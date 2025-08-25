@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Scripts SQL - MedSync</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 2.5em;
+            color: #4f46e5;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            font-size: 1.1em;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #1f2937;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+
+        .description {
+            color: #6b7280;
+            font-size: 1.1em;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        .file-info {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .file-name {
+            font-weight: bold;
+            color: #1f2937;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .file-size {
+            color: #6b7280;
+            font-size: 0.9em;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+        }
+
+        .contents {
+            text-align: left;
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .contents h3 {
+            color: #1f2937;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+
+        .contents ul {
+            list-style-type: none;
+            color: #6b7280;
+        }
+
+        .contents li {
+            padding: 5px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .contents li:last-child {
+            border-bottom: none;
+        }
+
+        .contents li::before {
+            content: "📄";
+            margin-right: 10px;
+        }
+
+        .back-link {
+            color: #4f46e5;
+            text-decoration: none;
+            font-size: 0.9em;
+            margin-top: 20px;
+            display: inline-block;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .instructions {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .instructions h3 {
+            color: #92400e;
+            margin-bottom: 10px;
+        }
+
+        .instructions p {
+            color: #92400e;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .instructions code {
+            background: #fde68a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">MedSync</div>
+        <div class="subtitle">Sistema de Gestão Médica</div>
+        
+        <h1>Scripts SQL - Sistema de Auto-preenchimento</h1>
+        
+        <div class="description">
+            <p>Scripts SQL organizados para implementar o sistema de auto-preenchimento baseado em <strong>CID + Conduta Cirúrgica</strong>. Focado no CID M75.1 (Síndrome do manguito rotador) com 17 condutas cirúrgicas disponíveis.</p>
+        </div>
+
+        <div class="file-info">
+            <div class="file-name">scripts_sql_medsync.zip</div>
+            <div class="file-size">Tamanho: 37 KB | Criado: 14/07/2025</div>
+        </div>
+
+        <a href="/scripts_sql_medsync.zip" class="download-btn" download>
+            ⬇️ Download Scripts SQL
+        </a>
+
+        <div class="contents">
+            <h3>📋 Conteúdo do Arquivo:</h3>
+            <ul>
+                <li>01_surgical_approaches.sql - 17 condutas cirúrgicas</li>
+                <li>02_clinical_justifications.sql - 13 justificativas clínicas</li>
+                <li>03_cid_surgical_approaches.sql - Associações CID × Conduta</li>
+                <li>04_surgical_approach_procedures.sql - Conduta × Procedimentos CBHPM</li>
+                <li>05_surgical_approach_opme_items.sql - Conduta × Itens OPME</li>
+                <li>06_surgical_approach_suppliers.sql - Conduta × Fornecedores</li>
+                <li>07_surgical_approach_justifications.sql - Conduta × Justificativas</li>
+                <li>08_cid_surgical_approach_extra_cids.sql - CIDs automáticos</li>
+                <li>09_execute_all_scripts.sql - Script mestre (executa todos)</li>
+                <li>README_SCRIPTS_SQL.md - Documentação completa</li>
+            </ul>
+        </div>
+
+        <div class="instructions">
+            <h3>🚀 Como Usar:</h3>
+            <p>1. Faça o download do arquivo ZIP<br>
+            2. Extraia os arquivos SQL<br>
+            3. Execute no PostgreSQL: <code>\i 09_execute_all_scripts.sql</code><br>
+            4. Ou execute os scripts individualmente na ordem numerada</p>
+        </div>
+
+        <a href="/" class="back-link">← Voltar ao sistema</a>
+    </div>
+</body>
+</html>

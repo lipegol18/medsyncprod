@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedSync - Download Backup</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a2332 0%, #0f172a 100%);
+            color: white;
+            margin: 0;
+            padding: 40px 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            max-width: 600px;
+            background: rgba(26, 35, 50, 0.8);
+            border: 1px solid #3b82f6;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        h1 {
+            color: #60a5fa;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+        .download-btn {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+        }
+        .download-btn:hover {
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+        }
+        .info {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid #3b82f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .info h3 {
+            color: #60a5fa;
+            margin-top: 0;
+        }
+        .file-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .detail-item {
+            padding: 10px;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 6px;
+        }
+        .detail-label {
+            font-weight: 600;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        .detail-value {
+            color: #e2e8f0;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MedSync - Backup do Código Fonte</h1>
+        
+        <div class="info">
+            <h3>Backup Completo Disponível</h3>
+            <div class="file-details">
+                <div class="detail-item">
+                    <div class="detail-label">Arquivo</div>
+                    <div class="detail-value">medsync-backup-20250624_191636.zip</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Tamanho</div>
+                    <div class="detail-value">6.5 MB</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Arquivos</div>
+                    <div class="detail-value">280 arquivos</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Data</div>
+                    <div class="detail-value">24/06/2025</div>
+                </div>
+            </div>
+            
+            <p><strong>Conteúdo:</strong></p>
+            <ul style="text-align: left; margin: 10px 0;">
+                <li>Frontend React + TypeScript (client/)</li>
+                <li>Backend Express + TypeScript (server/)</li>
+                <li>Schemas Drizzle ORM (shared/)</li>
+                <li>Migrações PostgreSQL (migrations/)</li>
+                <li>Configurações do projeto</li>
+                <li>Documentação completa</li>
+            </ul>
+        </div>
+
+        <a href="/medsync-backup-20250624_191636.zip" class="download-btn" download>
+            📦 Download Backup (6.5 MB)
+        </a>
+
+        <div class="info">
+            <h3>Instalação após Download</h3>
+            <ol style="text-align: left;">
+                <li>Extrair o arquivo ZIP</li>
+                <li>Executar <code>npm install</code></li>
+                <li>Configurar variáveis de ambiente (.env)</li>
+                <li>Executar <code>npm run db:push</code></li>
+                <li>Iniciar com <code>npm run dev</code></li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>

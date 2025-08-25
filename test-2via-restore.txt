@@ -1,0 +1,3 @@
+Este é um novo teste do arquivo 2Via.pdf para verificar se a correção está funcionando.
+Data: 25/07/2025 09:24
+Deve ser preservado quando o PDF do pedido for gerado.
