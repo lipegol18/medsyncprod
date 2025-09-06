@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Camada_2" data-name="Camada 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10.36 11.54">
+  <defs>
+    <style>
+      .cls-1, .cls-2 {
+        fill: none;
+        stroke: currentColor;
+        stroke-miterlimit: 10;
+        stroke-width: .65px;
+      }
+
+      .cls-2 {
+        stroke-linecap: round;
+      }
+    </style>
+  </defs>
+  <g id="Novo_Pedido_Cirúrgicos" data-name="Novo Pedido Cirúrgicos">
+    <path class="cls-1" d="M7.59,1.55h1.01c.79,0,1.43.64,1.43,1.43v6.81c0,.79-.64,1.43-1.43,1.43H1.75c-.79,0-1.43-.64-1.43-1.43V2.98c0-.79.64-1.43,1.43-1.43h1.09"/>
+    <rect class="cls-1" x="2.8" y=".32" width="4.89" height="2.74" rx="1.11" ry="1.11"/>
+    <line class="cls-2" x1="2.57" y1="5.75" x2="7.75" y2="5.75"/>
+    <line class="cls-2" x1="2.57" y1="8.28" x2="7.75" y2="8.28"/>
+  </g>
+</svg>

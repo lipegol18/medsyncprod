@@ -338,6 +338,8 @@ interface SurgeryDataProps {
   }>) => void;
   // Callback para carregar fabricantes existentes
   onManufacturersReady?: () => void;
+  // Flag para detectar modo de edição e desabilitar auto-preenchimento
+  isEditMode?: boolean;
 }
 
 // Componente para selecionar conduta clínica para um procedimento
@@ -383,6 +385,8 @@ interface ConductSelectorProps {
     procedureName: string;
     isPrimary: boolean;
   }>;
+  // Flag para detectar modo de edição e desabilitar auto-preenchimento
+  isEditMode?: boolean;
 }
 
 const ConductSelector: React.FC<ConductSelectorProps> = ({
@@ -405,7 +409,8 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
   selectedSupplier3,
   setClinicalJustification,
   setSelectedSurgicalApproaches,
-  selectedSurgicalApproaches = []
+  selectedSurgicalApproaches = [],
+  isEditMode = false
 }) => {
   // Debug: verificar se recebemos a prop setSelectedSurgicalApproaches
   console.log("🔧 ConductSelector - Props recebidas:", {
@@ -442,12 +447,17 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
           const data = await response.json();
           setAvailableConducts(data || []);
           
-          // Se há apenas uma conduta, selecionar automaticamente E fazer auto-preenchimento
+          // Se há apenas uma conduta, selecionar automaticamente APENAS no modo criação
           if (data && data.length === 1) {
-            console.log(`✨ Conduta única encontrada: ${data[0].approachName} - iniciando auto-preenchimento automático`);
-            setSelectedConduct(data[0]);
-            // ✅ CORREÇÃO: Chama a função de auto-preenchimento para condutas únicas
-            handleConductSelect(data[0]);
+            if (!isEditMode) {
+              console.log(`✨ Conduta única encontrada: ${data[0].approachName} - iniciando auto-preenchimento automático`);
+              setSelectedConduct(data[0]);
+              // ✅ CORREÇÃO: Chama a função de auto-preenchimento para condutas únicas
+              handleConductSelect(data[0]);
+            } else {
+              console.log(`🛡️ MODO EDIÇÃO: Conduta única encontrada: ${data[0].approachName} - auto-preenchimento DESABILITADO`);
+              // No modo edição, apenas mostrar como opção disponível, SEM seleção automática
+            }
           }
           
           console.log(`Condutas carregadas para procedimento ${procedureId}:`, data);
@@ -514,48 +524,74 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
           console.log('📋 CIDs encontrados para a conduta:', associatedCids);
           
           if (associatedCids.length > 0) {
-            // Adicionar aos CIDs existentes, evitando duplicatas
-            if (setMultipleCids) {
-              setMultipleCids((prevCids: any) => {
-                const updatedList = [...(prevCids || [])];
-                
-                associatedCids.forEach((cidData: any) => {
-                  const exists = updatedList.some((existing: any) => 
-                    (existing.cid?.id || existing.id) === cidData.cidId
+            if (isEditMode) {
+              // MODO EDIÇÃO: Apenas sugerir CIDs que não existem
+              console.log(`🛡️ MODO EDIÇÃO: Verificando CIDs para sugestão opcional`);
+              
+              if (setMultipleCids) {
+                setMultipleCids((prevCids: any) => {
+                  const currentCids = [...(prevCids || [])];
+                  const suggestableCids = associatedCids.filter((cidData: any) => 
+                    !currentCids.some((existing: any) => 
+                      (existing.cid?.id || existing.id) === cidData.cidId
+                    )
                   );
                   
-                  if (!exists) {
-                    // Formatar CID no padrão esperado pelo sistema
-                    const newCidItem = {
-                      cid: {
-                        id: cidData.cidId,
-                        code: cidData.cidCode,
-                        description: cidData.cidDescription,
-                        category: cidData.cidCategory || 'Geral'
-                      },
-                      isAutoAdded: true,
-                      isPrimary: cidData.isPrimaryCid,
-                      notes: cidData.notes,
-                      addedByConductSelect: true
-                    };
-                    
-                    updatedList.push(newCidItem);
-                    console.log(`✅ CID auto-adicionado: ${cidData.cidCode} - ${cidData.cidDescription}`);
+                  if (suggestableCids.length > 0) {
+                    console.log(`💡 ${suggestableCids.length} CIDs sugeridos (não adicionados automaticamente):`, suggestableCids);
+                    toast({
+                      title: "CIDs sugeridos disponíveis",
+                      description: `${suggestableCids.length} CID(s) relacionados estão disponíveis para adição manual`,
+                      duration: 4000,
+                    });
+                  } else {
+                    console.log(`✅ Todos os CIDs da conduta já existem no pedido`);
                   }
+                  
+                  return currentCids; // Retorna sem modificações no modo edição
                 });
-                
-                return updatedList;
+              }
+            } else {
+              // MODO CRIAÇÃO: Auto-adicionar CIDs como antes
+              if (setMultipleCids) {
+                setMultipleCids((prevCids: any) => {
+                  const updatedList = [...(prevCids || [])];
+                  
+                  associatedCids.forEach((cidData: any) => {
+                    const exists = updatedList.some((existing: any) => 
+                      (existing.cid?.id || existing.id) === cidData.cidId
+                    );
+                    
+                    if (!exists) {
+                      // Formatar CID no padrão esperado pelo sistema
+                      const newCidItem = {
+                        cid: {
+                          id: cidData.cidId,
+                          code: cidData.cidCode,
+                          description: cidData.cidDescription,
+                          category: cidData.cidCategory || 'Geral'
+                        },
+                        isAutoAdded: true,
+                        isPrimary: cidData.isPrimaryCid,
+                        notes: cidData.notes,
+                        addedByConductSelect: true
+                      };
+                      
+                      updatedList.push(newCidItem);
+                      console.log(`✅ CID auto-adicionado: ${cidData.cidCode} - ${cidData.cidDescription}`);
+                    }
+                  });
+                  
+                  return updatedList;
+                });
+              }
+              
+              toast({
+                title: "CIDs combinados",
+                description: `${associatedCids.length} CID(s) da conduta ${conduct.approachName} foram combinados (sem duplicatas)`,
+                duration: 4000,
               });
             }
-            
-            // NOTA: CIDs serão salvos no banco apenas quando o usuário clicar em "Salvar" ou "Próximo"
-            // seguindo o mesmo padrão dos outros campos do formulário
-            
-            toast({
-              title: "CIDs combinados",
-              description: `${associatedCids.length} CID(s) da conduta ${conduct.approachName} foram combinados (sem duplicatas)`,
-              duration: 4000,
-            });
           }
         }
       } catch (error) {
@@ -577,12 +613,28 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
           console.log('🏥 Procedimentos CBHPM encontrados:', cbhpmProcedures);
           
           if (cbhpmProcedures.length > 0) {
-            // TODO: Implementar auto-preenchimento dos procedimentos CBHPM na interface
-            // Por enquanto, apenas loggar os procedimentos encontrados
-            console.log(`✅ ${cbhpmProcedures.length} procedimentos CBHPM disponíveis para auto-preenchimento`);
-            
-            // 🔄 MERGE INTELIGENTE: Adicionar procedimentos CBHPM com soma de quantidades
-            if (setSelectedProcedure && setSecondaryProcedures && cbhpmProcedures.length > 0) {
+            if (isEditMode) {
+              // MODO EDIÇÃO: Apenas sugerir procedimentos CBHPM que não existem
+              console.log(`🛡️ MODO EDIÇÃO: ${cbhpmProcedures.length} procedimentos CBHPM disponíveis para sugestão opcional`);
+              
+              const hasExistingProcedures = selectedProcedure || (setSecondaryProcedures && true);
+              
+              if (hasExistingProcedures) {
+                console.log(`💡 Procedimentos CBHPM sugeridos (não adicionados automaticamente):`, cbhpmProcedures);
+                toast({
+                  title: "Procedimentos CBHPM sugeridos",
+                  description: `${cbhpmProcedures.length} procedimento(s) CBHPM relacionados estão disponíveis para adição manual`,
+                  duration: 4000,
+                });
+              }
+              
+              // NO MODO EDIÇÃO: Não executar auto-preenchimento de procedimentos
+            } else {
+              // MODO CRIAÇÃO: Auto-preenchimento dos procedimentos CBHPM
+              console.log(`✅ ${cbhpmProcedures.length} procedimentos CBHPM disponíveis para auto-preenchimento`);
+              
+              // 🔄 MERGE INTELIGENTE: Adicionar procedimentos CBHPM com soma de quantidades
+              if (setSelectedProcedure && setSecondaryProcedures && cbhpmProcedures.length > 0) {
               // Formatar todos os procedimentos para o padrão da interface
               const formattedProcedures = cbhpmProcedures.map((proc: any) => ({
                 procedure: {
@@ -641,13 +693,14 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
                 }
                 console.log(`🏥 NOVO PRINCIPAL: ${sortedByPorte[0].procedure.code} (maior porte)`);
               }
+              }
+              
+              toast({
+                title: "Procedimentos CBHPM combinados",
+                description: `Procedimentos CBHPM da conduta ${conduct.approachName} foram combinados com os existentes`,
+                duration: 4000,
+              });
             }
-            
-            toast({
-              title: "Procedimentos CBHPM combinados",
-              description: `Procedimentos CBHPM da conduta ${conduct.approachName} foram combinados com os existentes`,
-              duration: 4000,
-            });
           }
         }
       } catch (error) {
@@ -671,125 +724,202 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
           
           // 🔄 MERGE INTELIGENTE: Auto-preencher itens OPME com soma de quantidades
           if (completeData.opmeItems && completeData.opmeItems.length > 0 && setSelectedOpmeItems) {
-            setSelectedOpmeItems((prevOpmeItems: any) => {
-              const currentItems = [...(prevOpmeItems || [])];
-              let addedCount = 0;
-              let mergedCount = 0;
+            if (isEditMode) {
+              // MODO EDIÇÃO: Apenas sugerir itens OPME que não existem
+              console.log(`🛡️ MODO EDIÇÃO: Verificando itens OPME para sugestão opcional`);
               
-              completeData.opmeItems.forEach((newOpme: any) => {
-                const existingIndex = currentItems.findIndex((existing: any) => 
-                  existing.item.id === newOpme.id
+              setSelectedOpmeItems((prevOpmeItems: any) => {
+                const currentItems = [...(prevOpmeItems || [])];
+                const suggestableOpme = completeData.opmeItems.filter((newOpme: any) => 
+                  !currentItems.some((existing: any) => existing.item.id === newOpme.id)
                 );
                 
-                if (existingIndex !== -1) {
-                  // Item já existe - somar quantidades
-                  currentItems[existingIndex].quantity += (newOpme.quantity || 1);
-                  mergedCount++;
-                  console.log(`📦 MERGE: ${newOpme.technicalName} - quantidade somada: ${currentItems[existingIndex].quantity}`);
+                if (suggestableOpme.length > 0) {
+                  console.log(`💡 ${suggestableOpme.length} itens OPME sugeridos (não adicionados automaticamente):`, suggestableOpme);
+                  toast({
+                    title: "Itens OPME sugeridos disponíveis",
+                    description: `${suggestableOpme.length} item(ns) OPME relacionados estão disponíveis para adição manual`,
+                    duration: 4000,
+                  });
                 } else {
-                  // Item novo - adicionar à lista
-                  const newOpmeItem = {
-                    item: {
-                      id: newOpme.id,
-                      technicalName: newOpme.technicalName,
-                      commercialName: newOpme.commercialName,
-                      manufacturerName: newOpme.manufacturerName || '',
-                      anvisaRegistrationNumber: newOpme.anvisaRegistrationNumber,
-                      riskClass: newOpme.riskClass,
-                      registrationHolder: newOpme.registrationHolder
-                    },
-                    quantity: newOpme.quantity || 1
-                  };
-                  currentItems.push(newOpmeItem);
-                  addedCount++;
-                  console.log(`📦 NOVO: ${newOpme.technicalName} - adicionado com quantidade: ${newOpme.quantity || 1}`);
+                  console.log(`✅ Todos os itens OPME da conduta já existem no pedido`);
                 }
+                
+                return currentItems; // Retorna sem modificações no modo edição
               });
-              
-              console.log(`📦 OPME MERGE: ${addedCount} novos itens, ${mergedCount} quantidades somadas`);
-              
-              toast({
-                title: "Itens OPME combinados",
-                description: `${addedCount} novos itens + ${mergedCount} quantidades atualizadas para ${conduct.approachName}`,
-                duration: 4000,
+            } else {
+              // MODO CRIAÇÃO: Auto-preencher itens OPME como antes
+              setSelectedOpmeItems((prevOpmeItems: any) => {
+                const currentItems = [...(prevOpmeItems || [])];
+                let addedCount = 0;
+                let mergedCount = 0;
+                
+                completeData.opmeItems.forEach((newOpme: any) => {
+                  const existingIndex = currentItems.findIndex((existing: any) => 
+                    existing.item.id === newOpme.id
+                  );
+                  
+                  if (existingIndex !== -1) {
+                    // Item já existe - somar quantidades
+                    currentItems[existingIndex].quantity += (newOpme.quantity || 1);
+                    mergedCount++;
+                    console.log(`📦 MERGE: ${newOpme.technicalName} - quantidade somada: ${currentItems[existingIndex].quantity}`);
+                  } else {
+                    // Item novo - adicionar à lista
+                    const newOpmeItem = {
+                      item: {
+                        id: newOpme.id,
+                        technicalName: newOpme.technicalName,
+                        commercialName: newOpme.commercialName,
+                        manufacturerName: newOpme.manufacturerName || '',
+                        anvisaRegistrationNumber: newOpme.anvisaRegistrationNumber,
+                        riskClass: newOpme.riskClass,
+                        registrationHolder: newOpme.registrationHolder
+                      },
+                      quantity: newOpme.quantity || 1
+                    };
+                    currentItems.push(newOpmeItem);
+                    addedCount++;
+                    console.log(`📦 NOVO: ${newOpme.technicalName} - adicionado com quantidade: ${newOpme.quantity || 1}`);
+                  }
+                });
+                
+                console.log(`📦 OPME MERGE: ${addedCount} novos itens, ${mergedCount} quantidades somadas`);
+                
+                toast({
+                  title: "Itens OPME combinados",
+                  description: `${addedCount} novos itens + ${mergedCount} quantidades atualizadas para ${conduct.approachName}`,
+                  duration: 4000,
+                });
+                
+                return currentItems;
               });
-              
-              return currentItems;
-            });
+            }
           }
           
           // 🔄 MERGE INTELIGENTE: Combinar fornecedores únicos  
           if (completeData.suppliers && completeData.suppliers.length > 0) {
-            const newSuppliers = completeData.suppliers.slice(0, 3); // Máximo 3 fornecedores
-            
-            // Obter fornecedores atuais
-            const currentSuppliers = [
-              selectedSupplier1,
-              selectedSupplier2, 
-              selectedSupplier3
-            ].filter(Boolean); // Remove nulls
-            
-            // Criar lista única combinando atuais + novos (sem duplicatas por CNPJ)
-            const combinedSuppliers = [...currentSuppliers];
-            let addedCount = 0;
-            
-            newSuppliers.forEach((newSupplier: any) => {
-              const exists = combinedSuppliers.some((existing: any) => 
-                existing.cnpj === newSupplier.cnpj
+            if (isEditMode) {
+              // MODO EDIÇÃO: Apenas sugerir fornecedores que não existem
+              console.log(`🛡️ MODO EDIÇÃO: Verificando fornecedores para sugestão opcional`);
+              
+              const currentSuppliers = [
+                selectedSupplier1,
+                selectedSupplier2, 
+                selectedSupplier3
+              ].filter(Boolean); // Remove nulls
+              
+              const suggestableSuppliers = completeData.suppliers.filter((newSupplier: any) =>
+                !currentSuppliers.some((existing: any) => existing.cnpj === newSupplier.cnpj)
               );
               
-              if (!exists && combinedSuppliers.length < 3) {
-                combinedSuppliers.push({
-                  id: newSupplier.id,
-                  companyName: newSupplier.companyName,
-                  tradeName: newSupplier.tradeName,
-                  cnpj: newSupplier.cnpj,
-                  municipalityId: newSupplier.municipalityId,
-                  address: newSupplier.address,
-                  phone: newSupplier.phone,
-                  email: newSupplier.email,
-                  active: newSupplier.active
+              if (suggestableSuppliers.length > 0) {
+                console.log(`💡 ${suggestableSuppliers.length} fornecedores sugeridos (não adicionados automaticamente):`, suggestableSuppliers);
+                toast({
+                  title: "Fornecedores sugeridos disponíveis",
+                  description: `${suggestableSuppliers.length} fornecedor(es) relacionados estão disponíveis para adição manual`,
+                  duration: 4000,
                 });
-                addedCount++;
-                console.log(`🏢 NOVO FORNECEDOR: ${newSupplier.tradeName || newSupplier.companyName}`);
+              } else {
+                console.log(`✅ Todos os fornecedores da conduta já existem no pedido`);
               }
-            });
-            
-            // Atualizar os 3 slots de fornecedores
-            if (setSelectedSupplier1) setSelectedSupplier1(combinedSuppliers[0] || null);
-            if (setSelectedSupplier2) setSelectedSupplier2(combinedSuppliers[1] || null);
-            if (setSelectedSupplier3) setSelectedSupplier3(combinedSuppliers[2] || null);
-            
-            console.log(`🏢 FORNECEDORES MERGE: ${addedCount} novos fornecedores únicos adicionados`);
+              
+              // NO MODO EDIÇÃO: Não modificar fornecedores existentes
+            } else {
+              // MODO CRIAÇÃO: Auto-preencher fornecedores como antes
+              const newSuppliers = completeData.suppliers.slice(0, 3); // Máximo 3 fornecedores
+              
+              // Obter fornecedores atuais
+              const currentSuppliers = [
+                selectedSupplier1,
+                selectedSupplier2, 
+                selectedSupplier3
+              ].filter(Boolean); // Remove nulls
+              
+              // Criar lista única combinando atuais + novos (sem duplicatas por CNPJ)
+              const combinedSuppliers = [...currentSuppliers];
+              let addedCount = 0;
+              
+              newSuppliers.forEach((newSupplier: any) => {
+                const exists = combinedSuppliers.some((existing: any) => 
+                  existing.cnpj === newSupplier.cnpj
+                );
+                
+                if (!exists && combinedSuppliers.length < 3) {
+                  combinedSuppliers.push({
+                    id: newSupplier.id,
+                    companyName: newSupplier.companyName,
+                    tradeName: newSupplier.tradeName,
+                    cnpj: newSupplier.cnpj,
+                    municipalityId: newSupplier.municipalityId,
+                    address: newSupplier.address,
+                    phone: newSupplier.phone,
+                    email: newSupplier.email,
+                    active: newSupplier.active
+                  });
+                  addedCount++;
+                  console.log(`🏢 NOVO FORNECEDOR: ${newSupplier.tradeName || newSupplier.companyName}`);
+                }
+              });
+              
+              // Atualizar os 3 slots de fornecedores
+              if (setSelectedSupplier1) setSelectedSupplier1(combinedSuppliers[0] || null);
+              if (setSelectedSupplier2) setSelectedSupplier2(combinedSuppliers[1] || null);
+              if (setSelectedSupplier3) setSelectedSupplier3(combinedSuppliers[2] || null);
+              
+              console.log(`🏢 FORNECEDORES MERGE: ${addedCount} novos fornecedores únicos adicionados`);
+            }
           }
           
           // 🔄 MERGE INTELIGENTE: Justificativa clínica - concatenar ou usar a mais completa
           if (completeData.justifications && completeData.justifications.length > 0 && setClinicalJustification) {
-            const preferredJustification = completeData.justifications.find((j: any) => j.isPreferred) || completeData.justifications[0];
-            
-            setClinicalJustification((prevJustification: string) => {
-              if (prevJustification && prevJustification.trim()) {
-                // Já há justificativa - concatenar se for diferente
-                if (!prevJustification.includes(preferredJustification.content)) {
-                  const combined = `${prevJustification}\n\n${preferredJustification.content}`;
-                  console.log(`📝 JUSTIFICATIVA MERGE: Concatenada com justificativa anterior`);
-                  return combined;
+            if (isEditMode) {
+              // MODO EDIÇÃO: Apenas sugerir justificativa se não houver uma existente
+              const preferredJustification = completeData.justifications.find((j: any) => j.isPreferred) || completeData.justifications[0];
+              
+              setClinicalJustification((prevJustification: string) => {
+                if (prevJustification && prevJustification.trim()) {
+                  console.log(`🛡️ MODO EDIÇÃO: Justificativa clínica existente preservada - sugestão disponível`);
+                  toast({
+                    title: "Justificativa clínica sugerida",
+                    description: "Nova justificativa relacionada disponível para adição manual",
+                    duration: 4000,
+                  });
+                  return prevJustification; // Preservar justificativa existente
                 } else {
-                  console.log(`📝 JUSTIFICATIVA: Já inclui o texto da nova conduta`);
-                  return prevJustification;
+                  // Primeira justificativa no modo edição - permitir
+                  console.log(`📝 NOVA JUSTIFICATIVA (modo edição): ${preferredJustification.title}`);
+                  return preferredJustification.content;
                 }
-              } else {
-                // Primeira justificativa
-                console.log(`📝 NOVA JUSTIFICATIVA: ${preferredJustification.title}`);
-                return preferredJustification.content;
-              }
-            });
-            
-            toast({
-              title: "Justificativa clínica combinada",
-              description: preferredJustification.title,
-              duration: 4000,
-            });
+              });
+            } else {
+              // MODO CRIAÇÃO: Merge inteligente de justificativas como antes
+              const preferredJustification = completeData.justifications.find((j: any) => j.isPreferred) || completeData.justifications[0];
+              
+              setClinicalJustification((prevJustification: string) => {
+                if (prevJustification && prevJustification.trim()) {
+                  // Já há justificativa - concatenar se for diferente
+                  if (!prevJustification.includes(preferredJustification.content)) {
+                    const combined = `${prevJustification}\n\n${preferredJustification.content}`;
+                    console.log(`📝 JUSTIFICATIVA MERGE: Concatenada com justificativa anterior`);
+                    return combined;
+                  } else {
+                    console.log(`📝 JUSTIFICATIVA: Já inclui o texto da nova conduta`);
+                    return prevJustification;
+                  }
+                } else {
+                  // Primeira justificativa
+                  console.log(`📝 NOVA JUSTIFICATIVA: ${preferredJustification.title}`);
+                  return preferredJustification.content;
+                }
+              });
+              
+              toast({
+                title: "Justificativa clínica combinada",
+                description: preferredJustification.title,
+                duration: 4000,
+              });
+            }
           }
           
         }
@@ -994,6 +1124,8 @@ export function SurgeryData({
   setSelectedSurgicalApproaches = () => {},
   // Callback para carregar fabricantes existentes
   onManufacturersReady = () => {},
+  // Flag para detectar modo de edição e desabilitar auto-preenchimento
+  isEditMode = false,
 }: SurgeryDataProps) {
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
@@ -3153,6 +3285,7 @@ export function SurgeryData({
                           setClinicalJustification={setClinicalJustification}
                           setSelectedSurgicalApproaches={setSelectedSurgicalApproaches}
                           selectedSurgicalApproaches={selectedSurgicalApproaches}
+                          isEditMode={isEditMode}
                         />
                       </div>
                     </div>

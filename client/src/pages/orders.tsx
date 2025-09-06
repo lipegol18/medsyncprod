@@ -15,11 +15,10 @@ import { ReceivedValuesModal } from "@/components/received-values-modal";
 import { SurgeryAppointmentFormCompact } from "@/components/surgery-appointment-form-compact";
 import { StatusChangeModal } from "@/components/status-change-modal";
 import { SupplierApprovalModal } from "@/components/supplier-approval-modal";
-import { Calendar, CalendarDays } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { ChevronLeft, FileText, Eye, FileCheck, AlertCircle, Clock, Phone, Search, Filter, X, ChevronDown, Check, Edit2, Plus, Trash2, Loader2, Download, CheckCircle, ArrowRight, Undo2 } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { ChevronLeft, FileText, Eye, FileCheck, AlertCircle, Clock, Phone, Search, Filter, X, ChevronDown, Check, Edit2, Plus, Trash2, Loader2, Download, CheckCircle, ArrowRight, Undo2, Building2, Calendar, CalendarDays, Users, TrendingUp, CheckCircle2 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { useAuth } from "@/hooks/use-auth";
 import { format } from "date-fns";
@@ -40,7 +39,9 @@ const orderStatus = {
   "cirurgia_realizada": { label: "Cirurgia realizada", color: "bg-accent-light text-foreground" },
   "cancelado": { label: "Cancelada", color: "bg-destructive/50 text-destructive" },
   "aguardando_envio": { label: "Aguardando Envio", color: "bg-accent/50 text-foreground" },
-  "recebido": { label: "Recebido", color: "bg-accent/50 text-foreground" }
+  "recebido": { label: "Recebido", color: "bg-accent/50 text-foreground" },
+  "pendencia": { label: "Pendência", color: "bg-amber-100/80 text-amber-700" },
+  "aguardando_recurso": { label: "Aguardando Recurso", color: "bg-rose-100/80 text-rose-700" }
 };
 
 // Locale para formatação de datas
@@ -159,27 +160,45 @@ export default function Orders() {
   const [statusChangeCurrentStatusLabel, setStatusChangeCurrentStatusLabel] = useState<string>("");
   const [statusChangeOrder, setStatusChangeOrder] = useState<any>(null);
   
-  // Mapeamento de statusId para status code
+  // Mapeamento de statusId para status code (completo)
   const statusIdToCode = {
     1: "em_preenchimento",
     2: "em_avaliacao", 
     3: "aceito",
     4: "autorizado_parcial",
+    5: "pendencia",
     6: "cirurgia_realizada",
     7: "cancelado",
     8: "aguardando_envio",
-    9: "recebido"
+    9: "recebido",
+    10: "aguardando_recurso"
   };
   
   // Ler parâmetros da URL no carregamento da página
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const statusIdParam = urlParams.get('statusId');
+    const appealParam = urlParams.get('appeal');
     
     if (statusIdParam) {
       const statusCode = statusIdToCode[parseInt(statusIdParam) as keyof typeof statusIdToCode];
       if (statusCode) {
         setSelectedStatus(statusCode);
+      }
+    }
+
+    // Se há parâmetro appeal, abrir dialog de recurso para esse pedido
+    if (appealParam) {
+      const orderId = parseInt(appealParam);
+      if (!isNaN(orderId)) {
+        setSelectedOrderForAppeal(orderId);
+        setAppealJustification("");
+        setRejectionReason("");
+        setShowAppealDialog(true);
+        
+        // Limpar o parâmetro da URL para não reabrir se navegar de volta
+        const newUrl = window.location.pathname + (statusIdParam ? `?statusId=${statusIdParam}` : '');
+        window.history.replaceState({}, '', newUrl);
       }
     }
   }, []);
@@ -394,9 +413,14 @@ export default function Orders() {
         description: "Seu recurso foi enviado para análise da operadora",
       });
       
-      // Buscar apenas este pedido para refletir mudanças (otimização)
+      // Invalidar cache e atualizar dados
       if (selectedOrderForAppeal) {
-        fetchOrder(selectedOrderForAppeal);
+        // Invalidar queries do React Query para atualizar cache
+        queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${selectedOrderForAppeal}`] });
+        queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
+        
+        // Buscar apenas este pedido para obter o status e cores atualizadas (otimizado)
+        await fetchOrder(selectedOrderForAppeal);
       }
       
     } catch (error) {
@@ -479,8 +503,13 @@ export default function Orders() {
       
       const response = await apiRequest(`/api/medical-orders/${orderId}/status`, "PATCH", { status: newStatus });
       
-      // Buscar apenas este pedido para obter o previousStatusId atualizado (otimização)
+      // Buscar apenas este pedido para obter o status e cores atualizadas (otimizado)
       await fetchOrder(orderId);
+      
+      // Invalidar queries relacionadas para atualizar estatísticas
+      queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
       
       toast({
         title: "Status atualizado",
@@ -510,32 +539,13 @@ export default function Orders() {
   const handlePartialApprovalComplete = async () => {
     if (!partialApprovalOrderId) return;
 
-    try {
-      // Atualizar o status do pedido para autorizado_parcial
-      const response = await apiRequest(`/api/medical-orders/${partialApprovalOrderId}/status`, "PATCH", { 
-        status: 'autorizado_parcial' 
-      });
-      
-      // Buscar apenas este pedido para obter o previousStatusId atualizado (otimização)
-      await fetchOrder(partialApprovalOrderId);
-      
-      toast({
-        title: "Status atualizado",
-        description: "Pedido marcado como autorizado parcialmente",
-      });
-
-      // Após aprovação parcial, abrir modal de seleção de fornecedor
-      setSupplierApprovalOrderId(partialApprovalOrderId);
-      setShowSupplierApprovalModal(true);
-
-    } catch (error) {
-      console.error('Erro ao finalizar aprovação parcial:', error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível atualizar o status do pedido",
-        variant: "destructive",
-      });
-    }
+    // Apenas fechar o modal - o status não deve ser alterado aqui
+    // Os procedimentos já foram salvos individualmente pelo modal
+    setShowPartialApprovalModal(false);
+    setPartialApprovalOrderId(null);
+    
+    // Recarregar dados para refletir as mudanças nos procedimentos
+    await fetchOrder(partialApprovalOrderId);
   };
 
   // Função para finalizar valores recebidos
@@ -548,8 +558,13 @@ export default function Orders() {
         status: pendingStatusChange.status 
       });
       
-      // Buscar apenas este pedido para obter o previousStatusId atualizado (otimização)
+      // Buscar apenas este pedido para obter o status e cores atualizadas (otimizado)
       await fetchOrder(pendingStatusChange.orderId);
+      
+      // Invalidar queries relacionadas para atualizar estatísticas
+      queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
       
       toast({
         title: "Status atualizado",
@@ -615,6 +630,21 @@ export default function Orders() {
     } catch (error) {
       return "Data inválida";
     }
+  };
+
+  // Função simplificada para obter classes CSS do status
+  const getStatusColorClasses = (order: any) => {
+    // Se o backend já enviou as classes CSS geradas automaticamente, usar elas
+    if (order.statusColorClasses) {
+      return order.statusColorClasses;
+    }
+    
+    // Fallback para cinza se não houver classes
+    return {
+      background: 'bg-gradient-to-r from-slate-50 to-slate-100/50',
+      iconBg: 'bg-slate-200',
+      iconText: 'text-slate-700'
+    };
   };
 
   // Função para calcular dias úteis entre duas datas
@@ -774,18 +804,22 @@ export default function Orders() {
   };
 
   // Função para renderizar o status do pedido com botão de desfazer
-  const renderStatus = (status: string, orderId: number, hasPreviousStatus: boolean = false) => {
+  const renderStatus = (status: string, orderId: number, hasPreviousStatus: boolean = false, order: any = null) => {
     const statusInfo = orderStatus[status as keyof typeof orderStatus] || { 
       label: status, 
       color: "bg-muted/50 text-muted-foreground" 
     };
+
+    // Usar a cor dinâmica do status se o order estiver disponível
+    const buttonColor = order ? getStatusColorClasses(order).iconBg : statusInfo.color;
+    const textColor = order ? getStatusColorClasses(order).iconText : 'text-foreground';
 
     return (
       <div className="flex items-center justify-center gap-2">
         <Button
           variant="ghost"
           size="sm"
-          className={`${statusInfo.color} px-3 py-1 text-xs rounded-full cursor-default`}
+          className={`${buttonColor} ${textColor} px-3 py-1 text-sm font-bold rounded-full cursor-default`}
           disabled
         >
           {statusInfo.label}
@@ -846,8 +880,13 @@ export default function Orders() {
           description: "O status foi revertido para o estado anterior com sucesso.",
         });
         
-        // Buscar apenas este pedido para atualizar (otimização)
+        // Buscar apenas este pedido para obter o status e cores atualizadas (otimizado)
         await fetchOrder(orderId);
+        
+        // Invalidar queries relacionadas para atualizar estatísticas
+        queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
       }
     } catch (error: any) {
       toast({
@@ -857,6 +896,45 @@ export default function Orders() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Função para gerar recurso após aprovação parcial
+  const handleGenerateAppeal = async (orderId: number) => {
+    // Abrir dialog de recurso ao invés de mudar status diretamente
+    setSelectedOrderForAppeal(orderId);
+    setAppealJustification("");
+    setRejectionReason("");
+    setShowAppealDialog(true);
+  };
+
+  // Função para aceitar glosas após aprovação parcial
+  const handleAcceptGloss = async (orderId: number) => {
+    try {
+      // Primeiro, atualizar status do pedido para "autorizado_parcial"
+      await apiRequest(`/api/medical-orders/${orderId}/status`, 'PATCH', {
+        status: 'autorizado_parcial' // Código do status
+      });
+
+      // Invalidar cache para atualizar dados
+      queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
+      
+      // Depois, abrir modal de seleção de fornecedor
+      setSupplierApprovalOrderId(orderId);
+      setShowSupplierApprovalModal(true);
+      
+      toast({
+        title: "Glosas aceitas",
+        description: "Status atualizado para autorizado parcialmente. Agora selecione o fornecedor autorizado.",
+      });
+    } catch (error) {
+      console.error('Erro ao aceitar glosas:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível aceitar as glosas. Tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -955,140 +1033,152 @@ export default function Orders() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <main className="flex-grow">
-        <div className="container mx-auto px-4 py-6">
-          {/* Cabeçalho */}
-          <div className="flex items-center mb-6">
-            <Button
-              variant="outline"
-              className="mr-2 border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
-              onClick={handleGoBack}
-            >
-              <ChevronLeft className="mr-1 h-4 w-4" />
-              {t('common.back')}
-            </Button>
-            <h1 className="text-2xl font-bold text-foreground">{t('orders.title')}</h1>
+    <div className="min-h-screen flex flex-col bg-muted">
+      <main className="flex-grow bg-muted/30">
+        <div className="container mx-auto px-4 py-6 max-w-8xl">
+          {/* Cabeçalho Moderno com Fundo Azul */}
+          <div className="mb-8">
+            <div className="flex flex-col mb-8 p-10 rounded-xl bg-medsync-blue">
+              <div className="flex items-center justify-center my-2">
+                <h1 className="text-3xl font-bold text-white text-center">
+                  Gestão dos Pedidos Cirúrgicos
+                </h1>
+              </div>
+            </div>
           </div>
           
-          {/* Conteúdo principal */}
-          <Card className="border-border bg-card shadow-lg">
+          {/* Seção de Filtros Moderna */}
+          {!isLoading && !isError && ordersData.length > 0 && (
+            <Card className="border-gray-200 bg-gradient-to-r from-sky-50 to-sky-100/50 shadow-sm mb-6">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-sky-200 rounded-lg">
+                      <Filter className="h-5 w-5 text-sky-700" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-sky-800">Filtros de Busca</h3>
+                      <p className="text-sm text-sky-700/80">Encontre pedidos específicos</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {hasActiveFilters && (
+                      <div className="px-3 py-1 bg-sky-200/70 rounded-full text-xs font-medium text-sky-800">
+                        {filteredOrdersData.length} de {ordersData.length} resultados
+                      </div>
+                    )}
+                    <Button
+                      onClick={() => navigate("/create-order")}
+                      className="bg-sky-600 hover:bg-sky-700 text-white font-semibold"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Novo Pedido
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Campo de busca por paciente ou ID */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-sky-600" />
+                    <Input
+                      placeholder="Buscar por paciente ou ID..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 bg-white border-sky-200 text-foreground placeholder:text-sky-600/60 focus:border-sky-400 focus:ring-sky-400"
+                    />
+                    {searchTerm && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearSearchTerm}
+                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 text-sky-600 hover:text-sky-800"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Filtro por hospital */}
+                  <Select value={selectedHospital} onValueChange={setSelectedHospital}>
+                    <SelectTrigger className="bg-white border-sky-200 text-foreground focus:border-sky-400 focus:ring-sky-400">
+                      <SelectValue placeholder="Filtrar por hospital..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-sky-200">
+                      {hospitalsList.map((hospital) => (
+                        <SelectItem 
+                          key={hospital.id} 
+                          value={hospital.id.toString()}
+                          className="text-foreground hover:bg-sky-50"
+                        >
+                          {hospital.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Filtro por status */}
+                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                    <SelectTrigger className="bg-white border-sky-200 text-foreground focus:border-sky-400 focus:ring-sky-400">
+                      <SelectValue placeholder="Filtrar por status..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-sky-200">
+                      {Object.entries(orderStatus).map(([key, status]) => (
+                        <SelectItem 
+                          key={key} 
+                          value={key}
+                          className="text-foreground hover:bg-sky-50"
+                        >
+                          {status.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Botão de limpar filtros quando há filtros ativos */}
+                {hasActiveFilters && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearAllFilters}
+                      className="border-sky-300 text-sky-700 hover:bg-sky-100"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Limpar todos os filtros
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          
+          {/* Lista de Pedidos */}
+          <Card className="border-gray-200 bg-card shadow-lg">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center text-foreground">
-                    <FileText className="mr-2 h-5 w-5 text-accent" />
-                    {t('orders.list.title')}
+                    <FileText className="mr-2 h-5 w-5 text-sky-600" />
+                    Lista de Pedidos Cirúrgicos
                   </CardTitle>
                   <CardDescription className="text-muted-foreground">
                     {isAdmin 
-                      ? t('orders.list.description.admin') 
-                      : t('orders.list.description.user')}
+                      ? "Visualize e gerencie todos os pedidos médicos do sistema" 
+                      : "Acompanhe o status e histórico dos seus pedidos cirúrgicos"}
                   </CardDescription>
                 </div>
-                <Button
-                  onClick={() => navigate("/create-order")}
-                  variant="outline"
-                  className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Novo Pedido
-                </Button>
               </div>
             </CardHeader>
             <CardContent>
-              {/* Seção de Filtros */}
-              {!isLoading && !isError && ordersData.length > 0 && (
-                <div className="mb-6 p-4 bg-muted/30 rounded-lg border border-border">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Filter className="h-4 w-4 text-accent" />
-                    <h3 className="text-sm font-medium text-muted-foreground">Filtros de Busca</h3>
-                    {(searchTerm || selectedHospital || selectedStatus) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={clearAllFilters}
-                        className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-8 ml-auto"
-                      >
-                        <X className="h-3 w-3 mr-1" />
-                        Limpar Filtros
-                      </Button>
-                    )}
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Campo de busca por paciente ou ID */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-accent" />
-                      <Input
-                        placeholder="Buscar por paciente ou ID do pedido..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 bg-input border-border text-foreground placeholder:text-muted-foreground"
-                      />
-                      {searchTerm && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={clearSearchTerm}
-                          className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 text-accent hover:text-muted-foreground"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* Filtro por hospital */}
-                    <Select value={selectedHospital} onValueChange={setSelectedHospital}>
-                      <SelectTrigger className="bg-input border-border text-foreground">
-                        <SelectValue placeholder="Filtrar por hospital..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border-border">
-                        {hospitalsList.map((hospital) => (
-                          <SelectItem 
-                            key={hospital.id} 
-                            value={hospital.id.toString()}
-                            className="text-foreground hover:bg-accent-light"
-                          >
-                            {hospital.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    {/* Filtro por status */}
-                    <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                      <SelectTrigger className="bg-input border-border text-foreground">
-                        <SelectValue placeholder="Filtrar por status..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border-border">
-                        {Object.entries(orderStatus).map(([key, status]) => (
-                          <SelectItem 
-                            key={key} 
-                            value={key}
-                            className="text-foreground hover:bg-accent-light"
-                          >
-                            {status.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {/* Indicador de resultados */}
-                  {filteredOrdersData.length !== ordersData.length && (
-                    <div className="mt-3 text-sm text-muted-foreground">
-                      Mostrando {filteredOrdersData.length} de {ordersData.length} pedidos
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Conteúdo principal */}
               {isLoading ? (
                 <div className="space-y-4">
                   {Array.from({ length: 3 }).map((_, index) => (
-                    <Card key={index} className="border-border bg-card shadow overflow-hidden animate-pulse">
+                    <Card key={index} className="border-gray-200 bg-card shadow overflow-hidden animate-pulse">
                       <CardContent className="p-0">
                         <div className="p-4">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
@@ -1155,184 +1245,260 @@ export default function Orders() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {filteredOrdersData.map((order: any) => (
-                    <Card key={order.id} className="border-border bg-card shadow overflow-hidden">
+                    <Card key={order.id} className="border-gray-200 bg-card shadow-lg hover:shadow-xl transition-all duration-200 overflow-hidden group">
                       <CardContent className="p-0">
-                        <div className="p-4">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                            <div>
-                              <h3 className="text-lg font-medium text-foreground truncate">
-                                {order.surgicalApproaches && order.surgicalApproaches.length > 0 ? 
-                                  order.surgicalApproaches[0].name :
-                                  order.procedureName || `Pedido #${order.id}`}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                Criado em: {formatDateBrazilian(order.createdAt)}
-                              </p>
-                              {(order.status === 'em_avaliacao' || order.status === 'cirurgia_realizada') ? (
-                                // Para estados "em_avaliacao" e "cirurgia_realizada", mostrar contagem regressiva
+                        {/* Header com gradiente baseado na cor do status do banco */}
+                        <div className={`p-4 relative ${getStatusColorClasses(order).background}`}>
+                          {/* ID no canto superior direito */}
+                          <div className="absolute top-2 right-2">
+                            <p className="text-xs font-semibold text-muted-foreground">
+                              ID: #{order.id}
+                            </p>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <div className={`p-2 rounded-lg ${getStatusColorClasses(order).iconBg}`}>
+                                  <FileText className={`h-5 w-5 ${getStatusColorClasses(order).iconText}`} />
+                                </div>
+                                <div className="flex-1">
+                                  <div>
+                                    <h3 className="text-lg font-bold text-muted-foreground pr-16">
+                                      {order.patientName || 'Paciente não informado'}
+                                    </h3>
+                                  </div>
+                                  <p className="text-sm text-medsync-blue font-bold mb-1">
+                                    {order.procedureName || 'Procedimento não informado'}
+                                    {order.clinicalJustification && (
+                                      <>
+                                        <br />
+                                        <span className="text-sm text-medsync-blue font-bold mb-1">{order.clinicalJustification}</span>
+                                      </>
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {order.status === 'em_avaliacao' ? (
+                                // Para estado "em_avaliacao", mostrar informações completas com contagem regressiva
                                 (() => {
                                   const countdownInfo = getCountdownInfo(order);
-                                  return countdownInfo ? (
-                                    <p className={`text-sm ${countdownInfo.color} font-medium flex items-center`}>
-                                      <Clock className="inline h-3 w-3 mr-1" />
-                                      {countdownInfo.text}
-                                    </p>
-                                  ) : null;
+                                  return (
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-white/80 rounded-full w-fit">
+                                      <Clock className="h-4 w-4 text-red-600" />
+                                      <div className="text-sm text-slate-700 font-medium">
+                                        <div>Criado em: {formatDateBrazilian(order.createdAt)}</div>
+                                        <div>Última Atualização: {formatDateBrazilian(order.updatedAt || order.createdAt)}</div>
+                                        {countdownInfo && (
+                                          <div className={`${countdownInfo.color} font-bold`}>
+                                            {countdownInfo.text}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })()
+                              ) : order.status === 'cirurgia_realizada' ? (
+                                // Para estado "cirurgia_realizada", mostrar informações completas com contagem regressiva
+                                (() => {
+                                  const countdownInfo = getCountdownInfo(order);
+                                  return (
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-white/80 rounded-full w-fit">
+                                      <Clock className="h-4 w-4 text-orange-600" />
+                                      <div className="text-sm text-slate-700 font-medium">
+                                        <div>Criado em: {formatDateBrazilian(order.createdAt)}</div>
+                                        <div>Última Atualização: {formatDateBrazilian(order.updatedAt || order.createdAt)}</div>
+                                        {countdownInfo && (
+                                          <div className={`${countdownInfo.color} font-bold`}>
+                                            {countdownInfo.text}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
                                 })()
                               ) : (
                                 // Para demais estados, mostrar última atualização
-                                <p className="text-sm text-muted-foreground">
-                                  Última atualização em: {formatDateBrazilian(order.updatedAt || order.createdAt)}
-                                </p>
+                                <div className="flex items-center gap-2 px-3 py-1 bg-white/80 rounded-full w-fit">
+                                  <Clock className="h-4 w-4 text-slate-600" />
+                                  <div className="text-sm text-slate-700 font-medium">
+                                    <div>Criado em: {formatDateBrazilian(order.createdAt)}</div>
+                                    <div>Última Atualização: {formatDateBrazilian(order.updatedAt || order.createdAt)}</div>
+                                  </div>
+                                </div>
                               )}
                             </div>
-                            {renderStatus(order.status, order.id, !!order.previousStatusId)}
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">{t('orders.list.item.patient')}:</span>{' '}
-                              <span className="text-foreground">{order.patientName || 'Não informado'}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">{t('orders.list.item.hospital')}:</span>{' '}
-                              <span className="text-foreground">{order.hospitalName || 'Não informado'}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Data do Procedimento:</span>{' '}
-                              <span className="text-foreground">
-                                {formatProcedureDate(order)}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">{t('orders.list.item.doctor')}:</span>{' '}
-                              <span className="text-foreground">{order.userName || 'Não informado'}</span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Valor Recebido:</span>{' '}
-                              <span className="text-foreground">{formatCurrency(order.receivedValue)}</span>
+                            <div className="flex items-center gap-2 order-3">
+                              {renderStatus(order.status, order.id, !!order.previousStatusId, order)}
                             </div>
                           </div>
                         </div>
                         
-                        <Separator className="bg-border" />
-                        
-                        <div className="py-2 px-4 flex justify-between items-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-8"
-                            onClick={() => handleWhatsAppClick(order.patientPhone)}
-                            disabled={order.patientPhone === null || order.patientPhone === undefined || order.patientPhone === ""}
-                            title={order.patientPhone ? `Enviar mensagem para ${order.patientName}` : "Paciente sem telefone cadastrado"}
-                          >
-                            <FaWhatsapp className="h-4 w-4 mr-1" />
-                            WhatsApp
-                          </Button>
+                        {/* Informações organizadas em linhas */}
+                        <div className="px-4 py-3 border-t border-gray-200/30 space-y-2">
+                          {/* Primeira linha */}
+                          <div className="grid grid-cols-2 gap-8 text-sm">
+                            <div>
+                              <span className="text-muted-foreground font-medium">Data da cirurgia:</span>
+                              <span className="ml-2 text-foreground">{formatProcedureDate(order)}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground font-medium">Médico Responsável:</span>
+                              <span className="ml-2 text-foreground">
+                                {order.userName ? `Dr(a). ${order.userName}` : 'Não informado'}
+                              </span>
+                            </div>
+                          </div>
                           
-                          <div className="flex gap-2">
-                            {/* Botão de agendamento - aparece para status "aceito" e "autorizado_parcial" */}
-                            {(order.status === "aceito" || order.status === "autorizado_parcial") && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-8"
-                                onClick={() => {
-                                  setSelectedOrderForAppointment(order.id);
-                                  setShowAppointmentModal(true);
-                                }}
-                              >
-                                <CalendarDays className="h-4 w-4 mr-1" />
-                                {/* Usar agendamento da surgery_appointments se existir, senão usar procedureDate */}
-                                {(appointmentsByOrder[order.id] && appointmentsByOrder[order.id].scheduledDate) ||
-                                 (order.procedureDate && 
-                                  order.procedureDate !== null && 
-                                  order.procedureDate !== 'null' && 
-                                  order.procedureDate !== 'undefined' &&
-                                  order.procedureDate !== 'Data não agendada') ? 
-                                  "Reagendar" : "Agendar"}
-                              </Button>
-                            )}
-                            
-                            {/* Botão de recurso - aparece para status "recusado", "pendencia" e "autorizado_parcial" */}
-                            {(order.status === "recusado" || order.status === "pendencia" || order.status === "autorizado_parcial") && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-8"
-                                onClick={() => {
-                                  setSelectedOrderForAppeal(order.id);
-                                  setAppealJustification("");
-                                  setShowAppealDialog(true);
-                                }}
-                              >
-                                <FileText className="h-4 w-4 mr-1" />
-                                Gerar Recurso
-                              </Button>
-                            )}
-                            
-                            {/* Botão de deletar - apenas para status "em_preenchimento" */}
-                            {order.status === "em_preenchimento" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-8"
-                                onClick={() => handleDeleteOrder(order.id)}
-                              >
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                Apagar
-                              </Button>
-                            )}
-                            
-                            {['em_preenchimento', 'aguardando_envio', 'em_avaliacao'].includes(order.status) && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-8"
-                                onClick={() => handleEditOrder(order)}
-                                title="Editar pedido"
-                              >
-                                <Edit2 className="h-4 w-4 mr-1" />
-                                Editar
-                              </Button>
-                            )}
-                            
-                            {order.status !== 'em_preenchimento' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-8"
-                                onClick={() => handleDownloadPdf(order.id, order.patientName)}
-                              >
-                                <Download className="h-4 w-4 mr-1" />
-                                Baixar PDF
-                              </Button>
-                            )}
-                            
+                          {/* Segunda linha */}
+                          <div className="grid grid-cols-2 gap-8 text-sm">
+                            <div>
+                              <span className="text-muted-foreground font-medium">Caráter da Cirurgia:</span>
+                              <span className="ml-2 text-foreground">
+                                {order.procedureType === 'eletiva' ? 'Eletiva' :
+                                 order.procedureType === 'urgencia' ? 'Urgência' :
+                                 order.procedureType === 'emergencia' ? 'Emergência' :
+                                 'Não definido'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground font-medium">Hospital:</span>
+                              <span className="ml-2 text-foreground">{order.hospitalName || 'Não informado'}</span>
+                            </div>
+                          </div>
+                          
+                          {/* Terceira linha */}
+                          <div className="text-sm">
+                            <span className="text-muted-foreground font-medium">Valor Recebido:</span>
+                            <span className="ml-2 font-semibold text-emerald-600">{formatCurrency(order.receivedValue)}</span>
+                          </div>
+                        </div>
+                        
+                        {/* Seção de Ações Modernizada */}
+                        <div className="bg-gradient-to-r from-slate-50 to-slate-100/30 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            {/* Botão WhatsApp destacado à esquerda */}
                             <Button
                               variant="outline"
                               size="sm"
-                              className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-8"
-                              onClick={() => handleViewOrder(order.id)}
+                              className={`border-green-200 text-green-700 hover:bg-green-50 h-9 font-medium ${
+                                order.patientPhone === null || order.patientPhone === undefined || order.patientPhone === ""
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : "hover:shadow-sm"
+                              }`}
+                              onClick={() => handleWhatsAppClick(order.patientPhone)}
+                              disabled={order.patientPhone === null || order.patientPhone === undefined || order.patientPhone === ""}
+                              title={order.patientPhone ? `Enviar mensagem para ${order.patientName}` : "Paciente sem telefone cadastrado"}
                             >
-                              <Eye className="h-4 w-4 mr-1" />
-                              {t('orders.list.item.view')}
+                              <FaWhatsapp className="h-4 w-4 mr-2" />
+                              WhatsApp
                             </Button>
                             
-                            {/* Botão "Próxima Etapa" - sempre o último à direita, aparece para status que permitem alteração */}
-                            {order.status !== 'recebido' && order.status !== 'cancelado' && (
+                            {/* Grupo de botões principais */}
+                            <div className="flex flex-wrap gap-2">
+                              {/* Botão de agendamento - aparece para status "aceito" e "autorizado_parcial" */}
+                              {(order.status === "aceito" || order.status === "autorizado_parcial") && (
+                                <Button
+                                  size="sm"
+                                  className="bg-blue-600 hover:bg-blue-700 text-white h-9 font-medium hover:shadow-sm"
+                                  onClick={() => {
+                                    setSelectedOrderForAppointment(order.id);
+                                    setShowAppointmentModal(true);
+                                  }}
+                                >
+                                  <CalendarDays className="h-4 w-4 mr-2" />
+                                  {(appointmentsByOrder[order.id] && appointmentsByOrder[order.id].scheduledDate) ||
+                                   (order.procedureDate && 
+                                    order.procedureDate !== null && 
+                                    order.procedureDate !== 'null' && 
+                                    order.procedureDate !== 'undefined' &&
+                                    order.procedureDate !== 'Data não agendada') ? 
+                                    "Reagendar" : "Agendar"}
+                                </Button>
+                              )}
+                              
+                              {/* Botão de recurso */}
+                              {(order.status === "recusado" || order.status === "pendencia" || order.status === "autorizado_parcial") && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-amber-200 text-amber-700 hover:bg-amber-50 h-9 font-medium hover:shadow-sm"
+                                  onClick={() => {
+                                    setSelectedOrderForAppeal(order.id);
+                                    setAppealJustification("");
+                                    setShowAppealDialog(true);
+                                  }}
+                                >
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Gerar Recurso
+                                </Button>
+                              )}
+                              
+                              {/* Botão de deletar */}
+                              {order.status === "em_preenchimento" && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-red-200 text-red-700 hover:bg-red-50 h-9 font-medium hover:shadow-sm"
+                                  onClick={() => handleDeleteOrder(order.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Apagar
+                                </Button>
+                              )}
+                              
+                              {/* Botão de editar */}
+                              {['em_preenchimento', 'aguardando_envio', 'em_avaliacao'].includes(order.status) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-sky-200 text-sky-700 hover:bg-sky-50 h-9 font-medium hover:shadow-sm"
+                                  onClick={() => handleEditOrder(order)}
+                                  title="Editar pedido"
+                                >
+                                  <Edit2 className="h-4 w-4 mr-2" />
+                                  Editar
+                                </Button>
+                              )}
+                              
+                              {/* Botão de download PDF */}
+                              {order.status !== 'em_preenchimento' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-purple-200 text-purple-700 hover:bg-purple-50 h-9 font-medium hover:shadow-sm"
+                                  onClick={() => handleDownloadPdf(order.id, order.patientName)}
+                                >
+                                  <Download className="h-4 w-4 mr-2" />
+                                  Baixar PDF
+                                </Button>
+                              )}
+                              
+                              {/* Botão de visualizar */}
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-8"
-                                onClick={() => handleOpenStatusChangeModal(order, order.status, orderStatus[order.status as keyof typeof orderStatus]?.label || order.status)}
+                                className="border-slate-200 text-slate-700 hover:bg-slate-50 h-9 font-medium hover:shadow-sm"
+                                onClick={() => handleViewOrder(order.id)}
                               >
-                                <ArrowRight className="h-4 w-4 mr-1" />
-                                Próxima Etapa
+                                <Eye className="h-4 w-4 mr-2" />
+                                Visualizar
                               </Button>
-                            )}
+                              
+                              {/* Botão "Próxima Etapa" destacado */}
+                              {order.status !== 'recebido' && order.status !== 'cancelado' && (
+                                <Button
+                                  size="sm"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white h-9 font-medium hover:shadow-sm"
+                                  onClick={() => handleOpenStatusChangeModal(order, order.status, orderStatus[order.status as keyof typeof orderStatus]?.label || order.status)}
+                                >
+                                  <ArrowRight className="h-4 w-4 mr-2" />
+                                  Próxima Etapa
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -1352,7 +1518,7 @@ export default function Orders() {
           setScheduleDate("");
         }
       }}>
-        <DialogContent className="bg-card border-border text-foreground">
+        <DialogContent className="bg-card border-gray-200 text-foreground">
           <DialogHeader>
             <DialogTitle className="text-foreground">
               Agendar Procedimento
@@ -1368,7 +1534,7 @@ export default function Orders() {
                 type="datetime-local"
                 value={scheduleDate}
                 onChange={(e) => setScheduleDate(e.target.value)}
-                className="bg-input border-border text-foreground mt-1"
+                className="bg-input border-gray-200 text-foreground mt-1"
               />
             </div>
             <div className="flex justify-end gap-2 pt-4">
@@ -1378,7 +1544,7 @@ export default function Orders() {
                   setSchedulingOrderId(null);
                   setScheduleDate("");
                 }}
-                className="border-border text-muted-foreground hover:bg-muted"
+                className="border-gray-200 text-muted-foreground hover:bg-muted"
               >
                 Cancelar
               </Button>
@@ -1401,7 +1567,7 @@ export default function Orders() {
 
       {/* Dialog para criar recurso */}
       <Dialog open={showAppealDialog} onOpenChange={setShowAppealDialog}>
-        <DialogContent className="bg-card border-border text-foreground max-w-md">
+        <DialogContent className="bg-card border-gray-200 text-foreground max-w-md">
           <DialogHeader>
             <DialogTitle className="text-destructive flex items-center">
               <FileText className="h-5 w-5 mr-2" />
@@ -1418,7 +1584,7 @@ export default function Orders() {
                 placeholder="Cole aqui a mensagem de recusa enviada pela operadora..."
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
-                className="bg-input border-border text-foreground mt-1 min-h-[80px]"
+                className="bg-input border-gray-200 text-foreground mt-1 min-h-[80px]"
                 rows={3}
               />
             </div>
@@ -1431,7 +1597,7 @@ export default function Orders() {
                 placeholder="Descreva a justificativa médica para o recurso..."
                 value={appealJustification}
                 onChange={(e) => setAppealJustification(e.target.value)}
-                className="bg-input border-border text-foreground mt-1 min-h-[100px]"
+                className="bg-input border-gray-200 text-foreground mt-1 min-h-[100px]"
                 rows={4}
               />
             </div>
@@ -1480,6 +1646,8 @@ export default function Orders() {
           }}
           orderId={partialApprovalOrderId}
           onApprovalComplete={handlePartialApprovalComplete}
+          onGenerateAppeal={handleGenerateAppeal}
+          onAcceptGloss={handleAcceptGloss}
         />
       )}
 
@@ -1522,7 +1690,7 @@ export default function Orders() {
 
       {/* Modal de Agendamento Cirúrgico */}
       <Dialog open={showAppointmentModal} onOpenChange={setShowAppointmentModal}>
-        <DialogContent className="bg-card border-border text-foreground max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-card border-gray-200 text-foreground max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-primary text-xl">
               <CalendarDays className="h-5 w-5 inline mr-2" />
@@ -1565,7 +1733,7 @@ export default function Orders() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel 
-              className="bg-secondary border-border text-secondary-foreground hover:bg-secondary/80"
+              className="bg-secondary border-gray-200 text-secondary-foreground hover:bg-secondary/80"
               disabled={isDeletingOrder}
             >
               Cancelar
@@ -1595,7 +1763,7 @@ export default function Orders() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel 
-              className="bg-secondary border-border text-secondary-foreground hover:bg-secondary/80"
+              className="bg-secondary border-gray-200 text-secondary-foreground hover:bg-secondary/80"
               onClick={() => {
                 setShowSchedulingPrompt(false);
                 setAuthorizedOrderForScheduling(null);

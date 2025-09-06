@@ -15,7 +15,7 @@ import { OpmeSelection } from "@/steps/opme-selection";
 import { Button } from "@/components/ui/button";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import MedSyncLogo from "../assets/medsync-logo.png";
+import MedSyncLogo from "../assets/medsync-logo-new.svg";
 import {
   Dialog,
   DialogContent,
@@ -2840,6 +2840,8 @@ export default function CreateOrder() {
       queryClient.invalidateQueries({
         queryKey: [API_ENDPOINTS.MEDICAL_ORDERS],
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
 
       // Avançar para o último passo (confirmação)
       setCurrentStep(5);
@@ -3244,7 +3246,7 @@ export default function CreateOrder() {
               <h2 className="text-3xl font-bold text-muted-foreground">
                 Pedido Cirúrgico
               </h2>
-              <p className="text-accent text-sm mt-2">
+              <p className="text-medsync-blue text-sm mt-2 font-semibold">
                 Seu pedido pronto em apenas 5 etapas.
               </p>
             </div>
@@ -3261,7 +3263,7 @@ export default function CreateOrder() {
                 />
                 
                 {/* Progress fill line */}
-                <div className="absolute top-3 h-2 bg-accent rounded-full transition-all duration-500" 
+                <div className="absolute top-3 h-2 bg-medsync-blue rounded-full transition-all duration-500" 
                      style={{
                        left: '20%',
                        width: `${60 * Math.max(0, (currentStep - 1) / (steps.length - 1))}%`,
@@ -3279,11 +3281,11 @@ export default function CreateOrder() {
                   let textColor = '';
                   
                   if (isActive || isCompleted) {
-                    stepStatus = "bg-accent text-muted-foreground border-2 border-accent";
-                    textColor = "text-accent";
+                    stepStatus = "bg-medsync-blue text-white border-2 border-medsync-blue";
+                    textColor = "font-semibold text-muted-foreground";
                   } else {
                     stepStatus = "bg-muted text-muted-foreground border-2 border-muted";
-                    textColor = "text-muted-foreground";
+                    textColor = "font-semibold text-medsync-blue";
                   }
                   
                   // Posicionar cada círculo: step 3 no centro (50%), outros distribuídos
@@ -3305,7 +3307,7 @@ export default function CreateOrder() {
                       >
                         {step.number}
                       </div>
-                      <span className="mt-2 text-xs text-center font-medium whitespace-nowrap">
+                      <span className={`mt-2 text-xs text-center whitespace-nowrap ${textColor}`}>
                         {step.label}
                       </span>
                     </div>
@@ -3335,7 +3337,7 @@ export default function CreateOrder() {
             <h2 className="text-3xl font-bold text-muted-foreground">
               Dados para Cirurgia
             </h2>
-            <p className="text-accent text-sm mt-2">
+            <p className="text-medsync-blue text-sm mt-2">
               Preencha os campos necessários para o seu Pedido Cirúrgico
             </p>
           </div>
@@ -3423,6 +3425,7 @@ export default function CreateOrder() {
                   setAvailableProceduresFromRegion={setAvailableProceduresFromRegion}
                   selectedSurgicalApproaches={selectedSurgicalApproaches}
                   setSelectedSurgicalApproaches={debugSetSelectedSurgicalApproaches}
+                  isEditMode={!!editOrderId}
                 />
               </div>
             )}
@@ -3715,7 +3718,7 @@ export default function CreateOrder() {
             {currentStep === 5 && (
               <div className="p-6">
                 <div className="text-center mt-4 mb-8">
-                  <Check className="w-16 h-16 text-accent mx-auto mb-4" />
+                  <Check className="w-16 h-16 text-medsync-blue mx-auto mb-4" />
                   <h3 className="text-xl font-semibold text-foreground">
                     Pedido Criado com Sucesso!
                   </h3>
@@ -3727,7 +3730,7 @@ export default function CreateOrder() {
                 <div className="flex justify-center gap-4 mt-6">
                   <Button
                     variant="outline"
-                    className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+                    className="border-border text-medsync-blue hover:bg-medsync-blue-light hover:text-muted-foreground h-10"
                     onClick={downloadExistingPDF}
                   >
                     <FileText className="mr-2 h-4 w-4" />
@@ -3735,7 +3738,7 @@ export default function CreateOrder() {
                   </Button>
                   <Button
                     variant="outline"
-                    className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+                    className="border-border text-medsync-blue hover:bg-medsync-blue-light hover:text-muted-foreground h-10"
                     onClick={() => {
                       toast({
                         title: "Funcionalidade em desenvolvimento",
@@ -3766,7 +3769,7 @@ export default function CreateOrder() {
                   <Button
                     variant="outline"
                     onClick={goToPreviousStep}
-                    className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+                    className="border-border text-medsync-blue hover:bg-medsync-blue-light hover:text-muted-foreground h-10"
                   >
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Voltar
@@ -3779,7 +3782,7 @@ export default function CreateOrder() {
                 <Button
                   variant="outline"
                   onClick={saveAndExit}
-                  className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+                  className="border-border text-medsync-blue hover:bg-medsync-blue-light hover:text-muted-foreground h-10"
                 >
                   <Save className="mr-2 h-4 w-4" />
                   Salvar e Sair
@@ -3791,7 +3794,7 @@ export default function CreateOrder() {
                 <Button
                   variant="outline"
                   onClick={goToNextStep}
-                  className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+                  className="border-border text-medsync-blue hover:bg-medsync-blue-light hover:text-muted-foreground h-10"
                   disabled={
                     (currentStep === 1 &&
                       (!selectedPatient || !selectedHospital)) ||
@@ -3836,7 +3839,7 @@ export default function CreateOrder() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="text-sm text-foreground bg-accent-light p-3 rounded border border-border">
+          <div className="text-sm text-foreground bg-medsync-blue-light p-3 rounded border border-border">
             {existingOrderData?.surgicalConduct && (
               <p>
                 <strong>Conduta Cirúrgica:</strong>{" "}
@@ -3879,14 +3882,14 @@ export default function CreateOrder() {
             <Button
               variant="outline"
               onClick={handleStartNewOrder}
-              className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+              className="border-border text-medsync-blue hover:bg-medsync-blue-light hover:text-muted-foreground h-10"
             >
               Iniciar Novo Pedido
             </Button>
             <Button
               variant="outline"
               onClick={handleContinueExistingOrder}
-              className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+              className="border-border text-medsync-blue hover:bg-medsync-blue-light hover:text-muted-foreground h-10"
             >
               Continuar Pedido Existente
             </Button>
