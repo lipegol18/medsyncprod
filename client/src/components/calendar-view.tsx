@@ -32,10 +32,23 @@ import { format,
 import { ptBR } from 'date-fns/locale';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 
-import type { SurgeryAppointment as BaseSurgeryAppointment } from '@shared/schema';
-
-interface SurgeryAppointment extends BaseSurgeryAppointment {
-  patientName?: string | null;
+interface SurgeryAppointment {
+  id: number;
+  medicalOrderId: number;
+  patientId: number;
+  doctorId: number;
+  hospitalId: number | null;
+  scheduledDate: string;
+  scheduledTime: string;
+  estimatedDuration: number;
+  surgeryType: string;
+  status: string;
+  surgeryRoom: string | null;
+  surgicalTeam: string | null;
+  priority: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface CalendarViewProps {
@@ -77,35 +90,9 @@ export function CalendarView({ appointments, onNewAppointment, onEditAppointment
 
   const getAppointmentsForDate = (date: Date) => {
     return appointments.filter(appointment => {
-      const appointmentDate = typeof appointment.scheduledDate === 'string' 
-        ? parseISO(appointment.scheduledDate)
-        : appointment.scheduledDate;
+      const appointmentDate = parseISO(appointment.scheduledDate);
       return isSameDay(appointmentDate, date);
     });
-  };
-
-  // Função para calcular quais horas o agendamento ocupa baseado na duração
-  const getAppointmentHours = (appointment: SurgeryAppointment) => {
-    const startHour = parseInt(appointment.scheduledTime.split(':')[0]);
-    const startMinute = parseInt(appointment.scheduledTime.split(':')[1]);
-    const durationMinutes = appointment.estimatedDuration;
-    
-    // Calcular quantas horas completas o agendamento ocupa
-    const totalMinutes = startMinute + durationMinutes;
-    const endHour = startHour + Math.ceil(totalMinutes / 60);
-    
-    // Retornar array com todas as horas que o agendamento ocupa
-    const hours = [];
-    for (let h = startHour; h < endHour && h < 24; h++) {
-      hours.push(h);
-    }
-    return hours;
-  };
-
-  // Função para verificar se uma hora específica está ocupada por um agendamento
-  const isHourOccupiedByAppointment = (appointment: SurgeryAppointment, hour: number) => {
-    const appointmentHours = getAppointmentHours(appointment);
-    return appointmentHours.includes(hour);
   };
 
   const getStatusColor = (status: string) => {
@@ -140,7 +127,6 @@ export function CalendarView({ appointments, onNewAppointment, onEditAppointment
     const { destination, source, draggableId } = result;
     
     console.log('🔄 Drag ended:', { destination, source, draggableId });
-    console.log('🔄 Full result object:', JSON.stringify(result, null, 2));
     
     if (!destination) {
       console.log('❌ No destination found');
@@ -160,12 +146,10 @@ export function CalendarView({ appointments, onNewAppointment, onEditAppointment
     
     if (!appointment) {
       console.log('❌ Appointment not found:', appointmentId);
-      console.log('📋 Available appointments:', appointments.map(a => ({ id: a.id, time: a.scheduledTime })));
       return;
     }
 
     console.log('📋 Found appointment:', appointment);
-    console.log('🔄 About to call onUpdateAppointment function');
 
     // Parse destination information
     const destParts = destination.droppableId.split('-');
@@ -213,10 +197,9 @@ export function CalendarView({ appointments, onNewAppointment, onEditAppointment
       newDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
       
       console.log('📅 Created new date:', newDateTime.toISOString());
-      console.log('🔄 Calling onUpdateAppointment with date update:', { appointmentId, scheduledDate: newDateTime });
       
       onUpdateAppointment(appointmentId, {
-        scheduledDate: newDateTime
+        scheduledDate: newDateTime.toISOString()
       });
     } else if (destType === 'hour') {
       const destDate = destParts[1];
@@ -257,10 +240,9 @@ export function CalendarView({ appointments, onNewAppointment, onEditAppointment
       newDateTime.setHours(destHour, 0, 0, 0);
       
       console.log('📅 Created new date:', newDateTime.toISOString());
-      console.log('🔄 Calling onUpdateAppointment with time update:', { appointmentId, scheduledDate: newDateTime, scheduledTime: newTime });
       
       onUpdateAppointment(appointmentId, {
-        scheduledDate: newDateTime,
+        scheduledDate: newDateTime.toISOString(),
         scheduledTime: newTime
       });
     } else {
@@ -317,7 +299,7 @@ export function CalendarView({ appointments, onNewAppointment, onEditAppointment
                   <div 
                     key={appointment.id}
                     onClick={() => onEditAppointment(appointment)}
-                    className={`text-xs p-1 rounded cursor-pointer border-l-2 ${getSurgeryTypeColor(appointment.surgeryType)} ${getPriorityColor(String(appointment.priority || '3'))} bg-opacity-20 hover:bg-opacity-30 transition-colors`}
+                    className={`text-xs p-1 rounded cursor-pointer border-l-2 ${getSurgeryTypeColor(appointment.surgeryType)} ${getPriorityColor(appointment.priority)} bg-opacity-20 hover:bg-opacity-30 transition-colors`}
                   >
                     <div className="font-medium truncate text-gray-800">
                       {appointment.scheduledTime}
@@ -325,11 +307,6 @@ export function CalendarView({ appointments, onNewAppointment, onEditAppointment
                     <div className="text-gray-600 truncate">
                       {appointment.surgeryType}
                     </div>
-                    {appointment.patientName && (
-                      <div className="text-gray-500 truncate text-[10px] mt-0.5">
-                        {appointment.patientName}
-                      </div>
-                    )}
                   </div>
                 ))}
                 
@@ -348,144 +325,102 @@ export function CalendarView({ appointments, onNewAppointment, onEditAppointment
 
   const renderWeekView = () => {
     const days = getDateRange();
-    
-    // Implementar drag and drop para visualização semanal
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+
     return (
       <DragDropContext 
         onDragEnd={handleDragEnd}
         onDragStart={(start) => {
-          console.log('🚀 Drag started in week view:', start);
+          console.log('🚀 Drag started:', start);
         }}
       >
-        <div className="bg-white rounded-lg shadow-sm">
-          {/* Cabeçalho */}
-          <div className="grid grid-cols-8 gap-1 border-b border-gray-200">
-            <div className="p-3 text-center font-semibold text-sm text-gray-800 bg-gray-50">
-              Horário
+        <div className="grid grid-cols-8 gap-1">
+          {/* Cabeçalho com horários */}
+          <div className="bg-gray-100 p-2 text-center font-semibold text-sm text-gray-800">
+            Horário
+          </div>
+          {days.map(day => (
+            <div key={day.toISOString()} className="bg-gray-100 p-2 text-center">
+              <div className="font-semibold text-sm text-gray-800">
+                {format(day, 'EEE', { locale: ptBR })}
+              </div>
+              <div className="text-xs text-gray-600">
+                {format(day, 'dd/MM')}
+              </div>
             </div>
-            {days.map(day => (
-              <div key={day.toISOString()} className="p-3 text-center bg-gray-50">
-                <div className="font-semibold text-sm text-gray-800">
-                  {format(day, 'EEE', { locale: ptBR })}
-                </div>
-                <div className="text-xs text-gray-600">
-                  {format(day, 'dd/MM')}
-                </div>
-              </div>
-            ))}
-          </div>
+          ))}
 
-          {/* Corpo do calendário */}
-          <div className="divide-y divide-gray-100">
-            {Array.from({ length: 24 }, (_, hour) => (
-              <div key={hour} className="grid grid-cols-8 gap-1 min-h-[60px]">
-                {/* Coluna de horário */}
-                <div className="p-2 text-center text-xs text-gray-500 bg-gray-25 border-r border-gray-100 flex items-center justify-center">
-                  <span className="font-medium">{String(hour).padStart(2, '0')}:00</span>
-                </div>
-                
-                {/* Colunas dos dias */}
-                {days.map((day, dayIndex) => {
-                  const dayAppointments = getAppointmentsForDate(day);
-                  
-                  // Encontrar agendamentos que começam exatamente nesta hora
-                  const appointmentsStartingHere = dayAppointments.filter(app => {
-                    const [appHour] = app.scheduledTime.split(':').map(Number);
-                    return appHour === hour;
-                  });
-                  
-                  const droppableId = `hour-${format(day, 'yyyy-MM-dd')}-${hour}`;
-                  
-                  return (
-                    <Droppable key={`${day.toISOString()}-${hour}`} droppableId={droppableId}>
-                      {(provided, snapshot) => (
-                        <div 
-                          ref={provided.innerRef}
-                          {...provided.droppableProps}
-                          className={`relative p-1 border-r border-gray-100 min-h-[60px] transition-colors ${
-                            snapshot.isDraggingOver ? 'bg-blue-50 border-blue-300' : ''
-                          }`}
-                        >
-                          {appointmentsStartingHere.map((appointment, index) => {
-                            const [startHour, startMinute] = appointment.scheduledTime.split(':').map(Number);
-                            const totalMinutes = startHour * 60 + startMinute + appointment.estimatedDuration;
-                            const endHour = Math.floor(totalMinutes / 60);
-                            const endMinute = totalMinutes % 60;
-                            const endTime = `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
-                            
-                            // Calcular altura baseada na duração
-                            const durationInHours = appointment.estimatedDuration / 60;
-                            const blockHeight = Math.max(durationInHours * 60, 50); // Mínimo 50px
-                            
-                            return (
-                              <Draggable 
-                                key={appointment.id} 
-                                draggableId={appointment.id.toString()} 
-                                index={index}
-                              >
-                                {(provided, snapshot) => (
-                                  <div
-                                    ref={provided.innerRef}
-                                    {...provided.draggableProps}
-                                    className={`absolute inset-x-1 top-1 rounded-md p-2 text-xs cursor-move transition-all hover:shadow-lg z-10 ${
-                                      getSurgeryTypeColor(appointment.surgeryType)
-                                    } ${getPriorityColor(String(appointment.priority || '3'))} bg-opacity-60 hover:bg-opacity-80 ${
-                                      snapshot.isDragging ? 'shadow-2xl transform scale-105 z-50' : ''
-                                    }`}
-                                    style={{
-                                      height: `${blockHeight}px`,
-                                      top: `${(startMinute / 60) * 60}px`, // Offset baseado nos minutos
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onEditAppointment(appointment);
-                                    }}
-                                  >
-                                    <div 
-                                      {...provided.dragHandleProps}
-                                      className="w-full h-full"
-                                    >
-                                      <div className="font-semibold text-gray-800 mb-1 flex items-center gap-1">
-                                        <div className="flex flex-col gap-[1px]">
-                                          <div className="w-[3px] h-[3px] bg-gray-600 rounded-full"></div>
-                                          <div className="w-[3px] h-[3px] bg-gray-600 rounded-full"></div>
-                                          <div className="w-[3px] h-[3px] bg-gray-600 rounded-full"></div>
-                                        </div>
-                                        <span className="text-[10px]">{appointment.scheduledTime} - {endTime}</span>
-                                      </div>
-                                      <div className="text-gray-700 font-medium text-[10px] mb-1">
-                                        {appointment.surgeryType}
-                                      </div>
-                                      {appointment.patientName && (
-                                        <div className="text-gray-600 text-[9px] font-medium mb-1">
-                                          {appointment.patientName}
-                                        </div>
-                                      )}
-                                      <div className="text-gray-500 text-[8px]">
-                                        {appointment.estimatedDuration}min
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </Draggable>
-                            );
-                          })}
-                          {provided.placeholder}
-                          
-                          {/* Mostrar indicador visual quando uma área está disponível para drop */}
-                          {snapshot.isDraggingOver && (
-                            <div className="absolute inset-0 border-2 border-dashed border-blue-400 bg-blue-50 opacity-50 rounded-md flex items-center justify-center">
-                              <div className="text-xs text-blue-600 font-medium">Soltar aqui</div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </Droppable>
-                  );
-                })}
+          {/* Linhas de horário */}
+          {hours.map(hour => (
+            <React.Fragment key={hour}>
+              <div className="bg-gray-50 p-2 text-xs text-gray-500 text-center border-t">
+                {String(hour).padStart(2, '0')}:00
               </div>
-            ))}
-          </div>
+              {days.map(day => {
+                const dayAppointments = getAppointmentsForDate(day).filter(app => {
+                  const appointmentHour = parseInt(app.scheduledTime.split(':')[0]);
+                  return appointmentHour === hour;
+                });
+                
+                const droppableId = `hour-${format(day, 'yyyy-MM-dd')}-${hour}`;
+                
+                return (
+                  <Droppable key={`${day.toISOString()}-${hour}`} droppableId={droppableId}>
+                    {(provided, snapshot) => (
+                      <div 
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`border-t border-gray-200 p-1 min-h-[50px] transition-colors ${
+                          snapshot.isDraggingOver ? 'bg-blue-50' : 'bg-white'
+                        }`}
+                      >
+                        {dayAppointments.map((appointment, index) => (
+                          <Draggable 
+                            key={appointment.id} 
+                            draggableId={appointment.id.toString()} 
+                            index={index}
+                          >
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                className={`text-xs p-1 rounded mb-1 transition-colors ${
+                                  getSurgeryTypeColor(appointment.surgeryType)
+                                } bg-opacity-20 hover:bg-opacity-30 ${
+                                  snapshot.isDragging ? 'shadow-lg transform rotate-2' : ''
+                                }`}
+                              >
+                                <div 
+                                  {...provided.dragHandleProps}
+                                  className="font-medium text-gray-800 cursor-move flex items-center gap-1"
+                                >
+                                  <div className="flex flex-col gap-[1px]">
+                                    <div className="w-[2px] h-[2px] bg-gray-400 rounded-full"></div>
+                                    <div className="w-[2px] h-[2px] bg-gray-400 rounded-full"></div>
+                                  </div>
+                                  <span>{appointment.scheduledTime}</span>
+                                </div>
+                                <div 
+                                  className="text-gray-600 truncate cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEditAppointment(appointment);
+                                  }}
+                                >
+                                  {appointment.surgeryType}
+                                </div>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                );
+              })}
+            </React.Fragment>
+          ))}
         </div>
       </DragDropContext>
     );
@@ -537,7 +472,7 @@ export function CalendarView({ appointments, onNewAppointment, onEditAppointment
                               {...provided.draggableProps}
                               className={`p-3 rounded-lg mb-2 border-l-4 transition-colors ${
                                 getSurgeryTypeColor(appointment.surgeryType)
-                              } ${getPriorityColor(String(appointment.priority || '3'))} bg-opacity-20 hover:bg-opacity-30 ${
+                              } ${getPriorityColor(appointment.priority)} bg-opacity-20 hover:bg-opacity-30 ${
                                 snapshot.isDragging ? 'shadow-lg transform rotate-2' : ''
                               }`}
                             >
@@ -552,19 +487,8 @@ export function CalendarView({ appointments, onNewAppointment, onEditAppointment
                                     <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
                                   </div>
                                   <div className="font-medium text-sm text-gray-800">
-                                    {appointment.scheduledTime} - {(() => {
-                                      const [startHour, startMinute] = appointment.scheduledTime.split(':').map(Number);
-                                      const totalMinutes = startHour * 60 + startMinute + appointment.estimatedDuration;
-                                      const endHour = Math.floor(totalMinutes / 60);
-                                      const endMinute = totalMinutes % 60;
-                                      return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
-                                    })()} - {appointment.surgeryType}
+                                    {appointment.scheduledTime} - {appointment.surgeryType}
                                   </div>
-                                  {appointment.patientName && (
-                                    <div className="text-xs text-gray-600 font-normal">
-                                      Paciente: {appointment.patientName}
-                                    </div>
-                                  )}
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <Badge variant="secondary" className="text-xs">

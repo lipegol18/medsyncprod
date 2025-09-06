@@ -77,20 +77,14 @@ export function SupplierApprovalModal({
   // Mutação para aprovar fornecedor
   const approveMutation = useMutation({
     mutationFn: async (supplierId: number) => {
-      // Aprovar fornecedor
-      await apiRequest(`/api/medical-orders/${orderId}/suppliers/${supplierId}/approve`, 'POST');
-      
-      // Não alterar o status automaticamente - manter o status atual do pedido
-      // O status só deve mudar quando explicitamente necessário pela regra de negócio
+      return apiRequest(`/api/medical-orders/${orderId}/suppliers/${supplierId}/approve`, 'POST');
     },
     onSuccess: () => {
       toast({
         title: 'Fornecedor Aprovado',
-        description: 'O fornecedor foi aprovado com sucesso.',
+        description: 'O fornecedor foi marcado como aprovado pela operadora.',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-orders', orderId, 'suppliers'] });
-      queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
-      queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
       onApprovalComplete();
       onClose();
     },
@@ -106,20 +100,14 @@ export function SupplierApprovalModal({
   // Mutação para adicionar novo fornecedor ao pedido
   const addSupplierMutation = useMutation({
     mutationFn: async (supplierId: number) => {
-      // Adicionar e aprovar fornecedor
-      await apiRequest(`/api/medical-orders/${orderId}/suppliers`, 'POST', { supplierId });
-      
-      // Não alterar o status automaticamente - manter o status atual do pedido
-      // O status só deve mudar quando explicitamente necessário pela regra de negócio
+      return apiRequest(`/api/medical-orders/${orderId}/suppliers`, 'POST', { supplierId });
     },
     onSuccess: () => {
       toast({
         title: 'Fornecedor Adicionado',
-        description: 'O fornecedor foi adicionado com sucesso.',
+        description: 'O fornecedor foi adicionado ao pedido e marcado como aprovado.',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-orders', orderId, 'suppliers'] });
-      queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
-      queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
       setShowAddSupplier(false);
       setSupplierSearchTerm('');
       onApprovalComplete();

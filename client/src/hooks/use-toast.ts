@@ -161,9 +161,6 @@ function toast({ ...props }: Toast) {
     },
   })
 
-  // Garantir que o toast seja removido automaticamente após o delay
-  addToRemoveQueue(id)
-
   return {
     id: id,
     dismiss,

@@ -26,7 +26,6 @@ import {
   Legend,
   Line,
   LineChart,
-  LabelList,
 } from "recharts";
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
@@ -46,9 +45,9 @@ import {
 // Componente para listar cirurgias por hospital
 function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
   const { data: hospitalSurgeries, isLoading, error } = useQuery({
-    queryKey: ['/api/hospital-distribution-working', appliedFilters],
+    queryKey: ['/api/reports/hospital-distribution', appliedFilters],
     queryFn: async () => {
-      const response = await fetch(`/api/hospital-distribution-working`, {
+      const response = await fetch(`/api/reports/hospital-distribution`, {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -115,86 +114,82 @@ function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
 }
 
 // Componente para listar fornecedores por número de cirurgias
-function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
-  const [supplierDistribution, setSupplierDistribution] = useState<{supplierName: string, surgeryCount: number}[]>([]);
+function SupplierSurgeryList({ appliedFilters }: { appliedFilters: any }) {
+  const [supplierSurgeries, setSupplierSurgeries] = useState<{supplierName: string, surgeryCount: number}[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchSupplierDistribution = async () => {
+    const fetchSupplierSurgeries = async () => {
       try {
-        console.log("=== Buscando distribuição de fornecedores ===");
+        const params = new URLSearchParams();
+        if (appliedFilters.statusFilter) params.append('status', appliedFilters.statusFilter);
+        if (appliedFilters.dateRange.startDate) params.append('startDate', appliedFilters.dateRange.startDate);
+        if (appliedFilters.dateRange.endDate) params.append('endDate', appliedFilters.dateRange.endDate);
+        if (appliedFilters.hospitalFilter) params.append('hospital', appliedFilters.hospitalFilter);
+        if (appliedFilters.complexityFilter) params.append('complexity', appliedFilters.complexityFilter);
         
-        const response = await fetch('/api/supplier-distribution-data', {
+        const response = await fetch(`/api/suppliers-by-surgeries?${params.toString()}`, {
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
           },
         });
-        
         if (response.ok) {
           const data = await response.json();
-          console.log("Dados de distribuição de fornecedores recebidos:", data);
-          setSupplierDistribution(data);
+          setSupplierSurgeries(data);
         } else {
-          const errorText = await response.text();
-          console.error("Erro na API supplier-distribution - Status:", response.status);
-          console.error("Erro na API supplier-distribution - Response:", errorText);
-          setSupplierDistribution([]);
+          console.error("Erro ao buscar dados de fornecedores por cirurgias");
+          setSupplierSurgeries([]);
         }
       } catch (error) {
-        console.error("Erro ao processar dados de distribuição de fornecedores:", error);
-        setSupplierDistribution([]);
+        console.error("Erro ao processar dados de fornecedores por cirurgias:", error);
+        setSupplierSurgeries([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchSupplierDistribution();
+    fetchSupplierSurgeries();
   }, [appliedFilters]);
 
   if (loading) {
     return (
       <div className="text-center py-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-        <p className="text-muted-foreground mt-2">Carregando fornecedores...</p>
+        <p className="text-muted-foreground mt-2">Carregando fornecedores e cirurgias...</p>
       </div>
     );
   }
 
-  if (supplierDistribution.length === 0) {
+  if (supplierSurgeries.length === 0) {
     return (
       <div className="text-center py-8">
-        <Building2 className="w-16 h-16 mb-4 text-muted-foreground/50 mx-auto" />
-        <p className="text-muted-foreground">Nenhum fornecedor encontrado</p>
-        <p className="text-muted-foreground text-sm">Crie pedidos com fornecedores para ver estatísticas</p>
+        <p className="text-muted-foreground">Nenhum fornecedor com cirurgias encontrado</p>
       </div>
     );
   }
 
-  // Calcular o número único de cirurgias (assumindo que cada fornecedor aparece no mesmo número de cirurgias)
-  const uniqueSurgeries = supplierDistribution.length > 0 ? supplierDistribution[0].surgeryCount : 0;
-  const totalSurgeries = supplierDistribution.reduce((sum, item) => sum + item.surgeryCount, 0);
+  const totalSurgeries = supplierSurgeries.reduce((sum, item) => sum + item.surgeryCount, 0);
 
   return (
     <div className="space-y-3">
-      {supplierDistribution.map((item, index) => (
-        <div key={index} className="flex justify-between items-center p-3 bg-card rounded-lg border border-border">
+      {supplierSurgeries.map((item, index) => (
+        <div key={index} className="flex justify-between items-center p-3 bg-muted/50 rounded-lg border border-border">
           <div className="flex items-center gap-3">
             <Building2 className="w-4 h-4 text-muted-foreground" />
-            <div>
-              <span className="text-foreground font-medium">{item.supplierName}</span>
-              <p className="text-muted-foreground text-sm">Selecionado em {item.surgeryCount} cirurgia{item.surgeryCount !== 1 ? 's' : ''}</p>
-            </div>
+            <span className="text-foreground font-medium">{item.supplierName}</span>
           </div>
           <div className="text-right">
-            <span className="text-foreground font-bold text-lg">{item.surgeryCount}</span>
+            <span className="text-foreground font-bold">{item.surgeryCount}</span>
+            <span className="text-muted-foreground text-sm ml-1">
+              {item.surgeryCount === 1 ? 'cirurgia' : 'cirurgias'}
+            </span>
           </div>
         </div>
       ))}
-      
       <div className="mt-4 p-3 bg-accent rounded-lg border border-border">
         <p className="text-accent-foreground text-sm">
-          <strong>Resumo:</strong> Com fornecedores: 14 pedidos | Sem fornecedores: 3 | Total: 17
+          <strong>Total:</strong> {supplierSurgeries.length} fornecedores • {totalSurgeries} cirurgias
         </p>
       </div>
     </div>
@@ -354,7 +349,7 @@ function ReceivedValuesTab({ appliedFilters }: { appliedFilters: any }) {
 
       {/* Cards dos pedidos com valores */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {receivedValues.filter((item: any) => item.totalReceivedValue > 0).map((item: any, index: number) => (
+        {receivedValues.map((item: any, index: number) => (
           <Card key={index} className="border-border bg-card shadow-lg hover:bg-accent transition-colors">
             <CardHeader className="pb-2">
               <CardTitle className="text-card-foreground text-lg flex items-center justify-between">
@@ -393,11 +388,11 @@ function ReceivedValuesTab({ appliedFilters }: { appliedFilters: any }) {
       </div>
 
       {/* Mensagem quando não há dados */}
-      {receivedValues.filter((item: any) => item.totalReceivedValue > 0).length === 0 && (
+      {receivedValues.length === 0 && (
         <Card className="border-border bg-card shadow-lg">
           <CardContent className="text-center py-8">
             <p className="text-muted-foreground">
-              Nenhum pedido com valores recebidos encontrado para os filtros aplicados
+              Nenhum pedido encontrado para os filtros aplicados
             </p>
           </CardContent>
         </Card>
@@ -1443,67 +1438,62 @@ export default function Reports() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-card-foreground">Cirurgias por período</CardTitle>
                   <CardDescription className="text-muted-foreground">
-                    Volume de cirurgias autorizadas, realizadas e recebidas
+                    Comparação entre solicitadas e realizadas
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="bg-card rounded-b-lg">
-                  <div className="h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
+                <CardContent className="h-80 bg-card rounded-b-lg">
+                  <ResponsiveContainer width="100%" height="100%">
+                    {timeData[timeRange as keyof typeof timeData] && timeData[timeRange as keyof typeof timeData].length > 0 ? (
+                      <LineChart
                         data={timeData[timeRange as keyof typeof timeData]}
-                        margin={{ top: 40, right: 30, left: 20, bottom: 5 }}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(59, 130, 246, 0.2)" />
-                        <XAxis 
-                          dataKey="name" 
-                          stroke="#93c5fd"
-                          tick={{ fontSize: 11, fill: "#93c5fd" }}
+                        <XAxis dataKey="name" stroke="#93c5fd" />
+                        <YAxis stroke="#93c5fd" />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: "#1e3a8a", 
+                            border: "1px solid #3b82f6",
+                            color: "#fff" 
+                          }}
                         />
-                        <YAxis 
-                          stroke="#93c5fd"
-                          tick={{ fontSize: 11, fill: "#93c5fd" }}
-                        />
-                        <Bar 
+                        <Legend />
+                        <Line 
+                          type="monotone" 
                           dataKey="solicitadas" 
-                          fill="#3b82f6"
-                          name="Autorizadas"
-                          radius={[2, 2, 0, 0]}
-                        >
-                          <LabelList 
-                            dataKey="solicitadas" 
-                            position="top" 
-                            style={{ 
-                              fontSize: '11px', 
-                              fontWeight: '600', 
-                              fill: '#3b82f6' 
-                            }}
-                            formatter={(value: number) => value > 0 ? value : ''}
-                          />
-                        </Bar>
-                        <Bar 
-                          dataKey="realizadas" 
-                          fill="#10b981"
-                          name="Realizadas"
-                          radius={[2, 2, 0, 0]}
-                        >
-                          <LabelList 
-                            dataKey="realizadas" 
-                            position="top" 
-                            style={{ 
-                              fontSize: '11px', 
-                              fontWeight: '600', 
-                              fill: '#10b981' 
-                            }}
-                            formatter={(value: number) => value > 0 ? value : ''}
-                          />
-                        </Bar>
-                        <Legend 
-                          iconType="rect"
-                          wrapperStyle={{ fontSize: '12px' }}
+                          stroke="#3b82f6" 
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
                         />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                        <Line 
+                          type="monotone" 
+                          dataKey="realizadas" 
+                          stroke="#60a5fa" 
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="canceladas" 
+                          stroke="#f43f5e" 
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                        <PieChartIcon className="w-16 h-16 mb-4 text-muted-foreground/50" />
+                        <p className="text-center">
+                          Não há dados suficientes para exibir este gráfico.<br />
+                          Crie mais solicitações de cirurgias para ver estatísticas.
+                        </p>
+                      </div>
+                    )}
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
               
@@ -1553,22 +1543,13 @@ export default function Reports() {
                     <CardTitle className="text-card-foreground">Pedidos por Mês</CardTitle>
                     <CardDescription className="text-muted-foreground">
                       Volume de pedidos cirúrgicos nos últimos 6 meses
-                      {timeData.monthly.length > 0 && (() => {
-                        const totalPedidos = timeData.monthly.reduce((sum, month) => 
-                          sum + month.solicitadas + month.realizadas + month.canceladas, 0
-                        );
-                        return totalPedidos > 0 ? ` • Total: ${totalPedidos} pedidos` : '';
-                      })()}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="h-80 bg-card rounded-b-lg">
                     <ResponsiveContainer width="100%" height="100%">
                       {timeData.monthly.length > 0 ? (
                         <BarChart 
-                          data={timeData.monthly.slice(-6).map(month => ({
-                            ...month,
-                            total: month.solicitadas + month.realizadas + month.canceladas
-                          }))}
+                          data={timeData.monthly.slice(-6)}
                           margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
                         >
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(59, 130, 246, 0.2)" />
@@ -1593,13 +1574,13 @@ export default function Reports() {
                               color: "#fff",
                               borderRadius: "8px"
                             }}
-                            formatter={(value) => [`${value} pedidos`, "Total"]}
+                            formatter={(value) => [`${value} pedidos`, "Solicitadas"]}
                           />
                           <Bar 
-                            dataKey="total" 
+                            dataKey="solicitadas" 
                             fill="#3B82F6"
                             radius={[4, 4, 0, 0]}
-                            name="Total de Pedidos"
+                            name="Pedidos"
                           />
                         </BarChart>
                       ) : (
@@ -1613,29 +1594,6 @@ export default function Reports() {
                       )}
                     </ResponsiveContainer>
                   </CardContent>
-                  {timeData.monthly.length > 0 && (() => {
-                    const mesesComDados = timeData.monthly.filter(month => 
-                      month.solicitadas > 0 || month.realizadas > 0 || month.canceladas > 0
-                    );
-                    return mesesComDados.length > 0 ? (
-                      <CardFooter className="pt-4 border-t">
-                        <div className="w-full">
-                          <p className="text-sm font-medium text-card-foreground mb-2">Resumo detalhado:</p>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            {mesesComDados.map(month => {
-                              const total = month.solicitadas + month.realizadas + month.canceladas;
-                              return (
-                                <div key={month.name} className="flex justify-between p-2 bg-muted rounded">
-                                  <span className="font-medium">{month.name}/2025:</span>
-                                  <span className="text-muted-foreground">{total} pedidos</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </CardFooter>
-                    ) : null;
-                  })()}
                 </Card>
               </div>
             </TabsContent>
@@ -1648,10 +1606,6 @@ export default function Reports() {
                     <CardTitle className="text-card-foreground">Principais Tipos de Procedimentos</CardTitle>
                     <CardDescription className="text-muted-foreground">
                       Distribuição por categoria de procedimento
-                      {topProcedures.length > 0 && (() => {
-                        const totalProcedures = topProcedures.reduce((sum, proc) => sum + proc.count, 0);
-                        return totalProcedures > 0 ? ` • ${totalProcedures} de 16 cirurgias têm procedimentos definidos` : '';
-                      })()}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="h-80 bg-card rounded-b-lg">
@@ -1695,30 +1649,6 @@ export default function Reports() {
                       )}
                     </ResponsiveContainer>
                   </CardContent>
-                  {topProcedures.length > 0 && (() => {
-                    const totalProcedures = topProcedures.reduce((sum, proc) => sum + proc.count, 0);
-                    return totalProcedures > 0 ? (
-                      <CardFooter className="pt-4 border-t">
-                        <div className="w-full">
-                          <p className="text-sm font-medium text-card-foreground mb-2">Resumo detalhado:</p>
-                          <div className="space-y-2 text-xs">
-                            <div className="flex justify-between p-2 bg-primary/10 rounded font-medium">
-                              <span>Com procedimentos:</span>
-                              <span>{totalProcedures} cirurgias</span>
-                            </div>
-                            <div className="flex justify-between p-2 bg-muted rounded text-muted-foreground">
-                              <span>Sem procedimentos:</span>
-                              <span>{16 - totalProcedures} cirurgias</span>
-                            </div>
-                            <div className="flex justify-between p-2 bg-accent rounded font-medium">
-                              <span>Total geral:</span>
-                              <span>16 cirurgias</span>
-                            </div>
-                          </div>
-                        </div>
-                      </CardFooter>
-                    ) : null;
-                  })()}
                 </Card>
                 
                 <Card className="border-border bg-card shadow-lg">
@@ -1759,7 +1689,7 @@ export default function Reports() {
                 </Card>
               </div>
               
-              {/* Segunda linha - Cards adicionais de Distribuição */}
+              {/* Segunda linha - Novo card de Cirurgias por Hospital */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                 <Card className="border-border bg-card shadow-lg">
                   <CardHeader className="pb-2">
@@ -1773,15 +1703,16 @@ export default function Reports() {
                   </CardContent>
                 </Card>
                 
+                {/* Card de Fornecedores por Cirurgias */}
                 <Card className="border-border bg-card shadow-lg">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-card-foreground">Fornecedores por Cirurgias</CardTitle>
                     <CardDescription className="text-muted-foreground">
-                      Fornecedores mais utilizados nos procedimentos OPME
+                      Fornecedores ordenados por número de cirurgias realizadas
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="bg-card rounded-b-lg">
-                    <SupplierDistributionList appliedFilters={appliedFilters} />
+                    <SupplierSurgeryList appliedFilters={appliedFilters} />
                   </CardContent>
                 </Card>
               </div>

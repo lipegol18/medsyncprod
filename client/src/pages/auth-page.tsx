@@ -1,60 +1,72 @@
 import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useLocation } from 'wouter';
-import { HelpCircle, Clock, TrendingDown, TrendingUp, Shield, Monitor, Stethoscope, Eye, FileText, BarChart3, Edit } from 'lucide-react';
+import { Loader2, CheckCircle2, HelpCircle, Clock, TrendingDown, TrendingUp, Shield, Monitor, Stethoscope, Eye, FileText, BarChart3, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useAuth } from '@/hooks/use-auth';
-import { LoginModal } from '@/components/auth/login-modal';
-import { RegisterModal } from '@/components/auth/register-modal';
-import { ForgotPasswordModal } from '@/components/auth/forgot-password-modal';
-import { type LoginForm, type RegisterForm, type ForgotPasswordForm, type ResetPasswordForm } from '@/schemas/auth-schemas';
 import MedSyncLogo from '@/assets/medsync-logo-new.svg';
 import blueSectionImage from '@assets/image_1753726436254.png';
-import sectionDoctorImage from '@/assets/section_doctor_image.png';
-import sectionYStylized from '@/assets/section_y_stylized.svg';
-import iconHome1 from '@/assets/icons/icon_home_1.svg';
-import iconHome2 from '@/assets/icons/icon_home_2.svg';
-import iconHome3 from '@/assets/icons/icon_home_3.svg';
-import iconHome4 from '@/assets/icons/icon_home_4.svg';
-import iconDoctor from '@/assets/icons/icon-doctor.svg';
-import avatarTest from '@/assets/avatar_test.png';
-import { onlyNumbers } from '@/lib/utils';
-import { useValidation } from '@/hooks/use-validation';
+
+// Form schemas
+const loginSchema = z.object({
+  username: z.string().min(1, 'Username é obrigatório'),
+  password: z.string().min(1, 'Senha é obrigatória'),
+  remember: z.boolean().optional()
+});
+
+const registerSchema = z.object({
+  firstName: z.string().min(1, 'Nome é obrigatório'),
+  lastName: z.string().min(1, 'Sobrenome é obrigatório'),
+  email: z.string().email('Email inválido'),
+  phone: z.string().min(10, 'Telefone deve ter pelo menos 10 dígitos'),
+  username: z.string().min(3, 'Username deve ter pelo menos 3 caracteres'),
+  password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+  confirmPassword: z.string().min(1, 'Confirmação de senha é obrigatória'),
+  roleId: z.number().min(1, 'Função é obrigatória'),
+  crm: z.number().optional()
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Senhas não coincidem",
+  path: ["confirmPassword"]
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Email inválido')
+});
+
+const resetPasswordSchema = z.object({
+  password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+  confirmPassword: z.string().min(1, 'Confirmação de senha é obrigatória')
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Senhas não coincidem",
+  path: ["confirmPassword"]
+});
+
+type LoginForm = z.infer<typeof loginSchema>;
+type RegisterForm = z.infer<typeof registerSchema>;
+type ForgotPasswordForm = z.infer<typeof forgotPasswordSchema>;
+type ResetPasswordForm = z.infer<typeof resetPasswordSchema>;
 
 export default function AuthPage() {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'login' | 'register' | 'forgot-password'>('login');
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [showResetForm, setShowResetForm] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  const [selectedPlanCard, setSelectedPlanCard] = useState<'START' | 'PRO' | 'CLINICA' | null>(null);
   const [, setLocation] = useLocation();
-  const { validateUnique, isValidating } = useValidation();
   const { toast } = useToast();
   const { user, isLoading } = useAuth();
-
-  // Estados para hover sincronizado
-  const [hoveredPlan, setHoveredPlan] = useState<'START' | 'PRO' | 'CLINICA' | null>(null);
-
-  // Função para selecionar plano
-  const handlePlanSelection = (planType: 'START' | 'PRO' | 'CLINICA') => {
-    setSelectedPlanCard(planType);
-    toast({
-      title: `Plano ${planType} selecionado`,
-      description: `Você selecionou o plano ${planType}. Continue para finalizar sua escolha.`,
-    });
-  };
-
-  // Buscar planos de assinatura
-  const { data: subscriptionPlans = [] } = useQuery({
-    queryKey: ['/api/subscriptions/plans'],
-  });
 
   // Force light theme on auth page
   useEffect(() => {
@@ -100,6 +112,35 @@ export default function AuthPage() {
     }
   }, [toast]);
 
+  // Form hooks
+  const loginForm = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { username: '', password: '', remember: false }
+  });
+
+  const registerForm = useForm<RegisterForm>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      firstName: '', lastName: '', email: '', phone: '', username: '',
+      password: '', confirmPassword: '', roleId: 2, crm: undefined
+    }
+  });
+
+  const forgotPasswordForm = useForm<ForgotPasswordForm>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: '' }
+  });
+
+  const resetPasswordForm = useForm<ResetPasswordForm>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: { password: '', confirmPassword: '' }
+  });
+
+  // Fetch roles for registration
+  const rolesQuery = useQuery({
+    queryKey: ['/api/roles'],
+    enabled: showModal && modalType === 'register'
+  });
 
   // Mutations
   const loginMutation = useMutation({
@@ -245,35 +286,22 @@ export default function AuthPage() {
     }
   });
 
-
-  // Função auxiliar para validar campos únicos
-  const handleFieldValidation = async (field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string) => {
-    if (!value.trim()) {
-      setValidationErrors(prev => ({ ...prev, [field]: '' }));
-      return;
-    }
-    
-    const normalizedValue = field === 'cpf' ? onlyNumbers(value) : value;
-    const isUnique = await validateUnique(field, normalizedValue);
-    
-    if (!isUnique) {
-      const fieldNames = {
-        cpf: 'CPF',
-        crm: 'CRM', 
-        phone: 'Telefone',
-        email: 'Email',
-        username: 'Username'
-      };
-      setValidationErrors(prev => ({ 
-        ...prev, 
-        [field]: `${fieldNames[field]} já está em uso`
-      }));
-    } else {
-      setValidationErrors(prev => ({ ...prev, [field]: '' }));
-    }
+  // Form handlers
+  const onLoginSubmit = (data: LoginForm) => {
+    loginMutation.mutate(data);
   };
 
+  const onRegisterSubmit = (data: RegisterForm) => {
+    registerMutation.mutate(data);
+  };
 
+  const onForgotPasswordSubmit = (data: ForgotPasswordForm) => {
+    forgotPasswordMutation.mutate(data);
+  };
+
+  const onResetPasswordSubmit = (data: ResetPasswordForm) => {
+    resetPasswordMutation.mutate(data);
+  };
 
   const handleLoginClick = () => {
     setModalType('login');
@@ -285,63 +313,10 @@ export default function AuthPage() {
     setShowModal(true);
   };
 
-  // Modal handlers
-  const handleLoginSubmit = (data: LoginForm) => {
-    loginMutation.mutate(data);
-  };
-
-  const handleRegisterSubmit = async (data: RegisterForm) => {
-    // Limpar erros de validação anteriores
-    setValidationErrors({});
-    
-    // Validar unicidade de todos os campos obrigatórios
-    const validationPromises = [
-      validateUnique('cpf', onlyNumbers(data.cpf)),
-      validateUnique('crm', data.crm.toString()),
-      validateUnique('phone', data.phone),
-      validateUnique('email', data.email),
-      validateUnique('username', data.username)
-    ];
-    
-    const [cpfUnique, crmUnique, phoneUnique, emailUnique, usernameUnique] = await Promise.all(validationPromises);
-    
-    const errors: Record<string, string> = {};
-    if (!cpfUnique) errors.cpf = 'CPF já está em uso';
-    if (!crmUnique) errors.crm = 'CRM já está em uso';
-    if (!phoneUnique) errors.phone = 'Telefone já está em uso';
-    if (!emailUnique) errors.email = 'Email já está em uso';
-    if (!usernameUnique) errors.username = 'Username já está em uso';
-    
-    if (Object.keys(errors).length > 0) {
-      setValidationErrors(errors);
-      toast({
-        title: 'Erro no registro',
-        description: 'Alguns campos já estão em uso. Verifique e tente novamente.',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    // Normalizar CPF removendo formatação antes de enviar
-    const normalizedData = {
-      ...data,
-      cpf: onlyNumbers(data.cpf)
-    };
-    registerMutation.mutate(normalizedData);
-  };
-
-  const handleForgotPasswordSubmit = (data: ForgotPasswordForm) => {
-    forgotPasswordMutation.mutate(data);
-  };
-
-  const handleResetPasswordSubmit = (data: ResetPasswordForm) => {
-    resetPasswordMutation.mutate(data);
-  };
-
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-muted shadow-sm">
+      <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center min-h-[9rem] py-0.5">
             {/* Logo */}
@@ -354,22 +329,18 @@ export default function AuthPage() {
             </div>
             
             {/* Login/Register buttons */}
-            <div className="flex border px-1 py-1 rounded-2xl" style={{borderColor: 'hsl(var(--medsync-blue))'}}>
+            <div className="flex border border-accent px-1 py-1 rounded-2xl">
               <Button
                 onClick={handleLoginClick}
                 variant="default"
-                className="text-white px-8 py-2 rounded-xl font-medium text-base h-9 transition-all duration-200"
-                style={{backgroundColor: 'hsl(var(--medsync-blue))'}}
-                onMouseEnter={(e) => e.target.style.backgroundColor = 'hsl(var(--accent))'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'hsl(var(--medsync-blue))'}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 px-8 py-2 rounded-xl font-medium text-base"
               >
                 <strong>Login</strong>
               </Button>
               <Button
                 onClick={handleRegisterClick}
                 variant="ghost"
-                className="bg-transparent px-8 py-2 rounded-xl font-medium text-base border-0 h-9 hover:bg-accent/10"
-                style={{color: 'hsl(var(--medsync-blue))'}}
+                className="text-accent hover:bg-accent/10 bg-transparent px-8 py-2 rounded-xl font-medium text-base border-0"
               >
                 <strong>Registrar</strong>
               </Button>
@@ -379,54 +350,106 @@ export default function AuthPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-24 bg-cover bg-no-repeat md:bg-center" style={{
-        backgroundImage: `url(${avatarTest})`,
-        backgroundPosition: '65% center' // Mobile: médico posicionado à direita em 65%
-      }}>
+      <section className="bg-gradient-to-br from-slate-800 to-slate-900 py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-start">
             {/* Left side - Text content aligned left */}
-            <div className="text-white z-10 max-w-md lg:max-w-2xl -mt-8">
-              <div className="mb-6 text-left relative">
-                <img 
-                  src={MedSyncLogo} 
-                  alt="MedSync Logo" 
-                  className="h-24 sm:h-32 lg:h-40 mb-6 ml-8 relative z-10" 
-                />
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight -mt-8 sm:-mt-12 ml-4 sm:ml-16 font-lato">
-                  <span className="text-white">Inteligência</span><br />
-                  <span className="text-white whitespace-nowrap">Médica Integrada</span>
-                </h1>
-              </div>
-              <p className="text-lg mb-4 text-primary/80 italic leading-relaxed text-center">
+            <div className="text-white z-10 max-w-md -mt-8">
+              <h1 className="text-5xl font-bold mb-6 leading-tight text-left">
+                <span className="text-accent">Medsync</span><br />
+                <span className="text-white">Inteligência</span><br />
+                <span className="text-white">Médica Integrada</span>
+              </h1>
+              <p className="text-lg mb-4 text-primary/80 italic leading-relaxed text-left">
                 "A Revolução nas Autorizações Cirúrgicas.<br />
                 Menos espera. Mais cuidado."
               </p>
-              <div className="text-left ml-16">
-                <Button
-                  onClick={handleRegisterClick}
-                  variant="default"
-                  className="text-white px-8 py-2 rounded-xl font-medium text-base h-9 transition-all duration-200"
-                  style={{backgroundColor: 'hsl(var(--medsync-blue))'}}
-                  onMouseEnter={(e) => e.target.style.backgroundColor = 'hsl(var(--accent))'}
-                  onMouseLeave={(e) => e.target.style.backgroundColor = 'hsl(var(--medsync-blue))'}
-                >
-                  <strong>Teste grátis</strong>
-                </Button>
+              <p className="text-gray-300 text-base leading-relaxed text-left">
+                O MedSync utiliza algoritmos treinados com base em milhares de protocolos 
+                ortopédicos e cirúrgicos para sugerir os procedimentos mais adequados - tudo 
+                de forma segura e editável.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Benefits Section */}
+      <section className="py-16 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-4xl font-bold text-gray-900 mb-12">
+            O <span className="text-cyan-500">sistema inteligente</span><br />
+            que automatiza<br />
+            pedidos cirúrgicos
+          </h2>
+          
+          {/* Three feature cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex items-center space-x-4">
+              <div className="w-12 h-12 bg-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-base font-semibold text-gray-900">
+                  Organiza toda a<br />documentação
+                </h3>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex items-center space-x-4">
+              <div className="w-12 h-12 bg-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <Stethoscope className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-base font-semibold text-gray-900">
+                  Integra convênios<br />e hospitais
+                </h3>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex items-center space-x-4">
+              <div className="w-12 h-12 bg-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-base font-semibold text-gray-900">
+                  Acelera aprovação<br />de cirurgias
+                </h3>
               </div>
             </div>
           </div>
         </div>
       </section>
 
+      {/* Blue Section with Background Image */}
+      <section 
+        className="mx-4 mb-16 relative overflow-hidden rounded-lg"
+        style={{
+          backgroundImage: `url(${blueSectionImage})`,
+          backgroundSize: 'contain',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center',
+          height: '300px',
+          width: '100%',
+          maxWidth: '1200px',
+          margin: '0 auto 4rem auto'
+        }}
+      >
+        {/* Invisible text overlays to match the image content - for screen readers */}
+        <div className="sr-only">
+          <p>Indicado para cirurgiões e clínicas que buscam eficiência e rastreabilidade nos processos cirúrgicos.</p>
+          <p>Ideal para médicos cirurgiões que desejam ganhar tempo, evitar glosas e aumentar sua produtividade.</p>
+        </div>
+      </section>
+
       {/* Organization Section */}
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-6xl font-bold mb-4">
-            <span style={{color: 'hsl(var(--medsync-blue))'}}>Organização</span><br />
+          <h2 className="text-4xl font-bold mb-4">
+            <span className="text-cyan-500">Organização</span><br />
             <span className="text-gray-900">Centralizada</span>
           </h2>
-          <p className="text-md text-gray-600 mb-12 font-bold">
+          <p className="text-xl text-gray-600 mb-12">
             Exames, laudos, documentos e pedidos em um só lugar.
           </p>
           
@@ -434,10 +457,10 @@ export default function AuthPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             <Card className="bg-white border border-gray-200 shadow-lg hover:shadow-xl transition-shadow">
               <CardContent className="p-6 text-center">
-                <div className="flex items-center justify-center mx-auto mb-4">
-                  <img src={iconHome1} alt="Economia de tempo" className="w-16 h-16" />
+                <div className="w-16 h-16 bg-cyan-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <Clock className="w-8 h-8 text-cyan-600" />
                 </div>
-                <h3 className="text-lg font-semibold mb-3" style={{color: 'hsl(var(--medsync-blue))'}}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
                   Economia<br />de tempo
                 </h3>
                 <p className="text-sm text-gray-600">
@@ -448,24 +471,24 @@ export default function AuthPage() {
             
             <Card className="bg-white border border-gray-200 shadow-lg hover:shadow-xl transition-shadow">
               <CardContent className="p-6 text-center">
-                <div className="flex items-center justify-center mx-auto mb-4">
-                  <img src={iconHome2} alt="Redução de glosas" className="w-16 h-16" />
+                <div className="w-16 h-16 bg-cyan-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <TrendingDown className="w-8 h-8 text-cyan-600" />
                 </div>
-                <h3 className="text-lg font-semibold mb-3" style={{color: 'hsl(var(--medsync-blue))'}}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
                   Redução<br />de glosas
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Preenchimento técnico, testado previamente e baseado em normas da tabela <span className="font-medium" style={{color: 'hsl(var(--medsync-blue))'}}>CBHPM</span>.
+                  Preenchimento técnico, testado previamente e baseado em normas da tabela <span className="text-cyan-600 font-medium">CBHPM</span>.
                 </p>
               </CardContent>
             </Card>
             
             <Card className="bg-white border border-gray-200 shadow-lg hover:shadow-xl transition-shadow">
               <CardContent className="p-6 text-center">
-                <div className="flex items-center justify-center mx-auto mb-4">
-                  <img src={iconHome3} alt="Produção otimizada" className="w-16 h-16" />
+                <div className="w-16 h-16 bg-cyan-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <TrendingUp className="w-8 h-8 text-cyan-600" />
                 </div>
-                <h3 className="text-lg font-semibold mb-3" style={{color: 'hsl(var(--medsync-blue))'}}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
                   Produção<br />otimizada
                 </h3>
                 <p className="text-sm text-gray-600">
@@ -476,10 +499,10 @@ export default function AuthPage() {
             
             <Card className="bg-white border border-gray-200 shadow-lg hover:shadow-xl transition-shadow">
               <CardContent className="p-6 text-center">
-                <div className="flex items-center justify-center mx-auto mb-4">
-                  <img src={iconHome4} alt="Segurança e Rastreio" className="w-16 h-16" />
+                <div className="w-16 h-16 bg-cyan-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <Shield className="w-8 h-8 text-cyan-600" />
                 </div>
-                <h3 className="text-lg font-semibold mb-3" style={{color: 'hsl(var(--medsync-blue))'}}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
                   Segurança<br />e Rastreio
                 </h3>
                 <p className="text-sm text-gray-600">
@@ -491,206 +514,369 @@ export default function AuthPage() {
         </div>
       </section>
 
-      {/* Blue Section with Background Image */}
-      <section 
-        className="mb-16 relative overflow-hidden py-12 pb-28"
-        style={{
-          backgroundColor: 'hsl(var(--medsync-blue))',
-          width: '100%',
-          borderBottomLeftRadius: '60px',
-          borderBottomRightRadius: '60px'
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-4 sm:gap-8">
-          {/* Container da imagem do médico */}
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 sm:p-8 mx-4 sm:mx-8 flex-1 flex items-center justify-center sm:justify-end">
-            <img 
-              src={sectionDoctorImage} 
-              alt="Doctor" 
-              className="h-64 sm:h-80 lg:h-96 w-auto object-contain"
-            />
-          </div>
-          
-          {/* Container das caixas de texto com Y sobreposto */}
-          <div className="relative mx-4 sm:mx-8">
-            <div className="flex flex-col gap-4 sm:gap-8">
-              {/* Primeira caixa */}
-              <div className="flex justify-start pl-0 sm:pl-12 lg:pl-56">
-                <div className="text-white text-base sm:text-xl font-medium leading-relaxed border border-white rounded-xl px-4 sm:px-6 py-3 sm:py-4 max-w-xs sm:max-w-none">
-                  <div className="w-1/2 h-px bg-white mb-3"></div>
-                  <p>
-                    Indicado para <strong>cirurgiões e<br />
-                    clínicas</strong> que buscam eficiência<br />
-                    e rastreabilidade nos processos<br />
-                    cirúrgicos.
-                  </p>
-                </div>
-              </div>
-              
-              {/* Segunda caixa */}
-              <div className="flex justify-end pr-0 sm:pr-12 lg:pr-56 -mt-1 sm:-mt-8">
-                <div className="text-white text-base sm:text-xl font-medium leading-relaxed border border-white rounded-xl px-4 sm:px-6 py-3 sm:py-4 max-w-xs sm:max-w-none">
-                  <div className="w-1/2 h-px bg-white mb-3"></div>
-                  <p>
-                    Ideal para <strong>médicos cirurgiões</strong><br />
-                    que desejam ganhar tempo,<br />
-                    evitar glosas e <strong>aumentar sua<br />
-                    produtividade.</strong>
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            {/* Y Stylized sobreposto apenas nas caixas de texto */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none pt-20 sm:pt-32 lg:pt-44">
-              <img 
-                src={sectionYStylized} 
-                alt="Y Stylized" 
-                className="h-32 sm:h-48 lg:h-72 w-auto opacity-80 sm:opacity-100"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits Section */}
-      <section className="py-16 bg-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-5xl font-bold text-gray-900 mb-12">
-            O <span style={{color: 'hsl(var(--medsync-blue))'}}>sistema inteligente</span><br />
-            que automatiza<br />
-            pedidos cirúrgicos
-          </h2>
-          
-          {/* Three feature cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 flex flex-col items-center">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{backgroundColor: 'hsl(var(--medsync-blue))'}}>
-                <FileText className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-center">
-                <h3 className="text-base font-semibold text-gray-900">
-                  Organiza toda a<br />documentação
-                </h3>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 flex flex-col items-center">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{backgroundColor: 'hsl(var(--medsync-blue))'}}>
-                <Shield className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-center">
-                <h3 className="text-base font-semibold text-gray-900">
-                  Integra convênios<br />e hospitais
-                </h3>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 flex flex-col items-center">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{backgroundColor: 'hsl(var(--medsync-blue))'}}>
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-              <div className="text-center">
-                <h3 className="text-base font-semibold text-gray-900">
-                  Acelera aprovação<br />de cirurgias
-                </h3>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
 
 
       {/* Login/Register Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-4xl w-[calc(100vw-16px)] sm:w-full mx-auto bg-gray-50 rounded-2xl border-2 border-gray-100 shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto">
-          {/* Cabeçalho completo */}
-          <DialogHeader className="flex flex-col px-4 lg:px-6">
-            {/* Logo no modal */}
-            <div className="flex justify-center">
-              <img 
-                src={MedSyncLogo} 
-                alt="MedSync Logo" 
-                className="h-16 w-auto lg:h-24" 
-              />
-            </div>
-            {modalType === 'forgot-password' && (
-              <>
-                <DialogTitle className="text-2xl font-bold text-gray-900 text-center">
-                  Recuperar senha
-                </DialogTitle>
-                <DialogDescription className="text-gray-600 leading-relaxed text-center">
-                  Digite seu email para receber instruções de recuperação
-                </DialogDescription>
-              </>
-            )}
-            {modalType === 'login' && (
-              <>
-                <DialogTitle className="sr-only">
-                  Login MedSync
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Faça login na plataforma MedSync
-                </DialogDescription>
-              </>
-            )}
-            {modalType === 'register' && (
-              <>
-                <DialogTitle className="sr-only">
-                  Registro MedSync
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Registre-se na plataforma MedSync
-                </DialogDescription>
-              </>
-            )}
-            {modalType === 'reset-password' && (
-              <>
-                <DialogTitle className="text-2xl font-bold text-gray-900 text-center">
-                  Redefinir senha
-                </DialogTitle>
-                <DialogDescription className="text-gray-600 leading-relaxed text-center">
-                  Digite sua nova senha
-                </DialogDescription>
-              </>
-            )}
+        <DialogContent className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl font-bold text-gray-900">
+              {modalType === 'login' && 'Entrar no MedSync'}
+              {modalType === 'register' && 'Criar conta no MedSync'}
+              {modalType === 'forgot-password' && 'Recuperar senha'}
+            </DialogTitle>
+            <DialogDescription className="text-center text-gray-600">
+              {modalType === 'login' && 'Faça login para acessar sua conta'}
+              {modalType === 'register' && 'Crie sua conta para começar a usar o sistema'}
+              {modalType === 'forgot-password' && 'Digite seu email para receber instruções de recuperação'}
+            </DialogDescription>
           </DialogHeader>
+          
+          {showResetForm ? (
+            /* Reset Password Form */
+            <div className="space-y-4">
+              <div className="text-center space-y-2">
+                <h2 className="text-xl font-semibold">Redefinir senha</h2>
+                <p className="text-gray-600">Digite sua nova senha abaixo</p>
+              </div>
+              
+              <form onSubmit={resetPasswordForm.handleSubmit(onResetPasswordSubmit)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="reset-password" className="text-gray-600">Nova senha</Label>
+                  <Input
+                    {...resetPasswordForm.register('password')}
+                    id="reset-password"
+                    type="password"
+                    placeholder="Digite sua nova senha"
+                    className="w-full"
+                  />
+                  {resetPasswordForm.formState.errors.password && (
+                    <p className="text-red-500 text-sm">{resetPasswordForm.formState.errors.password.message}</p>
+                  )}
+                </div>
 
-          <div className="p-4 sm:p-6 lg:p-12 bg-white">
-            {modalType === 'login' ? (
-              <LoginModal
-                onSubmit={handleLoginSubmit}
-                onSwitchToRegister={() => setModalType('register')}
-                onSwitchToForgotPassword={() => setModalType('forgot-password')}
-                isLoading={loginMutation.isPending}
-              />
-            ) : modalType === 'register' ? (
-              <RegisterModal
-                onSubmit={handleRegisterSubmit}
-                onSwitchToLogin={() => setModalType('login')}
-                isLoading={registerMutation.isPending}
-                validationErrors={validationErrors}
-                onFieldValidation={handleFieldValidation}
-              />
-            ) : modalType === 'forgot-password' ? (
-              <ForgotPasswordModal
-                onSubmitForgotPassword={handleForgotPasswordSubmit}
-                onSubmitResetPassword={handleResetPasswordSubmit}
-                onBackToLogin={() => setModalType('login')}
-                isLoadingForgot={forgotPasswordMutation.isPending}
-                isLoadingReset={resetPasswordMutation.isPending}
-                resetEmailSent={resetEmailSent}
-                showResetForm={showResetForm}
-                setResetEmailSent={setResetEmailSent}
-              />
-            ) : null}
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reset-confirmPassword" className="text-gray-600">Confirmar nova senha</Label>
+                  <Input
+                    {...resetPasswordForm.register('confirmPassword')}
+                    id="reset-confirmPassword"
+                    type="password"
+                    placeholder="Confirme sua nova senha"
+                    className="w-full"
+                  />
+                  {resetPasswordForm.formState.errors.confirmPassword && (
+                    <p className="text-red-500 text-sm">{resetPasswordForm.formState.errors.confirmPassword.message}</p>
+                  )}
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full bg-cyan-500 hover:bg-cyan-600"
+                  disabled={resetPasswordMutation.isPending}
+                >
+                  {resetPasswordMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  {resetPasswordMutation.isPending ? "Atualizando..." : "Atualizar senha"}
+                </Button>
+              </form>
+              
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResetForm(false);
+                    setModalType('login');
+                    // Limpar URL
+                    window.history.replaceState({}, '', '/auth');
+                  }}
+                  className="text-sm text-primary hover:text-primary/80 underline"
+                >
+                  Voltar ao login
+                </button>
+              </div>
+            </div>
+          ) : modalType === 'forgot-password' ? (
+            // Formulário de recuperação de senha
+            <div className="space-y-4">
+              {!resetEmailSent ? (
+                <form onSubmit={forgotPasswordForm.handleSubmit(onForgotPasswordSubmit)} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email" className="text-gray-600">Email</Label>
+                    <Input
+                      {...forgotPasswordForm.register('email')}
+                      id="forgot-email"
+                      type="email"
+                      placeholder="Digite seu email cadastrado"
+                      className="w-full"
+                    />
+                    {forgotPasswordForm.formState.errors.email && (
+                      <p className="text-red-500 text-sm">{forgotPasswordForm.formState.errors.email.message}</p>
+                    )}
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full btn-sky"
+                    disabled={forgotPasswordMutation.isPending}
+                  >
+                    {forgotPasswordMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    {forgotPasswordMutation.isPending ? "Enviando..." : "Enviar instruções"}
+                  </Button>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => setModalType('login')}
+                      className="text-sm text-primary hover:text-primary/80 underline"
+                    >
+                      Voltar ao login
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="text-center space-y-4">
+                  <CheckCircle2 className="mx-auto h-16 w-16 text-green-500" />
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Email enviado!</h3>
+                    <p className="text-gray-600 text-sm mb-4">
+                      Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setModalType('login');
+                        setResetEmailSent(false);
+                        forgotPasswordForm.reset();
+                      }}
+                      className="text-sm text-primary hover:text-primary/80 underline"
+                    >
+                      Voltar ao login
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Tabs value={modalType} onValueChange={(value) => setModalType(value as 'login' | 'register')} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="login">Login</TabsTrigger>
+                <TabsTrigger value="register">Registrar</TabsTrigger>
+              </TabsList>
+
+            {/* Login Tab */}
+            <TabsContent value="login" className="space-y-4">
+              <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username" className="text-gray-600">Usuário</Label>
+                  <Input
+                    {...loginForm.register('username')}
+                    id="username"
+                    placeholder="Digite seu usuário"
+                    className="w-full"
+                  />
+                  {loginForm.formState.errors.username && (
+                    <p className="text-red-500 text-sm">{loginForm.formState.errors.username.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-gray-600">Senha</Label>
+                  <Input
+                    {...loginForm.register('password')}
+                    id="password"
+                    type="password"
+                    placeholder="Digite sua senha"
+                    className="w-full"
+                  />
+                  {loginForm.formState.errors.password && (
+                    <p className="text-red-500 text-sm">{loginForm.formState.errors.password.message}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      {...loginForm.register('remember')}
+                      id="remember"
+                    />
+                    <Label htmlFor="remember" className="text-sm">
+                      Lembrar de mim
+                    </Label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModalType('forgot-password')}
+                    className="text-sm text-primary hover:text-primary/80 underline"
+                  >
+                    Esqueci minha senha
+                  </button>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full btn-sky"
+                  disabled={loginMutation.isPending}
+                >
+                  {loginMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  {loginMutation.isPending ? "Entrando..." : "Entrar"}
+                </Button>
+              </form>
+            </TabsContent>
+
+            {/* Register Tab */}
+            <TabsContent value="register" className="space-y-2">
+              <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="reg-firstName" className="text-sm text-gray-600">Nome</Label>
+                    <Input
+                      {...registerForm.register('firstName')}
+                      id="reg-firstName"
+                      placeholder="Nome"
+                      className="h-9"
+                    />
+                    {registerForm.formState.errors.firstName && (
+                      <p className="text-red-500 text-xs">{registerForm.formState.errors.firstName.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="reg-lastName" className="text-sm text-gray-600">Sobrenome</Label>
+                    <Input
+                      {...registerForm.register('lastName')}
+                      id="reg-lastName"
+                      placeholder="Sobrenome"
+                      className="h-9"
+                    />
+                    {registerForm.formState.errors.lastName && (
+                      <p className="text-red-500 text-xs">{registerForm.formState.errors.lastName.message}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="reg-email" className="text-sm text-gray-600">Email</Label>
+                  <Input
+                    {...registerForm.register('email')}
+                    id="reg-email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    className="h-9"
+                  />
+                  {registerForm.formState.errors.email && (
+                    <p className="text-red-500 text-xs">{registerForm.formState.errors.email.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="reg-phone" className="text-sm text-gray-600">Telefone</Label>
+                  <Input
+                    {...registerForm.register('phone')}
+                    id="reg-phone"
+                    type="tel"
+                    placeholder="(11) 99999-9999"
+                    className="h-9"
+                  />
+                  {registerForm.formState.errors.phone && (
+                    <p className="text-red-500 text-xs">{registerForm.formState.errors.phone.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="reg-username" className="text-sm text-gray-600">Usuário</Label>
+                  <Input
+                    {...registerForm.register('username')}
+                    id="reg-username"
+                    placeholder="usuario"
+                    className="h-9"
+                  />
+                  {registerForm.formState.errors.username && (
+                    <p className="text-red-500 text-xs">{registerForm.formState.errors.username.message}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="reg-password" className="text-sm text-gray-600">Senha</Label>
+                    <Input
+                      {...registerForm.register('password')}
+                      id="reg-password"
+                      type="password"
+                      placeholder="••••••••"
+                      className="h-9"
+                    />
+                    {registerForm.formState.errors.password && (
+                      <p className="text-red-500 text-xs">{registerForm.formState.errors.password.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="reg-confirm-password" className="text-sm text-gray-600">Confirmar</Label>
+                    <Input
+                      {...registerForm.register('confirmPassword')}
+                      id="reg-confirm-password"
+                      type="password"
+                      placeholder="••••••••"
+                      className="h-9"
+                    />
+                    {registerForm.formState.errors.confirmPassword && (
+                      <p className="text-red-500 text-xs">{registerForm.formState.errors.confirmPassword.message}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="reg-role" className="text-sm text-gray-600">Função</Label>
+                    <Select 
+                      value={registerForm.watch('roleId')?.toString() || ""} 
+                      onValueChange={(value) => registerForm.setValue('roleId', parseInt(value))}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Selecione sua função" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.isArray(rolesQuery.data) && rolesQuery.data.map((role: any) => (
+                          <SelectItem key={role.id} value={role.id.toString()}>
+                            {role.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {registerForm.formState.errors.roleId && (
+                      <p className="text-red-500 text-xs">{registerForm.formState.errors.roleId.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="reg-crm" className="text-sm text-gray-600">CRM (opcional)</Label>
+                    <Input
+                      {...registerForm.register('crm', { valueAsNumber: true })}
+                      id="reg-crm"
+                      type="number"
+                      placeholder="123456"
+                      className="h-9"
+                    />
+                    {registerForm.formState.errors.crm && (
+                      <p className="text-red-500 text-xs">{registerForm.formState.errors.crm.message}</p>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full btn-sky h-9 mt-3"
+                  disabled={registerMutation.isPending}
+                >
+                  {registerMutation.isPending ? "Registrando..." : "Criar conta"}
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+          )}
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-                  
-                  {/* Linha curva à direita */}
-                  <div className="absolute top-6 right-[calc(16.67%-12px)] w-6 h-6 border-t-2 border-r-2 border-accent rounded-tr-full" />

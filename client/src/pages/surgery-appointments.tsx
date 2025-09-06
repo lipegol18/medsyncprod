@@ -4,32 +4,14 @@ import { useLocation } from 'wouter';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { SurgeryAppointmentFormCompact } from '@/components/surgery-appointment-form-compact';
-import { SurgicalCalendarBig } from '@/components/surgical-calendar-big';
+import { CalendarView } from '@/components/calendar-view';
 import { ArrowLeft } from 'lucide-react';
 import type { SurgeryAppointment } from '@shared/schema';
-
-// Interface estendida que inclui os dados do paciente
-interface SurgeryAppointmentWithPatient extends SurgeryAppointment {
-  patientName?: string | null;
-}
-
-// Interface detalhada para o formulário
-interface SurgeryAppointmentWithDetails extends SurgeryAppointment {
-  medicalOrderTitle: string;
-  medicalOrderProcedureType: string;
-  medicalOrderComplexity: string;
-  patientName: string;
-  patientPhone: string;
-  hospitalName: string;
-  hospitalCnes: string;
-  doctorName: string;
-  doctorCrm: string;
-}
 
 export default function SurgeryAppointments() {
   const [, setLocation] = useLocation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedAppointment, setSelectedAppointment] = useState<SurgeryAppointmentWithPatient | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<SurgeryAppointment | null>(null);
 
   const { data: appointments = [], isLoading, error, refetch } = useQuery({
     queryKey: ['/api/surgery-appointments'],
@@ -38,7 +20,7 @@ export default function SurgeryAppointments() {
       if (!response.ok) {
         throw new Error('Failed to fetch appointments');
       }
-      return response.json() as Promise<SurgeryAppointmentWithPatient[]>;
+      return response.json() as Promise<SurgeryAppointment[]>;
     },
   });
 
@@ -83,7 +65,7 @@ export default function SurgeryAppointments() {
     setIsDialogOpen(true);
   };
 
-  const handleEditAppointment = (appointment: SurgeryAppointmentWithPatient) => {
+  const handleEditAppointment = (appointment: SurgeryAppointment) => {
     setSelectedAppointment(appointment);
     setIsDialogOpen(true);
   };
@@ -99,35 +81,21 @@ export default function SurgeryAppointments() {
     handleCloseDialog();
   };
 
-  const handleUpdateAppointment = async (appointmentId: number, updates: Partial<SurgeryAppointmentWithPatient> & { scheduledDate?: Date | string }) => {
+  const handleUpdateAppointment = async (appointmentId: number, updates: Partial<SurgeryAppointment>) => {
     console.log('🔄 handleUpdateAppointment called:', { appointmentId, updates });
     
     try {
-      // Converter Date para string ISO se necessário
-      const processedUpdates = { ...updates };
-      if (updates.scheduledDate) {
-        if (updates.scheduledDate instanceof Date) {
-          processedUpdates.scheduledDate = updates.scheduledDate.toISOString();
-        } else {
-          processedUpdates.scheduledDate = updates.scheduledDate;
-        }
-      }
-      
-      console.log('📋 Processed updates:', processedUpdates);
-      
       const response = await fetch(`/api/surgery-appointments/${appointmentId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(processedUpdates),
+        body: JSON.stringify(updates),
       });
 
       console.log('📡 API response status:', response.status);
       
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ API Error response:', errorData);
         throw new Error('Failed to update appointment');
       }
 
@@ -177,7 +145,7 @@ export default function SurgeryAppointments() {
         </div>
       </div>
 
-      <SurgicalCalendarBig 
+      <CalendarView 
         appointments={appointments}
         onNewAppointment={handleCreateAppointment}
         onEditAppointment={handleEditAppointment}
@@ -192,7 +160,7 @@ export default function SurgeryAppointments() {
             </DialogTitle>
           </DialogHeader>
           <SurgeryAppointmentFormCompact
-            appointment={selectedAppointment as SurgeryAppointmentWithDetails | null}
+            appointment={selectedAppointment}
             mode={selectedAppointment ? 'edit' : 'create'}
             preSelectedOrderId={preSelectedOrderId}
             onClose={handleCloseDialog}

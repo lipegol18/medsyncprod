@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, ChevronDown, ScanLine, Hospital, Building, UserCog, Shield, MessageSquare, Heart, Link2, Package, FileText, Activity, Target } from "lucide-react";
+import { Settings, ChevronDown, ScanLine, Hospital, Building, UserCog, Shield, MessageSquare, Heart, Link2, Package, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { t } from "@/lib/i18n";
@@ -120,33 +120,6 @@ export function AdminMenu() {
               <div className="flex items-center w-full">
                 <FileText className="mr-2 h-4 w-4" />
                 <span className="header-text">Cadastro CID-10</span>
-              </div>
-            </Link>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem asChild>
-            <Link href="/admin/surgical-procedures">
-              <div className="flex items-center w-full">
-                <Activity className="mr-2 h-4 w-4" />
-                <span className="header-text">Procedimentos Cirúrgicos</span>
-              </div>
-            </Link>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem asChild>
-            <Link href="/admin/surgical-approaches">
-              <div className="flex items-center w-full">
-                <Target className="mr-2 h-4 w-4" />
-                <span className="header-text">Condutas Cirúrgicas</span>
-              </div>
-            </Link>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem asChild>
-            <Link href="/admin/procedure-associations">
-              <div className="flex items-center w-full">
-                <Link2 className="mr-2 h-4 w-4" />
-                <span className="header-text">Gestão de Associações</span>
               </div>
             </Link>
           </DropdownMenuItem>

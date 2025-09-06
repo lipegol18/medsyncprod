@@ -218,7 +218,6 @@ export function SurgeryAppointmentForm({ appointment, mode, preSelectedOrderId, 
         description: 'O agendamento foi criado com sucesso.',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/surgery-appointments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/surgery-appointments/upcoming'] });
       onClose();
     },
     onError: (error: any) => {
@@ -247,7 +246,6 @@ export function SurgeryAppointmentForm({ appointment, mode, preSelectedOrderId, 
         description: 'O agendamento foi atualizado com sucesso.',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/surgery-appointments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/surgery-appointments/upcoming'] });
       onClose();
     },
     onError: (error: any) => {

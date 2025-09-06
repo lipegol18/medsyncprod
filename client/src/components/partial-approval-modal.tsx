@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { CheckCircle, XCircle, Hash, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { PostApprovalDecisionModal } from "@/components/post-approval-decision-modal";
 
 interface ProcedureApproval {
   id: number;
@@ -23,23 +22,18 @@ interface PartialApprovalModalProps {
   onClose: () => void;
   orderId: number;
   onApprovalComplete: () => void;
-  onGenerateAppeal?: (orderId: number) => void;
-  onAcceptGloss?: (orderId: number) => void;
 }
 
 export function PartialApprovalModal({ 
   isOpen, 
   onClose, 
   orderId, 
-  onApprovalComplete,
-  onGenerateAppeal,
-  onAcceptGloss
+  onApprovalComplete 
 }: PartialApprovalModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
   const [procedureApprovals, setProcedureApprovals] = useState<ProcedureApproval[]>([]);
-  const [showDecisionModal, setShowDecisionModal] = useState(false);
 
   // Buscar procedimentos do pedido
   const { data: procedures, isLoading } = useQuery({
@@ -56,10 +50,8 @@ export function PartialApprovalModal({
         code: proc.code,
         name: proc.name,
         quantityRequested: proc.quantityRequested,
-        // Usar o status real do banco de dados, mapear 'em_analise' para null para permitir edição
-        status: proc.status === 'em_analise' ? null : (proc.status as 'aprovado' | 'negado'),
-        // Usar quantityApproved do banco se existir, senão usar quantityRequested como padrão
-        quantityApproved: proc.quantityApproved ?? proc.quantityRequested,
+        status: null, // Sempre inicializar com null (vazio)
+        quantityApproved: proc.quantityRequested, // Valor padrão igual à quantidade solicitada
         isMain: proc.isMain
       }));
       setProcedureApprovals(initialApprovals);
@@ -92,9 +84,8 @@ export function PartialApprovalModal({
         description: "As aprovações dos procedimentos foram atualizadas com sucesso.",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-orders', orderId, 'procedures'] });
-      
-      // Mostrar modal de decisão (não fechar o modal principal ainda)
-      setShowDecisionModal(true);
+      onApprovalComplete();
+      onClose();
     },
     onError: (error) => {
       console.error('Erro ao salvar aprovações:', error);
@@ -179,62 +170,6 @@ export function PartialApprovalModal({
         return <XCircle className="h-4 w-4 text-destructive" />;
       default:
         return null;
-    }
-  };
-
-  // Calcular estatísticas para o modal de decisão
-  const approvedItems = procedureApprovals.filter(proc => proc.status === 'aprovado').length;
-  const deniedItems = procedureApprovals.filter(proc => proc.status === 'negado').length;
-
-  // Funções para lidar com as decisões do segundo modal
-  const handleGenerateAppeal = async () => {
-    try {
-      // Alterar status do pedido para "pendencia" antes de abrir tela de recurso
-      const response = await fetch(`/api/medical-orders/${orderId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: 'pendencia' })
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao atualizar status do pedido');
-      }
-
-      console.log(`Status do pedido ${orderId} alterado para: pendencia`);
-      
-      // Invalidar queries para atualizar dados do cache
-      await queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
-      await queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
-      await queryClient.refetchQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
-      
-      // Aguardar um pouco para garantir que o cache foi atualizado
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setShowDecisionModal(false);
-      onApprovalComplete();
-      onClose();
-      
-      if (onGenerateAppeal) {
-        onGenerateAppeal(orderId);
-      }
-    } catch (error) {
-      console.error('Erro ao alterar status para pendencia:', error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível alterar o status do pedido.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleAcceptGloss = () => {
-    setShowDecisionModal(false);
-    onApprovalComplete();
-    onClose();
-    if (onAcceptGloss) {
-      onAcceptGloss(orderId);
     }
   };
 
@@ -399,21 +334,6 @@ export function PartialApprovalModal({
           </button>
         </div>
       </div>
-
-      {/* Modal de Decisão Pós-Aprovação */}
-      <PostApprovalDecisionModal
-        isOpen={showDecisionModal}
-        onClose={() => {
-          setShowDecisionModal(false);
-          onApprovalComplete();
-          onClose();
-        }}
-        orderId={orderId}
-        approvedItems={approvedItems}
-        deniedItems={deniedItems}
-        onGenerateAppeal={handleGenerateAppeal}
-        onAcceptGloss={handleAcceptGloss}
-      />
     </div>
   );
 }

@@ -1,3 +1,2 @@
 # medsyncnew
 # medsyncprod
-# medsyncHomolo

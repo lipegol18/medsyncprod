@@ -1,191 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@200;300;400;500;600;700;800;900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
-
-/* Proxima Nova Font Faces - Todas as variações disponíveis */
-@font-face {
-  font-family: 'Proxima Nova';
-  src: url('./assets/fonts/ProximaNova-Light.otf') format('opentype');
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova';
-  src: url('./assets/fonts/ProximaNova-LightItalic.otf') format('opentype');
-  font-weight: 300;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova';
-  src: url('./assets/fonts/ProximaNova-Regular.otf') format('opentype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova';
-  src: url('./assets/fonts/ProximaNova-RegularItalic.otf') format('opentype');
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova';
-  src: url('./assets/fonts/ProximaNova-Semibold.otf') format('opentype');
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova';
-  src: url('./assets/fonts/ProximaNova-SemiboldItalic.otf') format('opentype');
-  font-weight: 600;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova';
-  src: url('./assets/fonts/ProximaNova-Bold.otf') format('opentype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova';
-  src: url('./assets/fonts/ProximaNova-BoldIt.otf') format('opentype');
-  font-weight: 700;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova';
-  src: url('./assets/fonts/ProximaNova-Extrabold.otf') format('opentype');
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova';
-  src: url('./assets/fonts/ProximaNova-Black.otf') format('opentype');
-  font-weight: 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-/* Proxima Nova Condensed Font Faces */
-@font-face {
-  font-family: 'Proxima Nova Condensed';
-  src: url('./assets/fonts/ProximaNovaCond-Light.otf') format('opentype');
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova Condensed';
-  src: url('./assets/fonts/ProximaNovaCond-LightIt.otf') format('opentype');
-  font-weight: 300;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova Condensed';
-  src: url('./assets/fonts/ProximaNovaCond-Regular.otf') format('opentype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova Condensed';
-  src: url('./assets/fonts/ProximaNovaCond-RegularIt.otf') format('opentype');
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova Condensed';
-  src: url('./assets/fonts/ProximaNovaCond-Semibold.otf') format('opentype');
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Proxima Nova Condensed';
-  src: url('./assets/fonts/ProximaNovaCond-SemiboldIt.otf') format('opentype');
-  font-weight: 600;
-  font-style: italic;
-  font-display: swap;
-}
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Classe personalizada para valores de preços com fonte Nunito */
-.price-value {
-  font-family: 'Nunito', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-weight: 700;
-  font-feature-settings: "tnum" 1;
-  letter-spacing: -0.02em;
-}
-
-/* Classes para diferentes pesos da fonte Inter (fonte padrão) */
-.font-thin { font-weight: 100; }
-.font-extralight { font-weight: 200; }
-.font-light { font-weight: 300; }
-.font-normal { font-weight: 400; }
-.font-medium { font-weight: 500; }
-.font-semibold { font-weight: 600; }
-.font-bold { font-weight: 700; }
-.font-extrabold { font-weight: 800; }
-.font-black { font-weight: 900; }
-
-/* Classes para fontes específicas com todos os pesos */
-.font-inter { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-.font-lato { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; }
-.font-nunito { font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif; }
-.font-proxima { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; }
-.font-proxima-condensed { font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif; }
-
-/* Classes específicas para diferentes pesos da Proxima Nova */
-.font-proxima-light { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 300; }
-.font-proxima-regular { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 400; }
-.font-proxima-semibold { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 600; }
-.font-proxima-bold { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 700; }
-.font-proxima-extrabold { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
-.font-proxima-black { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 900; }
-
-/* Classes específicas para diferentes pesos da Proxima Nova Condensed */
-.font-proxima-cond-light { font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif; font-weight: 300; }
-.font-proxima-cond-regular { font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif; font-weight: 400; }
-.font-proxima-cond-semibold { font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif; font-weight: 600; }
-
-/* Classes específicas para diferentes pesos da Lato */
-.font-lato-thin { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; font-weight: 100; }
-.font-lato-light { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; font-weight: 300; }
-.font-lato-regular { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; font-weight: 400; }
-.font-lato-bold { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; font-weight: 700; }
-.font-lato-black { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; font-weight: 900; }
-
-/* Extensões do sistema Tailwind quando necessário */
-.text-7xl { font-size: 4.5rem; line-height: 1; }
-.text-8xl { font-size: 6rem; line-height: 1; }
-.text-9xl { font-size: 8rem; line-height: 1; }
 
 :root {
   /* Tema MedSync - versão clara por padrão com paleta Sky */
@@ -196,19 +11,18 @@
   --semi-foreground: 218 40% 25%;  /* cinza intermediário entre muted e foreground */
   --popover: 0 0% 100%;
   --popover-foreground: 222.2 84% 4.9%;
-  --card: 0 0% 100%;
+  --card: 204 100% 97%;
   --card-foreground: 222.2 84% 4.9%;
-  --border: 220 14.3% 95.9%;  /* gray-200 equivalent */
+  --border: 213 94% 68%;  /* blue-400 similar */
   --input: 214.3 31.8% 91.4%;
-  /* --card-border removida - usando border-gray-200 */
   /* Paleta Sky para elementos principais - Header branco com texto personalizado */
   --primary: 0 0% 100%;             /* Branco para o header */
   --primary-foreground: 198 67% 53%; /* #2ca8e0 para textos do header */
   --secondary: 204 94% 94%;         /* sky-50 */
   --secondary-foreground: 198 67% 53%; /* #2ca8e0 */
-  --accent: 198 89% 69%;            /* sky-400 equivalent */
+  --accent: 198 67% 53%;            /* #2ca8e0 */
   --accent-foreground: 0 0% 100%;
-  --accent-light: 192 100% 93%;   /* #dcf6ff - azul muito claro para hover states */
+  --accent-light: 198 67% 53% / 0.3;   /* accent com 30% opacidade para hover states */
   --input-field: 204 100% 97%;  /* azul muito claro para campos de seleção */
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
@@ -220,10 +34,8 @@
   --sky-primary-foreground: 0 0% 100%;
   
   /* Cores específicas do MedSync usando cor personalizada */
-  --medsync-blue: 198 67% 48%;      /* #2ca8e0 mais escuro */
-  --medsync-dark-blue: 198 67% 43%; /* #2ca8e0 ainda mais escuro */
-  --medsync-navy-blue: 213 49% 35%; /* #224968 clareado - azul navy médio */
-  --medsync-green: 102 38% 59%;     /* #6fad45 - verde médico */
+  --medsync-blue: 198 67% 53%;      /* #2ca8e0 */
+  --medsync-dark-blue: 198 67% 48%; /* #2ca8e0 mais escuro */
 }
 
 .dark {
@@ -236,16 +48,15 @@
   --popover-foreground: 210 40% 98%;
   --card: 214 50% 20%;
   --card-foreground: 210 40% 98%;
-  --border: 220 14.3% 25%;  /* gray-700 equivalent for dark theme */
+  --border: 214 50% 30%;
   --input: 214 40% 30%;
-  /* --card-border removida - usando border-gray-200 */
   --primary: 210 100% 50%;
   --primary-foreground: 0 0% 100%;
   --secondary: 214 60% 40%;
   --secondary-foreground: 210 40% 98%;
-  --accent: 198 89% 69%;
+  --accent: 210 100% 60%;
   --accent-foreground: 0 0% 100%;
-  --accent-light: 192 100% 93%;  /* #dcf6ff - azul muito claro para hover states (mesmo no tema escuro) */
+  --accent-light: 210 100% 60% / 0.6;  /* accent com 60% opacidade para hover states */
   --input-field: 210 100% 95%;  /* azul muito claro para campos de seleção */
   --destructive: 0 62.8% 50.6%;
   --destructive-foreground: 210 40% 98%;
@@ -253,25 +64,24 @@
   --radius: 0.5rem;
   
   /* Cores específicas para o MedSync que não mudam com o tema */
-  --medsync-blue: 198 67% 48%;      /* #2ca8e0 mais escuro */
-  --medsync-dark-blue: 198 67% 43%; /* #2ca8e0 ainda mais escuro */
-  --medsync-navy-blue: 213 49% 32%; /* #224968 clareado para tema dark */
-  --medsync-green: 102 38% 59%;     /* #6fad45 - verde médico */
+  --medsync-blue: 214 90% 40%;
+  --medsync-dark-blue: 214 90% 25%;
 }
 
 @layer base {
   * {
+    
     @apply border-border;
+     
   }
 
   body {
-    @apply antialiased bg-background text-foreground;
-    font-family: 'Proxima Nova', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+     @apply font-sans antialiased bg-background text-foreground; 
   }
   
   /* Estilos para a página de autenticação que respondem ao tema */
   .auth-page-container {
-    @apply bg-background;
+    @apply bg-background; 
   }
   
   .auth-card {
@@ -281,7 +91,8 @@
   /* Estilos para formulários de autenticação que respondem ao tema */
   .auth-card input, 
   .auth-card select {
-    @apply bg-input border-border text-foreground;
+    @apply bg-input border-border text-foreground; 
+     
   }
   
   .auth-card input::placeholder {
@@ -293,30 +104,26 @@
     @apply text-foreground;
   }
   
-  /* Classes específicas para elementos que devem usar cor personalizada */
+  /* Classes específicas para elementos que devem usar cor personalizada #2ca8e0 */
   .btn-sky {
-    background-color: hsl(var(--medsync-blue));
+    background-color: hsl(198 67% 48%); /* #2ca8e0 mais escuro */
     color: white;
   }
   
   .btn-sky:hover {
-    background-color: hsl(var(--accent));
+    background-color: hsl(198 67% 53%); /* #2ca8e0 */
   }
   
   .text-sky {
-    color: hsl(var(--medsync-blue));
-  }
-  
-  .text-medsync-blue {
-    color: hsl(var(--medsync-blue));
+    color: hsl(198 67% 53%); /* #2ca8e0 */
   }
   
   .border-sky {
-    border-color: hsl(var(--medsync-blue));
+    border-color: hsl(198 67% 53%); /* #2ca8e0 */
   }
   
   .bg-sky {
-    background-color: hsl(var(--medsync-blue));
+    background-color: hsl(198 67% 53%); /* #2ca8e0 */
   }
   
   /* Force light theme for auth page - override any dark theme styles */
@@ -336,7 +143,7 @@
     --primary-foreground: 198 67% 53% !important;
     --secondary: 204 94% 94% !important;
     --secondary-foreground: 198 67% 53% !important;
-    --accent: 198 89% 69% !important;
+    --accent: 198 67% 53% !important;
     --accent-foreground: 0 0% 100% !important;
     --destructive: 0 84.2% 60.2% !important;
     --destructive-foreground: 0 0% 98% !important;
@@ -344,8 +151,8 @@
   }
   
   /* Fonte em negrito para textos do header no tema claro */
-  .header-text {
-    font-weight: 700 !important; /* bold */
+  .light .header-text {
+    font-weight: 500; /* medium */
   }
   
   /* Estilo ativo do header - bloco sky-500 */
@@ -367,7 +174,7 @@
   
   /* Card footer */
   .auth-card .bg-white {
-    @apply bg-card border-border;
+    /* @apply bg-card border-border; */
   }
   
   /* Estilos para os tabs */
@@ -420,141 +227,9 @@
     background-color: hsl(var(--input-field));
   }
   
-  /* Classe removida - usando border-gray-200 diretamente */
-  
   /* Classe para texto com cor accent */
   .text-accent {
     color: hsl(var(--accent));
   }
-  
-  /* Classe para texto com cor MedSync blue */
-  .text-medsync-blue {
-    color: hsl(var(--medsync-blue));
-  }
-  
-  /* Classe para borda com cor MedSync blue */
-  .border-medsync-blue {
-    border-color: hsl(var(--medsync-blue));
-  }
-  
-  /* Classe para background com cor MedSync blue */
-  .bg-medsync-blue {
-    background-color: hsl(var(--medsync-blue));
-  }
-  
-  /* Remove ring de foco dos inputs completamente */
-  input:focus {
-    box-shadow: none !important;
-    outline: none !important;
-  }
-}
-
-/* Estilos customizados para react-big-calendar */
-.surgical-calendar {
-  font-family: 'Proxima Nova', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-.rbc-calendar {
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.rbc-header {
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 12px 8px;
-  font-weight: 600;
-  color: #374151;
-  text-align: center;
-}
-
-.rbc-time-view .rbc-time-gutter {
-  background: #f8fafc;
-  border-right: 1px solid #e2e8f0;
-}
-
-.rbc-time-slot {
-  border-top: 1px solid #f1f5f9;
-}
-
-.rbc-current-time-indicator {
-  background-color: #ef4444;
-  height: 2px;
-  z-index: 10;
-}
-
-.rbc-event {
-  border-radius: 6px;
-  border: none !important;
-  padding: 4px 8px;
-  font-size: 12px;
-  line-height: 1.2;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.rbc-event:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transform: translateY(-1px);
-  transition: all 0.2s ease;
-}
-
-.rbc-event.rbc-selected {
-  box-shadow: 0 0 0 2px #3b82f6;
-}
-
-.rbc-day-bg.rbc-today {
-  background-color: #f0f9ff;
-}
-
-.rbc-time-header-gutter {
-  background: #f8fafc;
-}
-
-.rbc-toolbar {
-  padding: 16px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.rbc-toolbar button {
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #374151;
-  margin: 0 2px;
-  transition: all 0.2s ease;
-}
-
-.rbc-toolbar button:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-}
-
-.rbc-toolbar button.rbc-active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
-}
-
-.rbc-show-more {
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.rbc-off-range-bg {
-  background: #f9fafb;
-}
-
-.rbc-slot-selection {
-  background-color: rgba(59, 130, 246, 0.1);
-  border: 2px solid #3b82f6;
 }
 
