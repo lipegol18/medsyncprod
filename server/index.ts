@@ -14,7 +14,7 @@ app.use(cookieParser());
 
 // Configure CORS para permitir chamadas de aplicações mobile
 app.use(cors({
-  origin: ["http://localhost:5000", "http://65.108.209.89:5001", "http://localhost:5001","http://localhost:3000"], // Permitir localhost
+  origin: ["http://localhost:5000", "http://65.108.209.89:5000", "http://localhost:5000","http://localhost:3000"], // Permitir localhost
   credentials: true, // Permitir credenciais (cookies, session)
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "Accept", "Cookie"] 
