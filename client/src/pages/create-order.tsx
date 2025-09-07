@@ -15,7 +15,7 @@ import { OpmeSelection } from "@/steps/opme-selection";
 import { Button } from "@/components/ui/button";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import MedSyncLogo from "../assets/medsync-logo.png";
+import MedSyncLogo from "../assets/medsync-logo-new.svg";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +64,7 @@ interface SecondaryProcedure {
 }
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Buffer } from 'buffer';
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   API_ENDPOINTS,
@@ -158,25 +159,9 @@ export default function CreateOrder() {
     isPrimary: boolean;
   }>>([]);
   
-  // Wrapper para debug da função setSelectedSurgicalApproaches
-  const debugSetSelectedSurgicalApproaches = (newApproaches: any) => {
-    console.log("🔧 ESTADO DEBUG - setSelectedSurgicalApproaches sendo chamado com:", newApproaches);
-    console.log("🔧 ESTADO DEBUG - Estado anterior:", selectedSurgicalApproaches);
-    console.log("🔧 ESTADO DEBUG - Tipo da função recebida:", typeof newApproaches);
-    
-    if (typeof newApproaches === 'function') {
-      console.log("🔧 ESTADO DEBUG - Executando função de callback");
-      setSelectedSurgicalApproaches((prev) => {
-        const result = newApproaches(prev);
-        console.log("🔧 ESTADO DEBUG - Resultado da função callback:", result);
-        console.log("🔧 ESTADO DEBUG - Estado prev no callback:", prev);
-        return result;
-      });
-    } else {
-      console.log("🔧 ESTADO DEBUG - Definindo estado diretamente");
-      setSelectedSurgicalApproaches(newApproaches);
-    }
-    console.log("🔧 ESTADO DEBUG - Função setSelectedSurgicalApproaches executada");
+  // Função para atualizar condutas cirúrgicas selecionadas
+  const updateSelectedSurgicalApproaches = (newApproaches: any) => {
+    setSelectedSurgicalApproaches(newApproaches);
   };
 
   // Handler simples para atualizar estado quando região é selecionada
@@ -306,27 +291,36 @@ export default function CreateOrder() {
             await loadExistingOrderOptimized(orderData);
             console.log('✅ loadExistingOrderOptimized CONCLUÍDO - TODOS os dados carregados');
             
-            toast({
-              title: "Modo de edição",
-              description: `Editando pedido #${orderData.id}`,
-              duration: 3000,
-            });
+            // Usar setTimeout para evitar warning de React (setState durante render)
+            setTimeout(() => {
+              toast({
+                title: "Modo de edição",
+                description: `Editando pedido #${orderData.id}`,
+                duration: 3000,
+              });
+            }, 0);
           } else {
             console.error('❌ Erro na resposta da API:', response.status);
-            toast({
-              title: "Erro",
-              description: "Pedido não encontrado ou sem permissão para editar",
-              variant: "destructive",
-            });
+            // Usar setTimeout para evitar warning de React (setState durante render)
+            setTimeout(() => {
+              toast({
+                title: "Erro",
+                description: "Pedido não encontrado ou sem permissão para editar",
+                variant: "destructive",
+              });
+            }, 0);
             navigate('/orders');
           }
         } catch (error) {
           console.error('❌ Erro ao carregar pedido:', error);
-          toast({
-            title: "Erro",
-            description: "Erro ao carregar dados do pedido",
-            variant: "destructive",
-          });
+          // Usar setTimeout para evitar warning de React (setState durante render)
+          setTimeout(() => {
+            toast({
+              title: "Erro",
+              description: "Erro ao carregar dados do pedido",
+              variant: "destructive",
+            });
+          }, 0);
           navigate('/orders');
         }
       } else {
@@ -358,7 +352,7 @@ export default function CreateOrder() {
             const orderData = await res.json();
             // Se encontramos um pedido em andamento, carregamos seus dados
             console.log("Pedido em andamento encontrado:", orderData);
-            await _loadExistingOrder(orderData);
+            await loadExistingOrder(orderData);
 
             toast({
               title: "Pedido em andamento recuperado",
@@ -475,7 +469,7 @@ export default function CreateOrder() {
           console.log('🔍 RESET - Preservando attachments durante reset');
           setCurrentOrderData(prev => ({
             ...prev,
-            id: null,
+            id: undefined,
             // Manter apenas attachments se existirem
             attachments: prev?.attachments || []
           }));
@@ -586,7 +580,7 @@ export default function CreateOrder() {
             const orderData = await res.json();
             // Se encontramos um pedido em andamento, carregamos seus dados
             console.log("Pedido em andamento encontrado:", orderData);
-            await _loadExistingOrder(orderData);
+            await loadExistingOrder(orderData);
 
             toast({
               title: "Pedido em andamento recuperado",
@@ -806,7 +800,7 @@ export default function CreateOrder() {
         setCurrentOrderData(prev => ({
           ...prev,
           id: order.id,
-          attachments: order.attachments
+          attachments: order.attachments as UnifiedAttachment[]
         }));
       }
 
@@ -865,7 +859,6 @@ export default function CreateOrder() {
             setMultipleCids(enrichedCids);
             setCidsWithSurgicalApproachesLoaded(true); // Marcar que CIDs com condutas foram carregados
             console.log(`MODO EDIÇÃO: CIDs com condutas carregados:`, enrichedCids);
-            console.log(`🔍 DEBUG CONDUTAS: Estrutura detalhada do multipleCids:`, JSON.stringify(enrichedCids, null, 2));
           } catch (approachError) {
             console.warn("MODO EDIÇÃO: Erro ao carregar condutas cirúrgicas, continuando só com CIDs:", approachError);
             // Fallback: carregar apenas os CIDs
@@ -1048,7 +1041,7 @@ export default function CreateOrder() {
     setClinicalIndication(order.clinicalIndication || "");
     setAdditionalNotes(order.additionalNotes || "");
     setProcedureType(order.procedureType || PROCEDURE_TYPE_VALUES.ELETIVA);
-    setProcedureQuantity(order.procedureCbhpmQuantity || 1);
+    setProcedureQuantity((order as any).procedureCbhpmQuantity || 1);
 
     // Recuperar dados de lateralidade
     console.log("Carregando lateralidade do procedimento do banco de dados:", {
@@ -1070,13 +1063,13 @@ export default function CreateOrder() {
       setProcedureLaterality(null);
     }
 
-    // Processar URLs das imagens do exame
-    const examImageUrls = Array.isArray(order.exam_images_url) ? order.exam_images_url : [];
+    // Processar URLs das imagens do exame (sistema legado)
+    const examImageUrls = Array.isArray((order as any).exam_images_url) ? (order as any).exam_images_url : [];
     setImageUrls(examImageUrls);
     console.log(`Carregadas ${examImageUrls.length} URLs de imagens de exame`);
 
-    // Processar URLs dos laudos médicos
-    const medicalReportUrls = Array.isArray(order.medical_report_url) ? order.medical_report_url : [];
+    // Processar URLs dos laudos médicos (sistema legado)
+    const medicalReportUrls = Array.isArray((order as any).medical_report_url) ? (order as any).medical_report_url : [];
     setMedicalReportUrls(medicalReportUrls);
     console.log(`Carregadas ${medicalReportUrls.length} URLs de laudos médicos`);
     
@@ -1122,7 +1115,6 @@ export default function CreateOrder() {
         // 2. Carregar procedimentos salvos - PADRONIZADO como OPME
         try {
           const procedures = await apiRequest(`/api/orders/${order.id}/procedures`, "GET");
-          console.log(`DEBUG: Response from /api/orders/${order.id}/procedures:`, procedures);
           
           if (procedures && procedures.length > 0) {
             console.log(`Procedimentos salvos encontrados: ${procedures.length} procedimentos`);
@@ -1134,19 +1126,14 @@ export default function CreateOrder() {
               isMain: p.isMain
             }));
             
-            const mainProcedure = formattedProcedures.find(p => p.isMain);
-            const secondaryProcedures = formattedProcedures.filter(p => !p.isMain);
+            const mainProcedure = formattedProcedures.find((p: any) => p.isMain);
+            const secondaryProcedures = formattedProcedures.filter((p: any) => !p.isMain);
             
-            console.log(`DEBUG: mainProcedure formatado:`, mainProcedure);
-            console.log(`DEBUG: secondaryProcedures formatados:`, secondaryProcedures);
             
             if (mainProcedure?.item) {
-              console.log(`DEBUG: Definindo procedimento principal:`, mainProcedure.item);
               setSelectedProcedure(mainProcedure.item);
               setProcedureQuantity(mainProcedure.quantity);
               console.log(`Procedimento principal carregado: ${mainProcedure.item.code} - Quantidade: ${mainProcedure.quantity}`);
-            } else {
-              console.log(`DEBUG: Nenhum procedimento principal encontrado. mainProcedure:`, mainProcedure);
             }
             
             if (secondaryProcedures.length > 0) {
@@ -1154,12 +1141,9 @@ export default function CreateOrder() {
                 procedure: p.item,
                 quantity: p.quantity
               }));
-              console.log(`DEBUG: Definindo procedimentos secundários:`, secondaryData);
               setSecondaryProcedures(secondaryData);
               console.log(`Procedimentos secundários carregados: ${secondaryProcedures.length} procedimentos`);
             }
-          } else {
-            console.log(`DEBUG: Nenhum procedimento encontrado para pedido ${order.id}`);
           }
         } catch (error) {
           console.error("Erro ao carregar procedimentos:", error);
@@ -1177,7 +1161,6 @@ export default function CreateOrder() {
               quantity: 1 // Fornecedores não têm quantidade, mas mantemos consistência
             }));
             
-            console.log(`DEBUG: Fornecedores formatados:`, formattedSuppliers);
             
             // Manter formato atual do estado para compatibilidade (apenas IDs)
             const suppliersState = {
@@ -1185,7 +1168,6 @@ export default function CreateOrder() {
               supplier2: supplierData[1]?.id || null,
               supplier3: supplierData[2]?.id || null
             };
-            console.log(`DEBUG: IDs dos fornecedores sendo definidos:`, suppliersState);
             setSuppliers(suppliersState);
             console.log(`Fornecedores carregados:`, supplierData.map((s: any) => s.companyName).join(', '));
           }
@@ -1309,9 +1291,6 @@ export default function CreateOrder() {
     }
 
     // Carregar anexos unificados com debug detalhado
-    console.log('🔍 LOAD - order.attachments:', order.attachments);
-    console.log('🔍 LOAD - order.examImagesUrl:', order.examImagesUrl);
-    console.log('🔍 LOAD - order.medicalReportUrl:', order.medicalReportUrl);
     
     let finalAttachments = [];
     if (order.attachments && Array.isArray(order.attachments) && order.attachments.length > 0) {
@@ -1320,8 +1299,8 @@ export default function CreateOrder() {
     } else {
       console.log('🔄 Convertendo anexos legados para formato unificado');
       finalAttachments = convertLegacyAttachments(
-        order.exam_images_url,
-        order.medical_report_url
+        (order as any).exam_images_url,
+        (order as any).medical_report_url
       );
       console.log('🔄 Resultado da conversão:', finalAttachments);
     }
@@ -1333,7 +1312,7 @@ export default function CreateOrder() {
       attachments: finalAttachments,
       // Usando nomes das colunas exatamente iguais ao banco de dados
       exam_images_url: examImageUrls,
-      exam_image_count: order.exam_image_count || 0,
+      exam_image_count: (order as any).exam_image_count || 0,
       medical_report_url: medicalReportUrls,
     };
 
@@ -1378,7 +1357,7 @@ export default function CreateOrder() {
       // Definir procedimento principal e secundários baseado na quantidade
       let mainProcedure = null;
       let mainProcedureQuantity = 1;
-      let remainingSecondaryProcedures = [];
+      let remainingSecondaryProcedures: any[] = [];
 
       if (sortedSecondaryProcedures.length === 1) {
         // Se há apenas 1 procedimento, ele é o principal
@@ -1597,7 +1576,7 @@ export default function CreateOrder() {
         try {
           const cidIds = multipleCids.map((item) => {
             // Suportar ambas as estruturas: item.cid.id ou item.id
-            const cidId = item.cid?.id || item.id;
+            const cidId = item.cid?.id;
             if (!cidId) {
               console.warn("saveProgress - CID sem ID encontrado:", item);
             }
@@ -1755,8 +1734,6 @@ export default function CreateOrder() {
         // Salvar condutas cirúrgicas relacionais
         try {
           // Debug: verificar estado atual das condutas cirúrgicas
-          console.log("🔍 DEBUG CONDUTAS - Estado selectedSurgicalApproaches no saveProgress:", selectedSurgicalApproaches);
-          console.log("🔍 DEBUG CONDUTAS - Tipo e tamanho:", typeof selectedSurgicalApproaches, selectedSurgicalApproaches?.length);
           
           // Usar o estado selectedSurgicalApproaches diretamente para salvamento em lote
           if (selectedSurgicalApproaches && selectedSurgicalApproaches.length > 0) {
@@ -2003,9 +1980,6 @@ export default function CreateOrder() {
         return filename.includes(`pedido_${orderId}_`) || filename.includes(`order_${orderId}_`);
       }) || [];
       
-      console.log('🔍 DEBUG DOWNLOAD - Attachments encontrados:', orderData.attachments?.length || 0);
-      console.log('🔍 DEBUG DOWNLOAD - PDFs do sistema encontrados:', systemPdfs.length);
-      console.log('🔍 DEBUG DOWNLOAD - PDFs do sistema:', systemPdfs);
       
       if (systemPdfs.length === 0) {
         toast({
@@ -2053,10 +2027,12 @@ export default function CreateOrder() {
 
   // Função para gerar PDF vetorial com quebra automática de páginas
   const generateHighQualityPDF = async () => {
+    // Configurar Buffer globalmente para @react-pdf/renderer
+    if (typeof window !== 'undefined' && !window.Buffer) {
+      window.Buffer = Buffer;
+    }
     try {
       console.log("🔄 INÍCIO - Geração de PDF vetorial com quebra automática");
-      console.log("OrderID:", orderId);
-      console.log("Paciente:", selectedPatient?.fullName);
 
       if (!orderId || !selectedPatient || !selectedHospital) {
         toast({
@@ -2098,6 +2074,11 @@ export default function CreateOrder() {
         description: "Criando documento com quebra automática de páginas...",
       });
 
+      // Configurar Buffer para @react-pdf/renderer no navegador
+      if (typeof window !== 'undefined') {
+        (window as any).Buffer = Buffer;
+      }
+      
       // Importar dinamicamente o react-pdf
       const { pdf } = await import('@react-pdf/renderer');
       const { OrderPDFDocument } = await import('@/components/order-pdf-document');
@@ -2196,7 +2177,6 @@ export default function CreateOrder() {
 
       // ========== FAZER MERGE COM PDFs DOS ANEXOS ==========
       console.log("📄 Verificando anexos PDF para merge no @react-pdf/renderer...");
-      console.log("🔍 DEBUG - currentOrderData.attachments:", currentOrderData?.attachments);
       
       // Buscar anexos PDF do pedido atual
       const allPdfAttachments = (currentOrderData?.attachments || []).filter((attachment: any) => 
@@ -2205,12 +2185,6 @@ export default function CreateOrder() {
       );
       
       console.log(`📎 Total de PDFs nos anexos: ${allPdfAttachments.length}`);
-      console.log("🔍 DEBUG - Todos os PDFs encontrados:", allPdfAttachments.map(a => ({ 
-        filename: a.filename, 
-        url: a.url, 
-        type: a.type,
-        id: a.id 
-      })));
       
       // FILTRAR para excluir o próprio PDF do pedido (PDFs gerados pelo sistema)
       const pdfAttachments = allPdfAttachments.filter((attachment: any) => {
@@ -2840,6 +2814,8 @@ export default function CreateOrder() {
       queryClient.invalidateQueries({
         queryKey: [API_ENDPOINTS.MEDICAL_ORDERS],
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
 
       // Avançar para o último passo (confirmação)
       setCurrentStep(5);
@@ -3235,16 +3211,16 @@ export default function CreateOrder() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-muted">
       <main className="flex-grow overflow-auto">
         {/* Barra horizontal sky-200 do título até breadcrumbs */}
-        <div className="w-full bg-accent-light">
+        <div className="w-full bg-muted/30">
           <div className="container mx-auto px-4 py-6">
             <div className="mb-6 text-center">
               <h2 className="text-3xl font-bold text-muted-foreground">
                 Pedido Cirúrgico
               </h2>
-              <p className="text-accent text-sm mt-2">
+              <p className="text-medsync-blue text-sm mt-2 font-semibold">
                 Seu pedido pronto em apenas 5 etapas.
               </p>
             </div>
@@ -3252,7 +3228,7 @@ export default function CreateOrder() {
             <div className="mb-8 overflow-x-auto pb-2">
               <div className="relative h-16" style={{ minHeight: '4rem' }}>
                 {/* Background progress line */}
-                <div className="absolute top-3 h-2 bg-muted rounded-full" 
+                <div className="absolute top-3 h-2 bg-white rounded-full" 
                      style={{
                        left: '20%',
                        right: '20%',
@@ -3261,7 +3237,7 @@ export default function CreateOrder() {
                 />
                 
                 {/* Progress fill line */}
-                <div className="absolute top-3 h-2 bg-accent rounded-full transition-all duration-500" 
+                <div className="absolute top-3 h-2 bg-medsync-blue rounded-full transition-all duration-500" 
                      style={{
                        left: '20%',
                        width: `${60 * Math.max(0, (currentStep - 1) / (steps.length - 1))}%`,
@@ -3279,11 +3255,11 @@ export default function CreateOrder() {
                   let textColor = '';
                   
                   if (isActive || isCompleted) {
-                    stepStatus = "bg-accent text-muted-foreground border-2 border-accent";
-                    textColor = "text-accent";
+                    stepStatus = "bg-medsync-blue text-white border-2 border-medsync-blue";
+                    textColor = "font-semibold text-muted-foreground";
                   } else {
-                    stepStatus = "bg-muted text-muted-foreground border-2 border-muted";
-                    textColor = "text-muted-foreground";
+                    stepStatus = "bg-white text-muted-foreground border-2 border-white";
+                    textColor = "font-semibold text-medsync-blue";
                   }
                   
                   // Posicionar cada círculo: step 3 no centro (50%), outros distribuídos
@@ -3305,7 +3281,7 @@ export default function CreateOrder() {
                       >
                         {step.number}
                       </div>
-                      <span className="mt-2 text-xs text-center font-medium whitespace-nowrap">
+                      <span className={`mt-2 text-xs text-center whitespace-nowrap ${textColor}`}>
                         {step.label}
                       </span>
                     </div>
@@ -3335,7 +3311,7 @@ export default function CreateOrder() {
             <h2 className="text-3xl font-bold text-muted-foreground">
               Dados para Cirurgia
             </h2>
-            <p className="text-accent text-sm mt-2">
+            <p className="text-medsync-blue text-sm mt-2">
               Preencha os campos necessários para o seu Pedido Cirúrgico
             </p>
           </div>
@@ -3422,7 +3398,8 @@ export default function CreateOrder() {
                   availableProceduresFromRegion={availableProceduresFromRegion}
                   setAvailableProceduresFromRegion={setAvailableProceduresFromRegion}
                   selectedSurgicalApproaches={selectedSurgicalApproaches}
-                  setSelectedSurgicalApproaches={debugSetSelectedSurgicalApproaches}
+                  setSelectedSurgicalApproaches={updateSelectedSurgicalApproaches}
+                  isEditMode={!!editOrderId}
                 />
               </div>
             )}
@@ -3530,14 +3507,14 @@ export default function CreateOrder() {
                                     {multipleCids && multipleCids.length > 0 ? (
                                       multipleCids.map((cidItem, index) => {
                                         // Suportar ambas as estruturas: cidItem.cid.code ou cidItem.code
-                                        const code = cidItem.cid?.code || cidItem.code;
-                                        const description = cidItem.cid?.description || cidItem.description;
-                                        const id = cidItem.cid?.id || cidItem.id;
+                                        const code = cidItem.cid?.code;
+                                        const description = cidItem.cid?.description;
+                                        const id = cidItem.cid?.id;
                                         
                                         return (
                                           <p key={id || index}>
                                             {code} - {description}
-                                            {(cidItem.isAutoAdded || cidItem.cid?.isAutoAdded) && (
+                                            {(cidItem as any).isAutoAdded && (
                                               <span className="ml-2 text-green-600 text-xs font-medium">(Automático)</span>
                                             )}
                                           </p>
@@ -3555,7 +3532,7 @@ export default function CreateOrder() {
                                     <p className="font-bold text-xs text-foreground">Condutas Cirúrgicas:</p>
                                     <div className="text-xs text-muted-foreground pl-4 space-y-0.5">
                                       {selectedSurgicalApproaches.map((approach, index) => {
-                                        const conductName = approach.approachName || approach.surgicalApproachName || approach.name || 'Nome não encontrado';
+                                        const conductName = approach.approachName || 'Nome não encontrado';
                                         return (
                                           <p key={index}>
                                             {conductName}
@@ -3715,7 +3692,7 @@ export default function CreateOrder() {
             {currentStep === 5 && (
               <div className="p-6">
                 <div className="text-center mt-4 mb-8">
-                  <Check className="w-16 h-16 text-accent mx-auto mb-4" />
+                  <Check className="w-16 h-16 text-medsync-blue mx-auto mb-4" />
                   <h3 className="text-xl font-semibold text-foreground">
                     Pedido Criado com Sucesso!
                   </h3>
@@ -3726,16 +3703,14 @@ export default function CreateOrder() {
 
                 <div className="flex justify-center gap-4 mt-6">
                   <Button
-                    variant="outline"
-                    className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+                    className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
                     onClick={downloadExistingPDF}
                   >
                     <FileText className="mr-2 h-4 w-4" />
                     Download
                   </Button>
                   <Button
-                    variant="outline"
-                    className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+                    className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
                     onClick={() => {
                       toast({
                         title: "Funcionalidade em desenvolvimento",
@@ -3764,9 +3739,8 @@ export default function CreateOrder() {
               <div className="flex items-center">
                 {currentStep > 1 && (
                   <Button
-                    variant="outline"
                     onClick={goToPreviousStep}
-                    className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+                    className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
                   >
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Voltar
@@ -3777,9 +3751,8 @@ export default function CreateOrder() {
               {/* Área central - Botão Salvar e Sair */}
               <div className="flex items-center justify-center">
                 <Button
-                  variant="outline"
                   onClick={saveAndExit}
-                  className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+                  className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
                 >
                   <Save className="mr-2 h-4 w-4" />
                   Salvar e Sair
@@ -3789,9 +3762,8 @@ export default function CreateOrder() {
               {/* Área direita - Botão Próximo/Finalizar */}
               <div className="flex items-center justify-end">
                 <Button
-                  variant="outline"
                   onClick={goToNextStep}
-                  className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+                  className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
                   disabled={
                     (currentStep === 1 &&
                       (!selectedPatient || !selectedHospital)) ||
@@ -3836,7 +3808,7 @@ export default function CreateOrder() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="text-sm text-foreground bg-accent-light p-3 rounded border border-border">
+          <div className="text-sm text-white bg-medsync-blue p-3 rounded border border-border">
             {existingOrderData?.surgicalConduct && (
               <p>
                 <strong>Conduta Cirúrgica:</strong>{" "}
@@ -3877,16 +3849,14 @@ export default function CreateOrder() {
 
           <DialogFooter className="gap-3 justify-center items-center">
             <Button
-              variant="outline"
               onClick={handleStartNewOrder}
-              className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+              className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
             >
               Iniciar Novo Pedido
             </Button>
             <Button
-              variant="outline"
               onClick={handleContinueExistingOrder}
-              className="border-border text-accent hover:bg-accent-light hover:text-muted-foreground h-10"
+              className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
             >
               Continuar Pedido Existente
             </Button>

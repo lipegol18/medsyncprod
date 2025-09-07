@@ -746,7 +746,8 @@ const orderStatus = {
   "cirurgia_realizada": { label: "Cirurgia realizada", color: "bg-accent-light text-accent" },
   "cancelado": { label: "Cancelada", color: "bg-destructive/20 text-destructive" },
   "aguardando_envio": { label: "Aguardando Envio", color: "bg-purple-700/70 text-purple-200" },
-  "recebido": { label: "Recebido", color: "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600" }
+  "recebido": { label: "Recebido", color: "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600" },
+  "aguardando_recurso": { label: "Aguardando Recurso", color: "bg-rose-100 dark:bg-rose-900/20 text-rose-600" }
 };
 
 // Formatação de data
@@ -1041,6 +1042,14 @@ export default function OrderDetails() {
           color: "text-destructive"
         };
         
+      case 'aguardando_recurso': // Aguardando Recurso
+        return {
+          label: "Aguardando recurso",
+          date: formatDate(order.updatedAt),
+          subtitle: "Em análise de recurso",
+          color: "text-rose-600"
+        };
+        
       case 'cancelado': // Cancelada
         return {
           label: "Pedido cancelado",
@@ -1103,6 +1112,8 @@ export default function OrderDetails() {
       
       // Invalidar e refetch os dados do pedido
       queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
       
       toast({
         title: "Status atualizado",
@@ -1126,36 +1137,13 @@ export default function OrderDetails() {
 
   // Função para finalizar a aprovação parcial
   const handlePartialApprovalComplete = async () => {
-    try {
-      // Atualizar o status do pedido para autorizado_parcial
-      const response = await fetch(`/api/medical-orders/${orderId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: 'autorizado_parcial' })
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao atualizar status do pedido');
-      }
-
-      // Invalidar queries para recarregar dados
-      queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
-      
-      toast({
-        title: "Status atualizado",
-        description: "Pedido marcado como autorizado parcialmente",
-      });
-
-    } catch (error) {
-      console.error('Erro ao finalizar aprovação parcial:', error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível atualizar o status do pedido",
-        variant: "destructive",
-      });
-    }
+    // Apenas fechar o modal - o status não deve ser alterado aqui
+    // Os procedimentos já foram salvos individualmente pelo modal
+    setShowPartialApprovalModal(false);
+    
+    // Recarregar dados para refletir as mudanças nos procedimentos
+    queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}/procedures`] });
   };
 
   // Função para finalizar o preenchimento de valores recebidos
@@ -1184,6 +1172,8 @@ export default function OrderDetails() {
       // Invalidar queries para recarregar dados dos procedimentos
       queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}/procedures`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
       
       toast({
         title: "Valores registrados",
@@ -1200,9 +1190,44 @@ export default function OrderDetails() {
     }
   };
 
+  // Função para gerar recurso após aprovação parcial
+  const handleGenerateAppeal = async (orderId: number) => {
+    // Redirecionar para a página de pedidos com o dialog de recurso aberto
+    // Como não temos os estados do dialog aqui, vamos navegar para orders e passar parâmetros
+    navigate(`/orders?appeal=${orderId}`);
+  };
 
+  // Função para aceitar glosas após aprovação parcial
+  const handleAcceptGloss = async (orderId: number) => {
+    try {
+      // Primeiro, atualizar status do pedido para "autorizado_parcial"
+      await apiRequest(`/api/medical-orders/${orderId}/status`, 'PATCH', {
+        status: 'autorizado_parcial' // Código do status
+      });
 
-  
+      // Invalidar cache para atualizar dados
+      queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
+      
+      // Depois, abrir modal de seleção de fornecedor
+      setShowSupplierApprovalModal(true);
+      
+      toast({
+        title: "Glosas aceitas",
+        description: "Status atualizado para autorizado parcialmente. Agora selecione o fornecedor autorizado.",
+      });
+
+    } catch (error) {
+      console.error('Erro ao aceitar glosas:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível aceitar as glosas. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Renderizar o status do pedido
   const renderStatus = (status: string) => {
     const statusInfo = (orderStatus as any)[status] || { 
@@ -1644,6 +1669,8 @@ export default function OrderDetails() {
         onClose={() => setShowPartialApprovalModal(false)}
         orderId={orderId}
         onApprovalComplete={handlePartialApprovalComplete}
+        onGenerateAppeal={handleGenerateAppeal}
+        onAcceptGloss={handleAcceptGloss}
       />
 
       {/* Modal de Valores Recebidos */}
@@ -1723,6 +1750,8 @@ export default function OrderDetails() {
                 setSelectedOrderForAppointment(null);
                 // Invalidar cache para atualizar informações do pedido
                 queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
+                queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+                queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
                 toast({
                   title: "Agendamento criado",
                   description: "Cirurgia agendada com sucesso",

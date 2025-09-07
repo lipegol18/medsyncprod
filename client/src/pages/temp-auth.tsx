@@ -604,7 +604,7 @@ export default function AuthPage() {
 
       {/* Login/Register Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-4xl w-[calc(100vw-16px)] sm:w-full mx-auto bg-gray-50 rounded-2xl border-2 border-gray-100 shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl w-full bg-gray-50 rounded-2xl border-2 border-gray-100 shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto">
           {/* Cabeçalho completo */}
           <DialogHeader className="flex flex-col px-4 lg:px-6">
             {/* Logo no modal */}
@@ -657,40 +657,14 @@ export default function AuthPage() {
             )}
           </DialogHeader>
 
-          <div className="p-4 sm:p-6 lg:p-12 bg-white">
-            {modalType === 'login' ? (
-              <LoginModal
-                onSubmit={handleLoginSubmit}
-                onSwitchToRegister={() => setModalType('register')}
-                onSwitchToForgotPassword={() => setModalType('forgot-password')}
-                isLoading={loginMutation.isPending}
-              />
-            ) : modalType === 'register' ? (
-              <RegisterModal
-                onSubmit={handleRegisterSubmit}
-                onSwitchToLogin={() => setModalType('login')}
-                isLoading={registerMutation.isPending}
-                validationErrors={validationErrors}
-                onFieldValidation={handleFieldValidation}
-              />
-            ) : modalType === 'forgot-password' ? (
-              <ForgotPasswordModal
-                onSubmitForgotPassword={handleForgotPasswordSubmit}
-                onSubmitResetPassword={handleResetPasswordSubmit}
-                onBackToLogin={() => setModalType('login')}
-                isLoadingForgot={forgotPasswordMutation.isPending}
-                isLoadingReset={resetPasswordMutation.isPending}
-                resetEmailSent={resetEmailSent}
-                showResetForm={showResetForm}
+          <div className="flex flex-col lg:flex-row">
                 setResetEmailSent={setResetEmailSent}
               />
             ) : null}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-                  
-                  {/* Linha curva à direita */}
-                  <div className="absolute top-6 right-[calc(16.67%-12px)] w-6 h-6 border-t-2 border-r-2 border-accent rounded-tr-full" />
