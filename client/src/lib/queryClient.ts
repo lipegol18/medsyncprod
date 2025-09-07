@@ -31,10 +31,12 @@ async function throwIfResNotOk(res: Response) {
     let errorMessage = "";
 
     try {
+      // Tentar ler como JSON primeiro
       const errorData = await res.json();
       errorMessage = errorData.message || res.statusText;
     } catch (e) {
-      errorMessage = (await res.text()) || res.statusText;
+      // Se falhar, usar statusText ao invés de tentar text() novamente
+      errorMessage = res.statusText;
     }
 
     const errorStatus = res.status;
