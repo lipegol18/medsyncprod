@@ -72,7 +72,13 @@ const workflowSteps: Record<string, StatusOption[]> = {
       color: 'text-violet-600',
       requiresModal: true
     },
-
+    { 
+      key: 'pendencia', 
+      label: 'Solicitar Documentação', 
+      description: 'Operadora solicita documentos adicionais', 
+      icon: AlertCircle, 
+      color: 'text-amber-600' 
+    },
     { 
       key: 'cancelado', 
       label: 'Negar Pedido', 
@@ -122,6 +128,40 @@ const workflowSteps: Record<string, StatusOption[]> = {
       icon: DollarSign, 
       color: 'text-emerald-600',
       requiresModal: true
+    }
+  ],
+  'pendencia': [
+    { 
+      key: 'aguardando_recurso', 
+      label: 'Enviar Recurso', 
+      description: 'Contestar pendência com documentação adicional', 
+      icon: FileText, 
+      color: 'text-rose-600' 
+    }
+  ],
+  'cancelado': [
+    { 
+      key: 'aguardando_recurso', 
+      label: 'Interpor Recurso', 
+      description: 'Contestar decisão de negativa da operadora', 
+      icon: FileText, 
+      color: 'text-rose-600' 
+    }
+  ],
+  'aguardando_recurso': [
+    { 
+      key: 'em_avaliacao', 
+      label: 'Retornar para Análise', 
+      description: 'Operadora aceita recurso e reanalisa pedido', 
+      icon: Clock, 
+      color: 'text-accent' 
+    },
+    { 
+      key: 'cancelado', 
+      label: 'Recurso Negado', 
+      description: 'Operadora mantém decisão original', 
+      icon: X, 
+      color: 'text-destructive' 
     }
   ]
 };

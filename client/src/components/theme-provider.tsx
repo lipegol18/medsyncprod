@@ -14,7 +14,7 @@ type ThemeProviderState = {
 }
 
 const initialState: ThemeProviderState = {
-  theme: "dark",
+  theme: "light",
   setTheme: () => null,
 }
 
@@ -27,16 +27,25 @@ export function ThemeProvider({
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
+    () => {
+      // Forçar sempre o tema claro inicialmente
+      const storedTheme = localStorage.getItem(storageKey) as Theme;
+      // Se houver um tema escuro armazenado, limpar e usar o padrão claro
+      if (storedTheme === "dark") {
+        localStorage.removeItem(storageKey);
+        return defaultTheme;
+      }
+      return storedTheme || defaultTheme;
+    }
   )
 
   useEffect(() => {
     const root = window.document.documentElement
 
-    // Remova as classes de tema anteriores
-    root.classList.remove("light", "dark")
+    // Força a remoção de todas as classes de tema
+    root.classList.remove("light", "dark", "system")
 
-    // Defina a classe com base na preferência do sistema, se necessário
+    // Para novos usuários, sempre começar com light
     if (theme === "system") {
       const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
         .matches
@@ -44,17 +53,17 @@ export function ThemeProvider({
         : "light"
 
       root.classList.add(systemTheme)
-      
-      // Log para debug
       console.log(`Aplicando tema do sistema: ${systemTheme}`)
       return
     }
 
-    // Adicione a classe de tema apropriada
-    root.classList.add(theme)
+    // Força sempre light se não há preferência armazenada
+    const themeToApply = theme || "light"
+    root.classList.add(themeToApply)
     
-    // Log para debug
-    console.log(`Aplicando tema: ${theme}`)
+    // Debug logs
+    console.log(`🎨 Tema aplicado: ${themeToApply}`)
+    console.log(`📋 Classes do HTML:`, root.className)
   }, [theme])
 
   const value = {

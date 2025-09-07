@@ -239,6 +239,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
       });
       // Invalidar múltiplas queries para atualizar todas as interfaces
       queryClient.invalidateQueries({ queryKey: ['/api/surgery-appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/surgery-appointments/upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/surgery-appointments/available-orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
       // Invalidar query específica do pedido médico se disponível
@@ -275,6 +276,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
       });
       // Invalidar múltiplas queries para atualizar todas as interfaces
       queryClient.invalidateQueries({ queryKey: ['/api/surgery-appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/surgery-appointments/upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/surgery-appointments/available-orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
       // Invalidar query específica do pedido médico
