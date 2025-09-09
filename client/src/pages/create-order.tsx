@@ -127,8 +127,7 @@ export default function CreateOrder() {
   const [cidCode, setCidCode] = useState("");
   const [cidDescription, setCidDescription] = useState("");
   const [selectedCidId, setSelectedCidId] = useState<number | null>(null);
-  // Estado para cidLaterality removido, mas mantendo referências para compatibilidade
-  const [cidLaterality, setCidLaterality] = useState<string | null>(null);
+  // cidLaterality removido - funcionalidade descontinuada
 
   // Novo estado para múltiplos CIDs (similar aos procedimentos secundários)
   const [multipleCids, setMultipleCids] = useState<
@@ -249,7 +248,7 @@ export default function CreateOrder() {
   // Estado para evitar chamadas duplicadas
   const [isLoadingPatientOrder, setIsLoadingPatientOrder] = useState(false);
 
-  // Estados para o diálogo de pedido existente
+  // Estados para o diálogo de pedido existente (RESTAURADO - usuário precisa escolher)
   const [showExistingOrderDialog, setShowExistingOrderDialog] = useState(false);
   const [existingOrderData, setExistingOrderData] = useState<any>(null);
   const [pendingPatient, setPendingPatient] = useState<Patient | null>(null);
@@ -275,42 +274,22 @@ export default function CreateOrder() {
     
     const loadOrderForEdit = async () => {
       if (editOrderId && user?.id) {
-        console.log('🚀 INÍCIO useEffect - Carregando pedido para edição:', editOrderId);
+        console.log('🚀 OTIMIZADO: Carregando pedido para edição DIRETAMENTE:', editOrderId);
         
         try {
-          console.log('🔍 Fazendo requisição para:', `/api/medical-orders/${editOrderId}`);
-          const response = await fetch(`/api/medical-orders/${editOrderId}`);
-          console.log('📡 Response status:', response.status);
+          console.log('⚡ OTIMIZADO: carregando tudo via loadExistingOrderOptimized incluindo dados básicos');
+          // ✅ OTIMIZAÇÃO: Carregar TODOS os dados diretamente, incluindo clinicalIndication e additionalNotes
+          await loadExistingOrderOptimized({ id: editOrderId } as MedicalOrder);
+          console.log('✅ OTIMIZADO: TODOS os dados carregados em uma única operação');
           
-          if (response.ok) {
-            const orderData = await response.json();
-            console.log('📋 Dados do pedido carregados para edição:', orderData);
-            
-            console.log('🔄 INICIANDO loadExistingOrderOptimized...');
-            // Carregar TODOS os dados do pedido existente de uma só vez
-            await loadExistingOrderOptimized(orderData);
-            console.log('✅ loadExistingOrderOptimized CONCLUÍDO - TODOS os dados carregados');
-            
-            // Usar setTimeout para evitar warning de React (setState durante render)
-            setTimeout(() => {
-              toast({
-                title: "Modo de edição",
-                description: `Editando pedido #${orderData.id}`,
-                duration: 3000,
-              });
-            }, 0);
-          } else {
-            console.error('❌ Erro na resposta da API:', response.status);
-            // Usar setTimeout para evitar warning de React (setState durante render)
-            setTimeout(() => {
-              toast({
-                title: "Erro",
-                description: "Pedido não encontrado ou sem permissão para editar",
-                variant: "destructive",
-              });
-            }, 0);
-            navigate('/orders');
-          }
+          // Usar setTimeout para evitar warning de React (setState durante render)
+          setTimeout(() => {
+            toast({
+              title: "Modo de edição",
+              description: `Editando pedido #${editOrderId}`,
+              duration: 3000,
+            });
+          }, 0);
         } catch (error) {
           console.error('❌ Erro ao carregar pedido:', error);
           // Usar setTimeout para evitar warning de React (setState durante render)
@@ -352,7 +331,8 @@ export default function CreateOrder() {
             const orderData = await res.json();
             // Se encontramos um pedido em andamento, carregamos seus dados
             console.log("Pedido em andamento encontrado:", orderData);
-            await loadExistingOrder(orderData);
+            // COMENTADO: await loadExistingOrder(orderData); // Função comentada durante unificação
+            console.log('⚠️ loadExistingOrder comentada - funcionalidade desabilitada');
 
             toast({
               title: "Pedido em andamento recuperado",
@@ -452,9 +432,12 @@ export default function CreateOrder() {
           );
 
           // Armazenar os dados para o diálogo
+          // ✅ RESTAURADO: Mostrar modal para usuário escolher
           setExistingOrderData(orderData);
           setPendingPatient(patient);
           setShowExistingOrderDialog(true);
+          
+          console.log('🔄 Modal exibido - usuário pode escolher entre editar ou criar novo');
 
           // Não carregamos automaticamente - deixamos o usuário escolher
           return;
@@ -491,42 +474,26 @@ export default function CreateOrder() {
     }
   };
 
-  // Função para continuar com o pedido existente
+  // ✅ UNIFICAÇÃO: Função para continuar com o pedido existente (redireciona para rota unificada)
   const handleContinueExistingOrder = async () => {
     if (existingOrderData && pendingPatient) {
-      console.log(
-        "Usuário escolheu continuar o pedido existente:",
-        existingOrderData,
-      );
-
-      // Carregar os dados do pedido existente
-      await loadExistingOrder(existingOrderData);
-      console.log('🔍 AFTER handleContinueExistingOrder loadExistingOrder - attachments loaded');
-
-      // Definir o paciente selecionado
-      setSelectedPatient(pendingPatient);
-
-      toast({
-        title: "Pedido em andamento carregado",
-        description: `Continuando o pedido existente para ${pendingPatient.fullName}`,
-        duration: 4000,
-      });
+      console.log('🔄 UNIFICAÇÃO: Usuário escolheu continuar pedido existente - redirecionando para rota unificada');
+      
+      // ✅ REDIRECIONAR para rota unificada (mesmo fluxo do botão "Editar")
+      navigate(`/create-order?edit=${existingOrderData.id}`);
     }
-
+    
     // Fechar o diálogo
     setShowExistingOrderDialog(false);
     setExistingOrderData(null);
     setPendingPatient(null);
   };
 
-  // Função para iniciar um novo pedido
+  // ✅ RESTAURADO: Função para iniciar um novo pedido
   const handleStartNewOrder = () => {
     if (pendingPatient) {
-      console.log(
-        "Usuário escolheu iniciar um novo pedido para:",
-        pendingPatient,
-      );
-
+      console.log('🆕 Usuário escolheu iniciar um novo pedido para:', pendingPatient.fullName);
+      
       // Resetar os campos do formulário
       setOrderId(null);
       setCurrentOrderData(null);
@@ -580,7 +547,8 @@ export default function CreateOrder() {
             const orderData = await res.json();
             // Se encontramos um pedido em andamento, carregamos seus dados
             console.log("Pedido em andamento encontrado:", orderData);
-            await loadExistingOrder(orderData);
+            // COMENTADO: await loadExistingOrder(orderData); // Função comentada durante unificação
+            console.log('⚠️ loadExistingOrder comentada - funcionalidade desabilitada');
 
             toast({
               title: "Pedido em andamento recuperado",
@@ -629,35 +597,98 @@ export default function CreateOrder() {
     // checkExistingOrder();
   }, [user?.id]);
 
-  // Função OTIMIZADA para carregar TODOS os dados de uma só vez
+  // Função OTIMIZADA para carregar TODOS os dados de uma só vez incluindo dados básicos
   const loadExistingOrderOptimized = async (order: MedicalOrder) => {
     console.log(`🚀 OTIMIZADO: Carregando TODOS os dados para pedido ${order.id} em uma única operação`);
     setOrderId(order.id);
     const currentOrderId = order.id;
 
     try {
-      // **CARREGAMENTO PARALELO** - Fazer todas as chamadas ao mesmo tempo
+      // **ETAPA 1: DADOS BÁSICOS DO PEDIDO** - Primeiro para obter IDs necessários
+      console.log('📋 ETAPA 1: Carregando dados básicos do pedido...');
+      const orderBasicData = await apiRequest(`/api/medical-orders/${currentOrderId}`, "GET");
+      
+      if (!orderBasicData) {
+        throw new Error('Pedido médico não encontrado');
+      }
+
+      console.log('✅ DADOS BÁSICOS carregados:', { 
+        clinicalIndication: orderBasicData.clinicalIndication,
+        additionalNotes: orderBasicData.additionalNotes,
+        clinicalJustification: orderBasicData.clinicalJustification,
+        patientId: orderBasicData.patientId,
+        hospitalId: orderBasicData.hospitalId
+      });
+
+      // **ETAPA 2: DADOS DO PACIENTE E HOSPITAL** - Usando IDs obtidos na ETAPA 1
+      console.log('👤 ETAPA 2: Carregando paciente e hospital...');
+      const [patientData, hospitalData] = await Promise.all([
+        apiRequest(`/api/patients/${orderBasicData.patientId}`, "GET"),
+        apiRequest(`/api/hospitals/${orderBasicData.hospitalId}`, "GET")
+      ]);
+      
+      if (patientData) {
+        setSelectedPatient(patientData);
+        console.log(`✅ Paciente carregado: ${patientData.fullName}`);
+      }
+      
+      if (hospitalData) {
+        setSelectedHospital(hospitalData);
+        console.log(`✅ Hospital carregado: ${hospitalData.name}`);
+      }
+      
+      // Aplicar dados básicos ao estado
+      setClinicalIndication(orderBasicData.clinicalIndication || "");
+      setAdditionalNotes(orderBasicData.additionalNotes || "");
+      setProcedureType(orderBasicData.procedureType || PROCEDURE_TYPE_VALUES.ELETIVA);
+      
+      if (orderBasicData.procedureLaterality) {
+        setProcedureLaterality(orderBasicData.procedureLaterality);
+      }
+      if (orderBasicData.clinicalJustification) {
+        setClinicalJustification(orderBasicData.clinicalJustification);
+        console.log('📄 JUSTIFICATIVA CLÍNICA carregada do banco:', {
+          comprimento: orderBasicData.clinicalJustification.length,
+          preview: orderBasicData.clinicalJustification.substring(0, 100) + '...'
+        });
+      } else {
+        console.log('⚠️ JUSTIFICATIVA CLÍNICA não encontrada ou vazia no banco de dados');
+      }
+      
+      if (orderBasicData.attachments) {
+        console.log('📎 ATTACHMENTS carregados:', {
+          quantidade: orderBasicData.attachments.length,
+          attachments: orderBasicData.attachments
+        });
+        setCurrentOrderData(prev => ({
+          ...prev,
+          id: orderBasicData.id,
+          attachments: orderBasicData.attachments as UnifiedAttachment[]
+        }));
+        console.log('✅ ATTACHMENTS aplicados ao estado currentOrderData');
+      } else {
+        console.log('ℹ️ Nenhum attachment encontrado para o pedido');
+      }
+
+      // **ETAPA 3: DADOS COMPLEMENTARES** - Todos os outros dados em paralelo
+      console.log('⚡ ETAPA 3: Carregando dados complementares em paralelo...');
       const [
         cidData,
         surgicalApproaches,
         procedures,
         surgicalProcedures,
         opmeItems,
-        suppliers,
-        patientData,
-        hospitalData
+        suppliers
       ] = await Promise.all([
         apiRequest(`/api/orders/${currentOrderId}/cids`, "GET"),
         apiRequest(`/api/medical-order-surgical-approaches/order/${currentOrderId}`, "GET"),
         apiRequest(`/api/orders/${currentOrderId}/procedures`, "GET"),
         apiRequest(`/api/medical-order-surgical-procedures/order/${currentOrderId}`, "GET"),
         apiRequest(`/api/orders/${currentOrderId}/opme-items`, "GET"),
-        apiRequest(`/api/orders/${currentOrderId}/suppliers`, "GET"),
-        apiRequest(`/api/patients/${order.patientId}`, "GET"),
-        apiRequest(`/api/hospitals/${order.hospitalId}`, "GET")
+        apiRequest(`/api/orders/${currentOrderId}/suppliers`, "GET")
       ]);
 
-      console.log(`✅ OTIMIZADO: Todas as ${8} consultas carregadas em paralelo`);
+      console.log(`✅ CORRIGIDO: Dados básicos → paciente+hospital → 6 consultas complementares`);
 
       // 1. Carregar CIDs (sem associação com condutas cirúrgicas)
       if (cidData && cidData.length > 0) {
@@ -697,6 +728,13 @@ export default function CreateOrder() {
       // 2. Carregar procedimentos - SISTEMA UNIFICADO
       if (procedures && procedures.length > 0) {
         console.log(`✅ OTIMIZADO: ${procedures.length} procedimentos encontrados - aplicando sistema unificado`);
+        console.log('📋 PROCEDIMENTOS CARREGADOS:', procedures.map(p => ({
+          id: p.procedure?.id,
+          codigo: p.procedure?.code,
+          descricao: p.procedure?.description,
+          porte: p.procedure?.porte,
+          quantidade: p.quantityRequested
+        })));
         
         // Função para calcular valor do porte
         const parsePorteValue = (porte: string | null | undefined): number => {
@@ -732,6 +770,14 @@ export default function CreateOrder() {
       if (opmeItems && opmeItems.length > 0) {
         setSelectedOpmeItems(opmeItems);
         console.log(`✅ OTIMIZADO: ${opmeItems.length} itens OPME carregados`);
+        console.log('🏥 ITENS OPME CARREGADOS:', opmeItems.map(item => ({
+          id: item.item?.id,
+          codigo: item.item?.anvisaRegistration,
+          nome: item.item?.name,
+          descricao: item.item?.description,
+          quantidade: item.quantityRequested,
+          fabricante: item.item?.manufacturer
+        })));
       }
 
       // 4. Carregar fornecedores
@@ -771,38 +817,7 @@ export default function CreateOrder() {
         console.log(`✅ OTIMIZADO: ${surgicalProcedures.length} procedimentos cirúrgicos carregados`);
       }
 
-      // 6. Carregar dados do paciente
-      if (patientData) {
-        setSelectedPatient(patientData);
-        console.log(`✅ OTIMIZADO: Paciente carregado: ${patientData.fullName}`);
-      }
-
-      // 6. Carregar dados do hospital
-      if (hospitalData) {
-        setSelectedHospital(hospitalData);
-        console.log(`✅ OTIMIZADO: Hospital carregado: ${hospitalData.name}`);
-      }
-
-      // 7. Carregar dados específicos do pedido
-      setClinicalIndication(order.clinicalIndication || "");
-      setAdditionalNotes(order.additionalNotes || "");
-      setProcedureType(order.procedureType || PROCEDURE_TYPE_VALUES.ELETIVA);
-      
-      if (order.procedureLaterality) {
-        setProcedureLaterality(order.procedureLaterality);
-      }
-      if (order.clinicalJustification) {
-        setClinicalJustification(order.clinicalJustification);
-      }
-      
-      // 8. Carregar anexos
-      if (order.attachments) {
-        setCurrentOrderData(prev => ({
-          ...prev,
-          id: order.id,
-          attachments: order.attachments as UnifiedAttachment[]
-        }));
-      }
+      // ✅ REMOVIDO: Paciente, hospital e dados básicos já carregados nas ETAPAS 1 e 2
 
       console.log(`🎉 OTIMIZADO: TODOS os dados carregados com sucesso para pedido ${order.id}`);
 
@@ -811,8 +826,9 @@ export default function CreateOrder() {
     }
   };
 
-  // Função para carregar pedido existente (inclui dados relacionais)
-  const loadExistingOrder = async (order: MedicalOrder) => {
+  // COMENTADO: Função para carregar pedido existente (UNIFICAÇÃO - usando loadExistingOrderOptimized)
+  // Esta função foi substituída pelo fluxo unificado que usa loadExistingOrderOptimized
+  const loadExistingOrder_COMENTADO = async (order: MedicalOrder) => {
     console.log(`🔄 INICIANDO loadExistingOrder para pedido ${order.id}`);
     console.log("Carregando pedido existente:", order);
     setOrderId(order.id);
@@ -1405,7 +1421,7 @@ export default function CreateOrder() {
       // Extrair os IDs dos CIDs múltiplos para enviar ao backend
       const cidIds = multipleCids.map((item) => {
         // Suportar ambas as estruturas: item.cid.id ou item.id
-        const cidId = item.cid?.id || item.id;
+        const cidId = item.cid?.id || (item as any).id;
         if (!cidId) {
           console.warn("CID sem ID encontrado:", item);
         }
@@ -1841,11 +1857,10 @@ export default function CreateOrder() {
           },
         );
 
-        // Verificar se a lateralidade foi salva corretamente
+        // Verificar se os dados foram salvos corretamente
         console.log(
           "saveProgressMutation - Dados retornados após salvamento:",
           {
-            cidLateralitySalvo: updatedData.cidLaterality,
             procedureLateralitySalvo: updatedData.procedureLaterality,
           },
         );
@@ -2133,7 +2148,6 @@ export default function CreateOrder() {
           id: orderId,
           clinicalJustification: currentOrderData?.clinical_justification || currentOrderData?.clinicalJustification,
           procedureLaterality: currentOrderData?.procedureLaterality,
-          cidLaterality: currentOrderData?.cidLaterality,
           secondaryProcedureQuantities: currentOrderData?.secondaryProcedureQuantities,
           opmeItemQuantities: currentOrderData?.opmeItemQuantities,
           doctorName: user?.name || "Dr. Médico Responsável",
@@ -3163,7 +3177,6 @@ export default function CreateOrder() {
         // Para outros passos, salvar o progresso e avançar
         // Lateralidade dos procedimentos secundários removida conforme solicitado
         console.log("Dados de lateralidade ANTES de salvar (próximo passo):", {
-          cidLaterality,
           procedureLaterality,
           // Não incluir mais as lateralidades dos procedimentos secundários
         });
@@ -3189,7 +3202,6 @@ export default function CreateOrder() {
   const goToPreviousStep = async () => {
     if (currentStep > 1) {
       console.log("Dados de lateralidade ANTES de salvar (passo anterior):", {
-        cidLaterality,
         procedureLaterality,
         // Lateralidade dos procedimentos secundários removida conforme solicitado
       });
@@ -3369,8 +3381,8 @@ export default function CreateOrder() {
                   setCidDescription={setCidDescription}
                   selectedCidId={selectedCidId}
                   setSelectedCidId={setSelectedCidId}
-                  cidLaterality={cidLaterality}
-                  setCidLaterality={setCidLaterality}
+                  cidLaterality={null}
+                  setCidLaterality={() => {}}
                   multipleCids={multipleCids}
                   setMultipleCids={setMultipleCids}
                   procedureLaterality={procedureLaterality}
@@ -3789,7 +3801,7 @@ export default function CreateOrder() {
         </div>
       </main>
 
-      {/* Diálogo de pedido existente */}
+      {/* ✅ RESTAURADO: Diálogo de pedido existente com escolha do usuário */}
       <Dialog
         open={showExistingOrderDialog}
         onOpenChange={setShowExistingOrderDialog}
@@ -3808,7 +3820,48 @@ export default function CreateOrder() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="text-sm text-white bg-medsync-blue p-3 rounded border border-border">
+          <div className="text-sm text-white bg-medsync-blue p-3 rounded border border-border space-y-2">
+            {/* ID do Pedido */}
+            {existingOrderData?.id && (
+              <p>
+                <strong>ID do Pedido:</strong> #{existingOrderData.id}
+              </p>
+            )}
+
+            {/* Data de Criação */}
+            {existingOrderData?.createdAt && (
+              <p>
+                <strong>Criado em:</strong>{" "}
+                {new Date(existingOrderData.createdAt).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </p>
+            )}
+
+            {/* Data da Última Atualização */}
+            {existingOrderData?.updatedAt && (
+              <p>
+                <strong>Última atualização:</strong>{" "}
+                {new Date(existingOrderData.updatedAt).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </p>
+            )}
+
+            {/* Separador visual */}
+            {(existingOrderData?.id || existingOrderData?.createdAt || existingOrderData?.updatedAt) && 
+             (existingOrderData?.surgicalConduct || existingOrderData?.procedureName || existingOrderData?.clinicalIndication || existingOrderData?.hospitalName) && (
+              <hr className="border-white/30 my-2" />
+            )}
+
             {existingOrderData?.surgicalConduct && (
               <p>
                 <strong>Conduta Cirúrgica:</strong>{" "}
@@ -3819,7 +3872,7 @@ export default function CreateOrder() {
               </p>
             )}
             {existingOrderData?.procedureName && (
-              <p className={existingOrderData?.surgicalConduct ? "mt-2" : ""}>
+              <p>
                 <strong>Procedimento:</strong>{" "}
                 {existingOrderData.procedureName.length > 60
                   ? `${existingOrderData.procedureName.substring(0, 60)}...`
@@ -3828,7 +3881,7 @@ export default function CreateOrder() {
               </p>
             )}
             {existingOrderData?.clinicalIndication && (
-              <p className={existingOrderData?.surgicalConduct || existingOrderData?.procedureName ? "mt-2" : ""}>
+              <p>
                 <strong>Indicação Clínica:</strong>{" "}
                 {existingOrderData.clinicalIndication.length > 60
                   ? `${existingOrderData.clinicalIndication.substring(0, 60)}...`
@@ -3837,7 +3890,7 @@ export default function CreateOrder() {
               </p>
             )}
             {existingOrderData?.hospitalName && (
-              <p className={existingOrderData?.surgicalConduct || existingOrderData?.procedureName || existingOrderData?.clinicalIndication ? "mt-2" : ""}>
+              <p>
                 <strong>Hospital:</strong>{" "}
                 {existingOrderData.hospitalName.length > 60
                   ? `${existingOrderData.hospitalName.substring(0, 60)}...`
@@ -3847,16 +3900,16 @@ export default function CreateOrder() {
             )}
           </div>
 
-          <DialogFooter className="gap-3 justify-center items-center">
+          <DialogFooter className="flex justify-center items-center gap-4 w-full">
             <Button
               onClick={handleStartNewOrder}
-              className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
+              className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10 w-48 text-center"
             >
               Iniciar Novo Pedido
             </Button>
             <Button
               onClick={handleContinueExistingOrder}
-              className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
+              className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10 w-48 text-center"
             >
               Continuar Pedido Existente
             </Button>

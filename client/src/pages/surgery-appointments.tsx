@@ -185,7 +185,7 @@ export default function SurgeryAppointments() {
       />
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+        <DialogContent className="max-w-6xl max-h-[95vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>
               {selectedAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
