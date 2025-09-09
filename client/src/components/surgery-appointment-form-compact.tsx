@@ -27,7 +27,6 @@ const surgeryAppointmentFormSchema = z.object({
   estimatedDuration: z.number().min(15, 'Duração mínima é 15 minutos').max(720, 'Duração máxima é 12 horas'),
   surgeryType: z.enum(['eletiva', 'urgencia']),
   status: z.enum(['agendado', 'confirmado', 'em_andamento', 'concluido', 'cancelado', 'reagendado']),
-  surgeryRoom: z.string().optional(),
   preOperativeNotes: z.string().optional(),
   priority: z.number().min(1).max(4),
   notes: z.string().optional(),
@@ -82,6 +81,32 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
     preSelectedOrderId,
     appointment
   });
+
+  // Função para preencher campos automaticamente baseado no pedido médico
+  const autoFillFormFields = (order: AvailableOrder) => {
+    console.log('🔄 Preenchendo campos automaticamente para pedido:', order);
+    
+    // Tipo de cirurgia baseado no procedureType
+    if (order.procedureType) {
+      form.setValue('surgeryType', order.procedureType as 'eletiva' | 'urgencia');
+    }
+    
+    // Data da cirurgia se disponível
+    if (order.procedureDate) {
+      const procedureDate = new Date(order.procedureDate);
+      form.setValue('scheduledDate', procedureDate.toISOString().split('T')[0]);
+    }
+    
+    // Duração estimada baseada no tipo
+    const estimatedDuration = order.procedureType === 'urgencia' ? 180 : 120;
+    form.setValue('estimatedDuration', estimatedDuration);
+    
+    // Prioridade baseada no tipo
+    const priority = order.procedureType === 'urgencia' ? 3 : 1; // Alta para urgência, Baixa para eletiva
+    form.setValue('priority', priority);
+    
+    console.log('✅ Campos preenchidos automaticamente');
+  };
   
   // Buscar pedidos médicos disponíveis para agendamento
   const { data: availableOrders = [], isLoading: isLoadingOrders, error } = useQuery({
@@ -139,7 +164,6 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
       estimatedDuration: existingAppointment?.estimatedDuration || appointment?.estimatedDuration || 120,
       surgeryType: existingAppointment?.surgeryType || appointment?.surgeryType || 'eletiva',
       status: existingAppointment?.status || appointment?.status || 'agendado',
-      surgeryRoom: existingAppointment?.surgeryRoom || appointment?.surgeryRoom || '',
       preOperativeNotes: existingAppointment?.preOperativeNotes || appointment?.preOperativeNotes || '',
       priority: existingAppointment?.priority || appointment?.priority || 1,
       notes: existingAppointment?.notes || appointment?.notes || '',
@@ -169,7 +193,6 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
         estimatedDuration: existingAppointmentData.estimatedDuration,
         surgeryType: existingAppointmentData.surgeryType,
         status: existingAppointmentData.status,
-        surgeryRoom: existingAppointmentData.surgeryRoom || '',
         preOperativeNotes: existingAppointmentData.preOperativeNotes || '',
         priority: existingAppointmentData.priority,
         notes: existingAppointmentData.notes || '',
@@ -201,6 +224,8 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
         if (preSelectedOrder) {
           setSelectedOrder(preSelectedOrder);
           form.setValue('medicalOrderId', preSelectedOrderId);
+          // Preencher campos automaticamente baseado no pedido médico
+          autoFillFormFields(preSelectedOrder);
           console.log('✅ Pedido médico pré-selecionado:', preSelectedOrderId);
           return;
         } else {
@@ -213,6 +238,8 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
         const order = availableOrders.find(o => o.id === selectedOrderId);
         if (order) {
           setSelectedOrder(order);
+          // Preencher campos automaticamente quando um pedido é carregado
+          autoFillFormFields(order);
         }
       }
     }
@@ -337,6 +364,8 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                             const order = availableOrders.find(o => o.id === orderId);
                             if (order) {
                               setSelectedOrder(order);
+                              // Preencher campos automaticamente quando um pedido é selecionado
+                              autoFillFormFields(order);
                             }
                           }}
                           value={field.value ? field.value.toString() : ''}
@@ -388,8 +417,8 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
             </Card>
           )}
 
-          {/* Layout principal - Grid 2x2 com layout super compacto */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* Layout principal - Informações do Agendamento */}
+          <div className="space-y-4">
             {/* Coluna 1: Informações do Agendamento */}
             <Card>
               <CardHeader className="pb-1">
@@ -456,6 +485,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                             className="h-7 text-xs"
                             {...field}
                             onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            disabled={!!selectedOrder}
                           />
                         </FormControl>
                         <FormMessage />
@@ -468,7 +498,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                     render={({ field }) => (
                       <FormItem className="space-y-0">
                         <FormLabel className="text-xs font-medium">Tipo</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={!!selectedOrder}>
                           <FormControl>
                             <SelectTrigger className="h-7">
                               <SelectValue placeholder="Eletiva" />
@@ -521,6 +551,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                         <Select 
                           onValueChange={(value) => field.onChange(parseInt(value))} 
                           value={field.value?.toString() || '1'}
+                          disabled={!!selectedOrder}
                         >
                           <FormControl>
                             <SelectTrigger className="h-7">
@@ -538,42 +569,24 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="surgeryRoom"
-                    render={({ field }) => (
-                      <FormItem className="space-y-0">
-                        <FormLabel className="text-xs font-medium">Sala Cirúrgica</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ex: Sala 1" className="h-7 text-xs" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </div>
               </CardContent>
             </Card>
 
-            {/* Coluna 2: Observações */}
+          
+            {/* Seção de Observações - Largura Completa */}
             <Card>
-              <CardHeader className="pb-1">
-                <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                  <AlertCircle className="h-4 w-4" />
-                  Observações
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1 pt-0 pb-2">
+              <CardContent className="space-y-4 pt-4 pb-4">
                 <FormField
                   control={form.control}
                   name="preOperativeNotes"
                   render={({ field }) => (
-                    <FormItem className="space-y-0">
-                      <FormLabel className="text-xs font-medium">Observações Pré-operatórias</FormLabel>
+                    <FormItem className="space-y-2">
+                      <FormLabel className="text-sm font-medium">Observações Pré-operatórias</FormLabel>
                       <FormControl>
                         <Textarea 
                           placeholder="Instruções, preparativos..."
-                          className="min-h-[45px] resize-none text-xs"
+                          className="min-h-[100px] resize-vertical text-sm"
                           {...field}
                         />
                       </FormControl>
@@ -586,12 +599,12 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                   control={form.control}
                   name="notes"
                   render={({ field }) => (
-                    <FormItem className="space-y-0">
-                      <FormLabel className="text-xs font-medium">Observações Gerais</FormLabel>
+                    <FormItem className="space-y-2">
+                      <FormLabel className="text-sm font-medium">Observações Gerais</FormLabel>
                       <FormControl>
                         <Textarea 
                           placeholder="Informações adicionais..."
-                          className="min-h-[45px] resize-none text-xs"
+                          className="min-h-[100px] resize-vertical text-sm"
                           {...field}
                         />
                       </FormControl>
@@ -606,12 +619,12 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                     control={form.control}
                     name="cancellationReason"
                     render={({ field }) => (
-                      <FormItem className="space-y-1">
-                        <FormLabel className="text-xs font-medium">Motivo do Cancelamento</FormLabel>
+                      <FormItem className="space-y-2">
+                        <FormLabel className="text-sm font-medium">Motivo do Cancelamento</FormLabel>
                         <FormControl>
                           <Textarea 
                             placeholder="Descreva o motivo do cancelamento..."
-                            className="min-h-[50px] resize-none text-xs"
+                            className="min-h-[80px] resize-vertical text-sm"
                             {...field}
                           />
                         </FormControl>
