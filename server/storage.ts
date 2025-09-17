@@ -24,14 +24,147 @@ import {
   municipalities, type Municipality, type InsertMunicipality,
   brazilianStates, type BrazilianState, type InsertBrazilianState,
   medicalOrderProcedures, type MedicalOrderProcedure, type InsertMedicalOrderProcedure,
-  orderStatuses, type OrderStatus, type InsertOrderStatus
+  orderStatuses, type OrderStatus, type InsertOrderStatus,
+  medicalSpecialties, type MedicalSpecialty, type InsertMedicalSpecialty,
+  subscriptionPlans, type SubscriptionPlan, type InsertSubscriptionPlan,
+  userSubscriptions, type UserSubscription, type InsertUserSubscription,
+  subscriptionPayments, type SubscriptionPayment, type InsertSubscriptionPayment,
+  discountCodes, type DiscountCode, type InsertDiscountCode,
+  surgeryAppointments, type SurgeryAppointment, type InsertSurgeryAppointment,
+  userAddresses, type UserAddress, type InsertUserAddress,
+  incompleteRegistrations, type IncompleteRegistration, type InsertIncompleteRegistration
 } from "@shared/schema";
 import { db, pool } from "./db";
-import { eq, desc, ilike, and, isNull, is, gt, or, sql, ne } from "drizzle-orm";
+import { eq, desc, ilike, and, isNull, is, gt, or, sql, ne, gte, lt, inArray } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
 import { hashPassword } from "./utils";
 import { normalizeText } from "./utils/normalize";
+
+// Cache global para mapeamento de cores
+let statusColorCache: Record<string, any> = {};
+
+// Função para converter cor hexadecimal para classes CSS Tailwind
+function hexToTailwindClasses(hexColor: string) {
+  if (!hexColor || !hexColor.startsWith('#')) {
+    return {
+      background: 'bg-gradient-to-r from-slate-50 to-slate-100/50',
+      iconBg: 'bg-slate-200',
+      iconText: 'text-slate-700'
+    };
+  }
+
+  // Converter hex para RGB
+  const hex = hexColor.replace('#', '');
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+
+  // Determinar cor principal baseada nos valores RGB
+  const max = Math.max(r, g, b);
+  const isGrayish = Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30;
+  
+  if (isGrayish) {
+    return {
+      background: 'bg-gradient-to-r from-slate-50 to-slate-100/50',
+      iconBg: 'bg-slate-200',
+      iconText: 'text-slate-700'
+    };
+  }
+
+  // Verificar primeiro se é amarelo (prioridade sobre vermelho para cores claras)
+  if ((r > 220 && g > 220 && b < 200) || (r > 240 && g > 230 && b < 180)) {
+    // Amarelo ou amarelo claro como #FFF59D
+    return {
+      background: 'bg-gradient-to-r from-yellow-50 to-yellow-100/50',
+      iconBg: 'bg-yellow-200',
+      iconText: 'text-yellow-700'
+    };
+  }
+  
+  // Verificar se é laranja (cores com R alto, G médio-alto, B médio-baixo)
+  if ((r > 240 && g > 180 && g < 220 && b < 160) || (r === 255 && g > 200 && b < 140)) {
+    // Laranja como #FFCC80 (255, 204, 128)
+    return {
+      background: 'bg-gradient-to-r from-orange-50 to-orange-100/50',
+      iconBg: 'bg-orange-200',
+      iconText: 'text-orange-700'
+    };
+  }
+  
+  // Determinar cor dominante
+  if (r > g && r > b) {
+    // Vermelho dominante
+    return {
+      background: 'bg-gradient-to-r from-red-50 to-red-100/50',
+      iconBg: 'bg-red-200',
+      iconText: 'text-red-700'
+    };
+  } else if (g > r && g > b) {
+    // Verde dominante
+    return {
+      background: 'bg-gradient-to-r from-green-50 to-green-100/50',
+      iconBg: 'bg-green-200',
+      iconText: 'text-green-700'
+    };
+  } else if (b > r && b > g) {
+    // Azul dominante
+    return {
+      background: 'bg-gradient-to-r from-blue-50 to-blue-100/50',
+      iconBg: 'bg-blue-200',
+      iconText: 'text-blue-700'
+    };
+  } else if (r > 180 && g > 100 && g < 180 && b < 150) {
+    // Laranja
+    return {
+      background: 'bg-gradient-to-r from-orange-50 to-orange-100/50',
+      iconBg: 'bg-orange-200',
+      iconText: 'text-orange-700'
+    };
+  } else if (r > 150 && b > 150 && g < 180) {
+    // Roxo
+    return {
+      background: 'bg-gradient-to-r from-purple-50 to-purple-100/50',
+      iconBg: 'bg-purple-200',
+      iconText: 'text-purple-700'
+    };
+  }
+
+  // Fallback para cinza
+  return {
+    background: 'bg-gradient-to-r from-slate-50 to-slate-100/50',
+    iconBg: 'bg-slate-200',
+    iconText: 'text-slate-700'
+  };
+}
+
+// Função para inicializar cache de cores
+async function initializeStatusColorCache() {
+  try {
+    console.log('🎨 Inicializando cache de cores dos status...');
+    const statusInfos = await db.select().from(orderStatuses);
+    
+    statusColorCache = {};
+    statusInfos.forEach(status => {
+      // Usar statusId como chave em vez de cor para evitar conflitos
+      statusColorCache[status.id] = {
+        statusName: status.name,
+        statusColor: status.color || '#EEEEEE',
+        color: status.color || '#EEEEEE',
+        classes: hexToTailwindClasses(status.color || '#EEEEEE')
+      };
+    });
+    
+    // Disponibilizar cache globalmente para uso em routes.ts
+    (global as any).statusColorCache = statusColorCache;
+    
+    console.log('✅ Cache de cores inicializado com', Object.keys(statusColorCache).length, 'status');
+  } catch (error) {
+    console.error('❌ Erro ao inicializar cache de cores:', error);
+    // Cache vazio como fallback
+    statusColorCache = {};
+  }
+}
 
 const PostgresSessionStore = connectPg(session);
 
@@ -43,9 +176,56 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByResetToken(token: string): Promise<User | undefined>;
   getUserByCrm(crm: number): Promise<User | undefined>;
+  getUserByField(field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
   deleteUser(id: number): Promise<boolean>;
+  deleteUserPermanently(id: number): Promise<boolean>;
+  
+  // User address operations
+  getUserAddresses(userId: number): Promise<UserAddress[]>;
+  getUserPrimaryAddress(userId: number): Promise<UserAddress | undefined>;
+  createUserAddress(address: InsertUserAddress): Promise<UserAddress>;
+  updateUserAddress(id: number, updates: Partial<InsertUserAddress>): Promise<UserAddress | undefined>;
+  deleteUserAddress(id: number): Promise<boolean>;
+  setUserPrimaryAddress(userId: number, addressId: number): Promise<boolean>;
+  
+  // Medical specialty operations
+  getMedicalSpecialties(): Promise<MedicalSpecialty[]>;
+  getMedicalSpecialty(id: number): Promise<MedicalSpecialty | undefined>;
+  getMedicalSpecialtyByName(name: string): Promise<MedicalSpecialty | undefined>;
+  createMedicalSpecialty(specialty: InsertMedicalSpecialty): Promise<MedicalSpecialty>;
+  
+  // Subscription plans operations
+  getAllSubscriptionPlans(): Promise<SubscriptionPlan[]>;
+  getSubscriptionPlans(): Promise<SubscriptionPlan[]>;
+  getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined>;
+  getSubscriptionPlanByName(name: string): Promise<SubscriptionPlan | undefined>;
+  createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
+  
+  // User subscriptions operations
+  getUserSubscription(userId: number): Promise<UserSubscription | undefined>;
+  getUserSubscriptionWithPlan(userId: number): Promise<(UserSubscription & { plan: SubscriptionPlan }) | undefined>;
+  createUserSubscription(subscription: InsertUserSubscription): Promise<UserSubscription>;
+  updateUserSubscription(id: number, updates: Partial<InsertUserSubscription>): Promise<UserSubscription | undefined>;
+  createTrialSubscription(userId: number): Promise<UserSubscription>;
+  isUserSubscriptionValid(userId: number): Promise<{ valid: boolean; reason?: string; subscription?: UserSubscription & { plan: SubscriptionPlan } }>;
+  
+  // Subscription payments operations
+  createSubscriptionPayment(payment: InsertSubscriptionPayment): Promise<SubscriptionPayment>;
+  getSubscriptionPayments(subscriptionId: number): Promise<SubscriptionPayment[]>;
+  
+  // Discount codes operations
+  getDiscountCode(code: string): Promise<DiscountCode | undefined>;
+  validateDiscountCode(code: string, planId: number): Promise<{ valid: boolean; discount?: DiscountCode; reason?: string }>;
+  applyDiscountCode(code: string): Promise<DiscountCode>;
+  calculateDiscountedPrice(originalPrice: number, discount: DiscountCode): { finalPrice: number; discountAmount: number };
+  createLifetimeSubscription(userId: number, discountCode?: string): Promise<UserSubscription>;
+  
+  // Promotional pricing operations
+  createPromotionalSubscription(userId: number, planId: number, promotionalDiscountPercent: number, promotionalDurationMonths: number, description?: string): Promise<UserSubscription>;
+  getCurrentSubscriptionPrice(userId: number): Promise<{ currentPrice: number; isPromotional: boolean; promotionalEndsAt?: Date; originalPrice: number }>;
+  checkPromotionalExpiry(userId: number): Promise<{ expired: boolean; subscription?: UserSubscription }>;
   
   // Supplier operations
   getSupplier(id: number): Promise<Supplier | undefined>;
@@ -195,7 +375,14 @@ export interface IStorage {
   updateMedicalOrder(id: number, updates: Partial<InsertMedicalOrder>): Promise<MedicalOrder | undefined>;
   updateMedicalOrderStatus(id: number, statusId: number): Promise<MedicalOrder | undefined>;
   deleteMedicalOrder(id: number): Promise<boolean>;
+  
+  // ⚠️  ATENÇÃO: Função retorna TODOS os campos do pedido médico (16+ campos)
+  // Para casos específicos, considere usar versões otimizadas como getMedicalOrdersInProgressForPatientModal()
+  // Antes de usar, avalie se todos os campos são necessários para evitar over-fetching
   getMedicalOrdersForPatient(patientId: number): Promise<MedicalOrder[]>;
+  
+  // ✅ OTIMIZADA: Retorna apenas 10 campos essenciais para o modal de escolha
+  getMedicalOrdersInProgressForPatientModal(patientId: number, userId: number): Promise<any[]>;
   getMedicalOrderInProgressByUser(userId: number): Promise<MedicalOrder | undefined>;
   
   // Medical order procedures operations
@@ -277,6 +464,14 @@ export class DatabaseStorage implements IStorage {
       tableName: 'session',
       createTableIfMissing: true 
     });
+    
+    // Inicializar cache de cores quando o storage é criado
+    this.initializeColorCache();
+  }
+
+  // Método para inicializar o cache de cores
+  private async initializeColorCache() {
+    await initializeStatusColorCache();
   }
 
   // User methods
@@ -318,6 +513,36 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(users)
       .where(eq(users.crm, crm));
+    return user || undefined;
+  }
+  
+  async getUserByField(field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string): Promise<User | undefined> {
+    let query;
+    
+    switch (field) {
+      case 'cpf':
+        query = eq(users.cpf, value);
+        break;
+      case 'crm':
+        query = eq(users.crm, parseInt(value));
+        break;
+      case 'phone':
+        query = eq(users.phone, value);
+        break;
+      case 'email':
+        query = eq(users.email, value);
+        break;
+      case 'username':
+        query = eq(users.username, value);
+        break;
+      default:
+        return undefined;
+    }
+    
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(query);
     return user || undefined;
   }
 
@@ -413,9 +638,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
+    // Se medicalSpecialtyId não foi definida, definir como Ortopedista (ID = 1)
+    const userData = {
+      ...insertUser,
+      medicalSpecialtyId: insertUser.medicalSpecialtyId || 1
+    };
+    
     const [user] = await db
       .insert(users)
-      .values(insertUser)
+      .values(userData)
       .returning();
     return user;
   }
@@ -490,6 +721,165 @@ export class DatabaseStorage implements IStorage {
       return true;
     } catch (error) {
       console.error(`[Storage] Erro ao desativar usuário ${id}:`, error);
+      return false;
+    }
+  }
+
+  async deleteUserPermanently(id: number): Promise<boolean> {
+    try {
+      console.log(`[Storage] Iniciando exclusão PERMANENTE do usuário ${id}`);
+      
+      // Verificar se o usuário existe
+      const [existingUser] = await db.select().from(users).where(eq(users.id, id));
+      if (!existingUser) {
+        console.log(`[Storage] Usuário ${id} não encontrado`);
+        return false;
+      }
+      
+      // Remover associações com hospitais (doctorHospitals)
+      console.log(`[Storage] Removendo associações de hospitais para o usuário ${id}`);
+      await db
+        .delete(doctorHospitals)
+        .where(eq(doctorHospitals.userId, id));
+      
+      // Remover associações com pacientes (doctorPatients)
+      console.log(`[Storage] Removendo associações de pacientes para o usuário ${id}`);
+      await db
+        .delete(doctorPatients)
+        .where(eq(doctorPatients.doctorId, id));
+      
+      // Remover permissões específicas do usuário
+      console.log(`[Storage] Removendo permissões para o usuário ${id}`);
+      await db
+        .delete(userPermissions)
+        .where(eq(userPermissions.userId, id));
+      
+      // Remover notificações do usuário
+      console.log(`[Storage] Removendo notificações para o usuário ${id}`);
+      await db
+        .delete(notifications)
+        .where(eq(notifications.userId, id));
+      
+      // Remover endereços do usuário
+      console.log(`[Storage] Removendo endereços para o usuário ${id}`);
+      await db
+        .delete(userAddresses)
+        .where(eq(userAddresses.userId, id));
+      
+      // DELETAR O USUÁRIO PERMANENTEMENTE
+      console.log(`[Storage] Removendo usuário ${id} PERMANENTEMENTE do banco`);
+      const [deleted] = await db
+        .delete(users)
+        .where(eq(users.id, id))
+        .returning();
+      
+      if (!deleted) {
+        console.log(`[Storage] Falha ao deletar usuário ${id}`);
+        return false;
+      }
+      
+      console.log(`[Storage] Usuário ${id} REMOVIDO PERMANENTEMENTE com sucesso`);
+      return true;
+    } catch (error) {
+      console.error(`[Storage] Erro ao deletar usuário ${id} permanentemente:`, error);
+      return false;
+    }
+  }
+
+  // User address methods
+  async getUserAddresses(userId: number): Promise<UserAddress[]> {
+    return await db
+      .select()
+      .from(userAddresses)
+      .where(eq(userAddresses.userId, userId))
+      .orderBy(desc(userAddresses.isPrimary), userAddresses.id);
+  }
+
+  async getUserPrimaryAddress(userId: number): Promise<UserAddress | undefined> {
+    const [address] = await db
+      .select()
+      .from(userAddresses)
+      .where(and(
+        eq(userAddresses.userId, userId),
+        eq(userAddresses.isPrimary, true)
+      ));
+    return address || undefined;
+  }
+
+  async createUserAddress(address: InsertUserAddress): Promise<UserAddress> {
+    // Se é o endereço principal, desmarcar outros como principais
+    if (address.isPrimary) {
+      await db
+        .update(userAddresses)
+        .set({ isPrimary: false })
+        .where(eq(userAddresses.userId, address.userId));
+    }
+
+    const [newAddress] = await db
+      .insert(userAddresses)
+      .values(address)
+      .returning();
+    return newAddress;
+  }
+
+  async updateUserAddress(id: number, updates: Partial<InsertUserAddress>): Promise<UserAddress | undefined> {
+    // Se está marcando como principal, desmarcar outros
+    if (updates.isPrimary) {
+      const [address] = await db
+        .select()
+        .from(userAddresses)
+        .where(eq(userAddresses.id, id));
+      
+      if (address) {
+        await db
+          .update(userAddresses)
+          .set({ isPrimary: false })
+          .where(eq(userAddresses.userId, address.userId));
+      }
+    }
+
+    const [updated] = await db
+      .update(userAddresses)
+      .set(updates)
+      .where(eq(userAddresses.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteUserAddress(id: number): Promise<boolean> {
+    try {
+      const [deleted] = await db
+        .delete(userAddresses)
+        .where(eq(userAddresses.id, id))
+        .returning();
+      return !!deleted;
+    } catch (error) {
+      console.error('Erro ao deletar endereço:', error);
+      return false;
+    }
+  }
+
+  async setUserPrimaryAddress(userId: number, addressId: number): Promise<boolean> {
+    try {
+      // Desmarcar todos os endereços como principais
+      await db
+        .update(userAddresses)
+        .set({ isPrimary: false })
+        .where(eq(userAddresses.userId, userId));
+
+      // Marcar o endereço específico como principal
+      const [updated] = await db
+        .update(userAddresses)
+        .set({ isPrimary: true })
+        .where(and(
+          eq(userAddresses.id, addressId),
+          eq(userAddresses.userId, userId)
+        ))
+        .returning();
+
+      return !!updated;
+    } catch (error) {
+      console.error('Erro ao definir endereço principal:', error);
       return false;
     }
   }
@@ -1285,23 +1675,65 @@ export class DatabaseStorage implements IStorage {
       const orders = await query;
       console.log(`Encontrados ${orders.length} pedidos médicos`);
       
-      // Mapeamento manual baseado na tabela order_statuses real
+      // Buscar informações de status da tabela order_statuses
+      const statusInfos = await db.select().from(orderStatuses);
+      const statusMap = statusInfos.reduce((acc, status) => {
+        acc[status.id] = status;
+        return acc;
+      }, {} as Record<number, any>);
+      
+      
+      // Mapeamento manual baseado na tabela order_statuses real (mantido para compatibilidade)
       const statusMapping = {
-        1: 'em_preenchimento',  // Incompleta
-        2: 'em_avaliacao',      // Em análise
-        3: 'aceito',            // Autorizado  
+        1: 'em_preenchimento',   // Incompleta
+        2: 'em_avaliacao',       // Em análise
+        3: 'aceito',             // Autorizado  
         4: 'autorizado_parcial', // Autorizado Parcial
-        5: 'pendencia',         // Pendência
+        5: 'pendencia',          // Pendência
         6: 'cirurgia_realizada', // Cirurgia realizada
-        7: 'cancelado',         // Cancelada
-        8: 'aguardando_envio'   // Aguardando Envio
+        7: 'cancelado',          // Cancelada
+        8: 'aguardando_envio',   // Aguardando Envio
+        9: 'recebido',           // Recebido
+        10: 'aguardando_recurso' // Aguardando Recurso
       };
       
-      // Adicionar campo status baseado no statusId
-      const ordersWithStatus = orders.map(order => ({
-        ...order,
-        status: statusMapping[order.statusId as keyof typeof statusMapping] || 'nao_especificado'
-      }));
+      // Adicionar campos de status baseado no statusId usando cache de cores
+      const ordersWithStatus = orders.map(order => {
+        const statusInfo = statusMap[order.statusId];
+        const cachedStatus = statusColorCache[order.statusId];
+        const statusColor = statusInfo?.color || '#EEEEEE';
+        const colorClasses = cachedStatus?.classes || hexToTailwindClasses(statusColor);
+        
+        
+        
+        // Correção específica para status ID 10
+        if (order.statusId === 10 && !statusInfo) {
+          return {
+            ...order,
+            status: 'aguardando_recurso',
+            statusCode: 'aguardando_recurso',
+            statusName: 'Aguardando Recurso',
+            statusColor: '#EF9A9A',
+            statusIcon: 'file-text',
+            statusColorClasses: {
+              background: 'bg-gradient-to-r from-red-50 to-red-100/50',
+              iconBg: 'bg-red-200',
+              iconText: 'text-red-700'
+            }
+          };
+        }
+        
+        return {
+          ...order,
+          status: statusMapping[order.statusId as keyof typeof statusMapping] || 'nao_especificado',
+          statusCode: statusInfo?.code || null,
+          statusName: statusInfo?.name || 'Não especificado',
+          statusColor: statusColor,
+          statusIcon: statusInfo?.icon || null,
+          // Adicionar classes CSS geradas automaticamente
+          statusColorClasses: colorClasses
+        };
+      });
       
       return ordersWithStatus;
     } catch (error) {
@@ -1493,7 +1925,10 @@ export class DatabaseStorage implements IStorage {
       if (updates.complexity !== undefined) updateData.complexity = updates.complexity;
       if (updates.statusId !== undefined) updateData.statusId = updates.statusId;
       if (updates.receivedValue !== undefined) updateData.receivedValue = updates.receivedValue;
-      if (updates.attachments !== undefined) updateData.attachments = updates.attachments;
+      if (updates.attachments !== undefined) {
+        console.log("🔍 STORAGE - Atualizando attachments:", updates.attachments);
+        updateData.attachments = updates.attachments;
+      }
       if (updates.procedureDate !== undefined) updateData.procedureDate = updates.procedureDate;
       
       // Sempre atualizar timestamp
@@ -1626,6 +2061,14 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // ⚠️  ATENÇÃO: Esta função retorna TODOS os campos do pedido médico
+  // Campos retornados: id, patientId, userId, hospitalId, procedureDate, clinicalIndication,
+  // clinicalJustification, procedureLaterality, procedureType, additionalNotes, complexity,
+  // createdAt, updatedAt, statusId, receivedValue, attachments + hospitalName (JOIN)
+  // 
+  // CONSIDERE usar versões otimizadas para casos específicos:
+  // - getMedicalOrdersInProgressForPatientModal(): Para modal de escolha (10 campos)
+  // - Criar nova função específica se precisar de subset diferente
   async getMedicalOrdersForPatient(patientId: number): Promise<MedicalOrder[]> {
     try {
       // Buscamos os pedidos básicos para o paciente com seleção explícita de colunas
@@ -1669,6 +2112,41 @@ export class DatabaseStorage implements IStorage {
       return ordersWithDetails as MedicalOrder[];
     } catch (error) {
       console.error("Erro ao buscar pedido em andamento para o paciente:", error);
+      throw error;
+    }
+  }
+
+  async getMedicalOrdersInProgressForPatientModal(patientId: number, userId: number): Promise<any[]> {
+    try {
+      // Query otimizada que retorna apenas os campos necessários para o modal
+      const ordersWithDetails = await db
+        .select({
+          id: medicalOrders.id,
+          patientId: medicalOrders.patientId,
+          userId: medicalOrders.userId,
+          hospitalId: medicalOrders.hospitalId,
+          statusId: medicalOrders.statusId,
+          createdAt: medicalOrders.createdAt,
+          updatedAt: medicalOrders.updatedAt,
+          clinicalIndication: medicalOrders.clinicalIndication,
+          hospitalName: hospitals.name,
+          patientName: patients.fullName,
+        })
+        .from(medicalOrders)
+        .leftJoin(hospitals, eq(medicalOrders.hospitalId, hospitals.id))
+        .leftJoin(patients, eq(medicalOrders.patientId, patients.id))
+        .where(and(
+          eq(medicalOrders.patientId, patientId),
+          eq(medicalOrders.userId, userId),
+          eq(medicalOrders.statusId, 1) // Apenas pedidos incompletos
+        ))
+        .orderBy(desc(medicalOrders.updatedAt));
+      
+      console.log(`[Storage] Encontrados ${ordersWithDetails.length} pedidos incompletos para modal (paciente: ${patientId}, médico: ${userId})`);
+      
+      return ordersWithDetails;
+    } catch (error) {
+      console.error("Erro ao buscar pedidos para modal:", error);
       throw error;
     }
   }
@@ -3357,7 +3835,764 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+
+  // Medical Specialty methods
+  async getMedicalSpecialties(): Promise<MedicalSpecialty[]> {
+    try {
+      return await db.select().from(medicalSpecialties).where(eq(medicalSpecialties.isActive, true));
+    } catch (error) {
+      console.error("Erro ao buscar especialidades médicas:", error);
+      return [];
+    }
+  }
+
+  async getMedicalSpecialty(id: number): Promise<MedicalSpecialty | undefined> {
+    try {
+      const [specialty] = await db.select().from(medicalSpecialties).where(eq(medicalSpecialties.id, id));
+      return specialty || undefined;
+    } catch (error) {
+      console.error("Erro ao buscar especialidade médica:", error);
+      return undefined;
+    }
+  }
+
+  async getMedicalSpecialtyByName(name: string): Promise<MedicalSpecialty | undefined> {
+    try {
+      const [specialty] = await db.select().from(medicalSpecialties).where(eq(medicalSpecialties.name, name));
+      return specialty || undefined;
+    } catch (error) {
+      console.error("Erro ao buscar especialidade médica por nome:", error);
+      return undefined;
+    }
+  }
+
+  async createMedicalSpecialty(specialty: InsertMedicalSpecialty): Promise<MedicalSpecialty> {
+    try {
+      const [newSpecialty] = await db
+        .insert(medicalSpecialties)
+        .values(specialty)
+        .returning();
+      return newSpecialty;
+    } catch (error) {
+      console.error("Erro ao criar especialidade médica:", error);
+      throw error;
+    }
+  }
+
+  // Subscription Plans methods
+  async getAllSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+    try {
+      return await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.isActive, true));
+    } catch (error) {
+      console.error("Erro ao buscar todos os planos de assinatura:", error);
+      return [];
+    }
+  }
+
+  async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+    // Usar o método getAllSubscriptionPlans para evitar duplicação
+    return await this.getAllSubscriptionPlans();
+  }
+
+  async getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined> {
+    try {
+      const [plan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, id));
+      return plan || undefined;
+    } catch (error) {
+      console.error("Erro ao buscar plano de assinatura:", error);
+      return undefined;
+    }
+  }
+
+  async getSubscriptionPlanByName(name: string): Promise<SubscriptionPlan | undefined> {
+    try {
+      const [plan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.name, name));
+      return plan || undefined;
+    } catch (error) {
+      console.error("Erro ao buscar plano por nome:", error);
+      return undefined;
+    }
+  }
+
+  async createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan> {
+    try {
+      const [newPlan] = await db
+        .insert(subscriptionPlans)
+        .values(plan)
+        .returning();
+      return newPlan;
+    } catch (error) {
+      console.error("Erro ao criar plano de assinatura:", error);
+      throw error;
+    }
+  }
+
+  // User Subscriptions methods
+  async getUserSubscription(userId: number): Promise<UserSubscription | undefined> {
+    try {
+      const [subscription] = await db
+        .select()
+        .from(userSubscriptions)
+        .where(eq(userSubscriptions.userId, userId));
+      return subscription || undefined;
+    } catch (error) {
+      console.error("Erro ao buscar assinatura do usuário:", error);
+      return undefined;
+    }
+  }
+
+  async getUserSubscriptionWithPlan(userId: number): Promise<(UserSubscription & { plan: SubscriptionPlan }) | undefined> {
+    try {
+      const [result] = await db
+        .select()
+        .from(userSubscriptions)
+        .leftJoin(subscriptionPlans, eq(userSubscriptions.planId, subscriptionPlans.id))
+        .where(eq(userSubscriptions.userId, userId));
+      
+      if (!result || !result.subscription_plans) return undefined;
+      
+      return {
+        ...result.user_subscriptions,
+        plan: result.subscription_plans
+      };
+    } catch (error) {
+      console.error("Erro ao buscar assinatura com plano:", error);
+      return undefined;
+    }
+  }
+
+  async createUserSubscription(subscription: InsertUserSubscription): Promise<UserSubscription> {
+    try {
+      const [newSubscription] = await db
+        .insert(userSubscriptions)
+        .values(subscription)
+        .returning();
+      return newSubscription;
+    } catch (error) {
+      console.error("Erro ao criar assinatura do usuário:", error);
+      throw error;
+    }
+  }
+
+  async updateUserSubscription(id: number, updates: Partial<InsertUserSubscription>): Promise<UserSubscription | undefined> {
+    try {
+      const [subscription] = await db
+        .update(userSubscriptions)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(userSubscriptions.id, id))
+        .returning();
+      return subscription || undefined;
+    } catch (error) {
+      console.error("Erro ao atualizar assinatura:", error);
+      return undefined;
+    }
+  }
+
+  async createTrialSubscription(userId: number): Promise<UserSubscription> {
+    try {
+      // Get trial plan
+      const trialPlan = await this.getSubscriptionPlanByName('Trial');
+      if (!trialPlan) {
+        throw new Error('Plano Trial não encontrado');
+      }
+
+      // Calculate trial end date
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + trialPlan.trialDays);
+
+      return await this.createUserSubscription({
+        userId,
+        planId: trialPlan.id,
+        status: 'trial',
+        trialEndsAt,
+        paymentProvider: 'none',
+      });
+    } catch (error) {
+      console.error("Erro ao criar assinatura trial:", error);
+      throw error;
+    }
+  }
+
+  async isUserSubscriptionValid(userId: number): Promise<{ valid: boolean; reason?: string; subscription?: UserSubscription & { plan: SubscriptionPlan } }> {
+    try {
+      const subscription = await this.getUserSubscriptionWithPlan(userId);
+      
+      if (!subscription) {
+        return { valid: false, reason: 'no_subscription' };
+      }
+
+      const now = new Date();
+
+      // Check trial
+      if (subscription.status === 'trial') {
+        if (subscription.trialEndsAt && subscription.trialEndsAt < now) {
+          return { valid: false, reason: 'trial_expired', subscription };
+        }
+        return { valid: true, subscription };
+      }
+
+      // Check active subscription
+      if (subscription.status === 'active') {
+        if (subscription.expiresAt && subscription.expiresAt < now) {
+          return { valid: false, reason: 'subscription_expired', subscription };
+        }
+        return { valid: true, subscription };
+      }
+
+      // Other statuses (expired, cancelled, past_due)
+      return { valid: false, reason: subscription.status, subscription };
+    } catch (error) {
+      console.error("Erro ao validar assinatura:", error);
+      return { valid: false, reason: 'error' };
+    }
+  }
+
+  // Subscription Payments methods
+  async createSubscriptionPayment(payment: InsertSubscriptionPayment): Promise<SubscriptionPayment> {
+    try {
+      const [newPayment] = await db
+        .insert(subscriptionPayments)
+        .values(payment)
+        .returning();
+      return newPayment;
+    } catch (error) {
+      console.error("Erro ao criar pagamento de assinatura:", error);
+      throw error;
+    }
+  }
+
+  async getSubscriptionPayments(subscriptionId: number): Promise<SubscriptionPayment[]> {
+    try {
+      return await db
+        .select()
+        .from(subscriptionPayments)
+        .where(eq(subscriptionPayments.subscriptionId, subscriptionId))
+        .orderBy(desc(subscriptionPayments.createdAt));
+    } catch (error) {
+      console.error("Erro ao buscar pagamentos:", error);
+      return [];
+    }
+  }
+
+  // Discount Codes methods
+  async getDiscountCode(code: string): Promise<DiscountCode | undefined> {
+    try {
+      const [discountCode] = await db
+        .select()
+        .from(discountCodes)
+        .where(eq(discountCodes.code, code.toUpperCase()));
+      return discountCode || undefined;
+    } catch (error) {
+      console.error("Erro ao buscar código de desconto:", error);
+      return undefined;
+    }
+  }
+
+  async validateDiscountCode(code: string, planId: number): Promise<{ valid: boolean; discount?: DiscountCode; reason?: string }> {
+    try {
+      const discount = await this.getDiscountCode(code);
+      
+      if (!discount) {
+        return { valid: false, reason: 'not_found' };
+      }
+
+      if (!discount.isActive) {
+        return { valid: false, reason: 'inactive', discount };
+      }
+
+      const now = new Date();
+      
+      // Verificar validade
+      if (discount.validFrom && discount.validFrom > now) {
+        return { valid: false, reason: 'not_started', discount };
+      }
+      
+      if (discount.validUntil && discount.validUntil < now) {
+        return { valid: false, reason: 'expired', discount };
+      }
+
+      // Verificar limites de uso
+      if (discount.maxUses && discount.currentUses >= discount.maxUses) {
+        return { valid: false, reason: 'max_uses_reached', discount };
+      }
+
+      // Verificar se plano é aplicável
+      if (discount.applicablePlans && discount.applicablePlans.length > 0) {
+        if (!discount.applicablePlans.includes(planId)) {
+          return { valid: false, reason: 'plan_not_applicable', discount };
+        }
+      }
+
+      return { valid: true, discount };
+    } catch (error) {
+      console.error("Erro ao validar código de desconto:", error);
+      return { valid: false, reason: 'error' };
+    }
+  }
+
+  async applyDiscountCode(code: string): Promise<DiscountCode> {
+    try {
+      const [updated] = await db
+        .update(discountCodes)
+        .set({ 
+          currentUses: sql`${discountCodes.currentUses} + 1`,
+          updatedAt: new Date()
+        })
+        .where(eq(discountCodes.code, code.toUpperCase()))
+        .returning();
+      return updated;
+    } catch (error) {
+      console.error("Erro ao aplicar código de desconto:", error);
+      throw error;
+    }
+  }
+
+  calculateDiscountedPrice(originalPrice: number, discount: DiscountCode): { finalPrice: number; discountAmount: number } {
+    let discountAmount = 0;
+    
+    if (discount.discountType === 'percentage') {
+      discountAmount = Math.round((originalPrice * discount.discountValue) / 100);
+    } else if (discount.discountType === 'fixed_amount') {
+      discountAmount = discount.discountValue;
+    }
+    
+    // Garantir que o desconto não seja maior que o preço original
+    discountAmount = Math.min(discountAmount, originalPrice);
+    
+    const finalPrice = Math.max(0, originalPrice - discountAmount);
+    
+    return { finalPrice, discountAmount };
+  }
+
+  async createLifetimeSubscription(userId: number, discountCode?: string): Promise<UserSubscription> {
+    try {
+      // Get lifetime plan
+      const lifetimePlan = await this.getSubscriptionPlanByName('Lifetime');
+      if (!lifetimePlan) {
+        throw new Error('Plano Lifetime não encontrado');
+      }
+
+      let subscriptionData: any = {
+        userId,
+        planId: lifetimePlan.id,
+        status: 'lifetime',
+        expiresAt: null, // NULL = nunca expira
+        paymentProvider: 'none',
+        originalPrice: 0,
+        finalPrice: 0,
+      };
+
+      // Aplicar código de desconto se fornecido
+      if (discountCode) {
+        const validation = await this.validateDiscountCode(discountCode, lifetimePlan.id);
+        if (validation.valid && validation.discount) {
+          await this.applyDiscountCode(discountCode);
+          subscriptionData.discountCode = discountCode;
+          subscriptionData.discountDescription = validation.discount.description;
+          
+          if (validation.discount.discountType === 'percentage') {
+            subscriptionData.discountPercent = validation.discount.discountValue;
+          } else {
+            subscriptionData.discountAmount = validation.discount.discountValue;
+          }
+        }
+      }
+
+      return await this.createUserSubscription(subscriptionData);
+    } catch (error) {
+      console.error("Erro ao criar assinatura vitalícia:", error);
+      throw error;
+    }
+  }
+
+  // Atualizar método de validação para incluir lifetime
+  async isUserSubscriptionValid(userId: number): Promise<{ valid: boolean; reason?: string; subscription?: UserSubscription & { plan: SubscriptionPlan } }> {
+    try {
+      const subscription = await this.getUserSubscriptionWithPlan(userId);
+      
+      if (!subscription) {
+        return { valid: false, reason: 'no_subscription' };
+      }
+
+      const now = new Date();
+
+      // Check lifetime (nunca expira)
+      if (subscription.status === 'lifetime') {
+        return { valid: true, subscription };
+      }
+
+      // Check trial
+      if (subscription.status === 'trial') {
+        if (subscription.trialEndsAt && subscription.trialEndsAt < now) {
+          return { valid: false, reason: 'trial_expired', subscription };
+        }
+        return { valid: true, subscription };
+      }
+
+      // Check active subscription
+      if (subscription.status === 'active') {
+        if (subscription.expiresAt && subscription.expiresAt < now) {
+          return { valid: false, reason: 'subscription_expired', subscription };
+        }
+        return { valid: true, subscription };
+      }
+
+      // Other statuses (expired, cancelled, past_due)
+      return { valid: false, reason: subscription.status, subscription };
+    } catch (error) {
+      console.error("Erro ao validar assinatura:", error);
+      return { valid: false, reason: 'error' };
+    }
+  }
+
+  // Promotional Pricing methods
+  async createPromotionalSubscription(
+    userId: number, 
+    planId: number, 
+    promotionalDiscountPercent: number, 
+    promotionalDurationMonths: number, 
+    description?: string
+  ): Promise<UserSubscription> {
+    try {
+      const plan = await this.getSubscriptionPlan(planId);
+      if (!plan) {
+        throw new Error('Plano não encontrado');
+      }
+
+      const originalPrice = plan.priceMonthly;
+      const promotionalPrice = Math.round(originalPrice * (1 - promotionalDiscountPercent / 100));
+      
+      // Calcular data de fim da promoção
+      const promotionalEndsAt = new Date();
+      promotionalEndsAt.setMonth(promotionalEndsAt.getMonth() + promotionalDurationMonths);
+      
+      // Data de expiração normal (1 mês após início)
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + 1);
+
+      const subscriptionData = {
+        userId,
+        planId,
+        status: 'active',
+        originalPrice,
+        finalPrice: promotionalPrice,
+        promotionalPrice,
+        promotionalEndsAt,
+        promotionalDescription: description || `${promotionalDiscountPercent}% de desconto por ${promotionalDurationMonths} meses`,
+        expiresAt,
+        paymentProvider: 'none', // Será atualizado quando integrar pagamento
+      };
+
+      return await this.createUserSubscription(subscriptionData);
+    } catch (error) {
+      console.error("Erro ao criar assinatura promocional:", error);
+      throw error;
+    }
+  }
+
+  async getCurrentSubscriptionPrice(userId: number): Promise<{ 
+    currentPrice: number; 
+    isPromotional: boolean; 
+    promotionalEndsAt?: Date; 
+    originalPrice: number 
+  }> {
+    try {
+      const subscription = await this.getUserSubscriptionWithPlan(userId);
+      
+      if (!subscription) {
+        throw new Error('Assinatura não encontrada');
+      }
+
+      const now = new Date();
+      const originalPrice = subscription.plan.priceMonthly;
+
+      // Verificar se está em período promocional
+      if (subscription.promotionalPrice && 
+          subscription.promotionalEndsAt && 
+          subscription.promotionalEndsAt > now) {
+        return {
+          currentPrice: subscription.promotionalPrice,
+          isPromotional: true,
+          promotionalEndsAt: subscription.promotionalEndsAt,
+          originalPrice
+        };
+      }
+
+      // Período promocional expirado ou não existe
+      return {
+        currentPrice: originalPrice,
+        isPromotional: false,
+        originalPrice
+      };
+    } catch (error) {
+      console.error("Erro ao obter preço atual:", error);
+      throw error;
+    }
+  }
+
+  async checkPromotionalExpiry(userId: number): Promise<{ expired: boolean; subscription?: UserSubscription }> {
+    try {
+      const subscription = await this.getUserSubscription(userId);
+      
+      if (!subscription) {
+        return { expired: false };
+      }
+
+      const now = new Date();
+      
+      // Verificar se promoção expirou
+      if (subscription.promotionalPrice && 
+          subscription.promotionalEndsAt && 
+          subscription.promotionalEndsAt <= now) {
+        
+        // Atualizar assinatura para preço normal
+        const plan = await this.getSubscriptionPlan(subscription.planId);
+        if (plan) {
+          await this.updateUserSubscription(subscription.id, {
+            finalPrice: plan.priceMonthly,
+            promotionalPrice: null,
+            promotionalEndsAt: null,
+            promotionalDescription: null
+          });
+        }
+        
+        return { expired: true, subscription };
+      }
+
+      return { expired: false, subscription };
+    } catch (error) {
+      console.error("Erro ao verificar expiração promocional:", error);
+      return { expired: false };
+    }
+  }
+
+  // Método helper para verificar se assinatura precisa de renovação de preço
+  async processSubscriptionPriceUpdate(userId: number): Promise<{ priceChanged: boolean; newPrice?: number; oldPrice?: number }> {
+    try {
+      const expiry = await this.checkPromotionalExpiry(userId);
+      
+      if (expiry.expired && expiry.subscription) {
+        const plan = await this.getSubscriptionPlan(expiry.subscription.planId);
+        return {
+          priceChanged: true,
+          newPrice: plan?.priceMonthly,
+          oldPrice: expiry.subscription.promotionalPrice || undefined
+        };
+      }
+      
+      return { priceChanged: false };
+    } catch (error) {
+      console.error("Erro ao processar atualização de preço:", error);
+      return { priceChanged: false };
+    }
+  }
+
+  // Contar cirurgias agendadas para hoje para um médico específico
+  async getTodayScheduledSurgeriesCount(doctorId: number): Promise<number> {
+    try {
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+      
+      const result = await db.select({ count: sql<number>`count(*)` })
+        .from(surgeryAppointments)
+        .where(
+          and(
+            eq(surgeryAppointments.doctorId, doctorId),
+            gte(surgeryAppointments.scheduledDate, startOfDay),
+            lt(surgeryAppointments.scheduledDate, endOfDay),
+            inArray(surgeryAppointments.status, ['agendado', 'confirmado'])
+          )
+        );
+      
+      return Number(result[0]?.count) || 0;
+    } catch (error) {
+      console.error(`Erro ao contar cirurgias agendadas para hoje do médico ${doctorId}:`, error);
+      return 0;
+    }
+  }
+
+  // Contar pedidos aguardando autorização para um médico específico
+  async getPendingAuthorizationOrdersCount(doctorId: number): Promise<number> {
+    try {
+      // Status 8 = aguardando_envio, Status 2 = em_avaliacao
+      const result = await db.select({ count: sql<number>`count(*)` })
+        .from(medicalOrders)
+        .where(
+          and(
+            eq(medicalOrders.userId, doctorId),
+            inArray(medicalOrders.statusId, [8, 2]) // aguardando_envio e em_avaliacao
+          )
+        );
+      
+      return Number(result[0]?.count) || 0;
+    } catch (error) {
+      console.error(`Erro ao contar pedidos aguardando autorização do médico ${doctorId}:`, error);
+      return 0;
+    }
+  }
+
+  // Contar pedidos aguardando agendamento para um médico específico
+  async getPendingSchedulingOrdersCount(doctorId: number): Promise<number> {
+    try {
+      // Status 3 = aceito, Status 4 = autorizado_parcial
+      // Pedidos que estão autorizados mas não têm data de procedimento definida
+      const result = await db.select({ count: sql<number>`count(*)` })
+        .from(medicalOrders)
+        .where(
+          and(
+            eq(medicalOrders.userId, doctorId),
+            inArray(medicalOrders.statusId, [3, 4]), // aceito e autorizado_parcial
+            isNull(medicalOrders.procedureDate)
+          )
+        );
+      
+      return Number(result[0]?.count) || 0;
+    } catch (error) {
+      console.error(`Erro ao contar pedidos aguardando agendamento do médico ${doctorId}:`, error);
+      return 0;
+    }
+  }
+
+  // === Incomplete Registrations (Lead Tracking) ===
+  async createIncompleteRegistration(data: InsertIncompleteRegistration): Promise<IncompleteRegistration> {
+    console.log('📧 Criando registro de lead incompleto:', { email: data.email, step: data.currentStep });
+    
+    // Verificar se já existe um registro para este email
+    const existing = await db
+      .select()
+      .from(incompleteRegistrations)
+      .where(eq(incompleteRegistrations.email, data.email))
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Atualizar registro existente - merge inteligente (não sobrescrever dados existentes com null)
+      const existingData = existing[0];
+      const mergedData = {
+        firstName: data.firstName || existingData.firstName,
+        lastName: data.lastName || existingData.lastName,
+        cpf: data.cpf || existingData.cpf,
+        phone: data.phone || existingData.phone,
+        username: data.username || existingData.username,
+        selectedPlanId: data.selectedPlanId || existingData.selectedPlanId,
+        currentStep: data.currentStep, // Sempre atualizar o step atual
+        userAgent: data.userAgent || existingData.userAgent,
+        ipAddress: data.ipAddress || existingData.ipAddress,
+        source: data.source || existingData.source,
+        updatedAt: new Date(),
+      };
+      
+      const updated = await db
+        .update(incompleteRegistrations)
+        .set(mergedData)
+        .where(eq(incompleteRegistrations.email, data.email))
+        .returning();
+      
+      return updated[0];
+    } else {
+      // Criar novo registro
+      const result = await db.insert(incompleteRegistrations).values(data).returning();
+      return result[0];
+    }
+  }
+
+  async updateIncompleteRegistrationStep(email: string, step: string, additionalData?: Partial<InsertIncompleteRegistration>): Promise<void> {
+    console.log('📧 Atualizando step do lead:', { email, step });
+    
+    await db
+      .update(incompleteRegistrations)
+      .set({
+        currentStep: step,
+        updatedAt: new Date(),
+        ...additionalData,
+      })
+      .where(eq(incompleteRegistrations.email, email));
+  }
+
+  async markRegistrationCompleted(email: string): Promise<void> {
+    console.log('📧 Marcando registro como completado:', { email });
+    
+    await db
+      .update(incompleteRegistrations)
+      .set({
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(incompleteRegistrations.email, email));
+  }
+
+  async getAbandonedRegistrations(daysOld: number = 1): Promise<IncompleteRegistration[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    
+    return await db
+      .select()
+      .from(incompleteRegistrations)
+      .where(
+        and(
+          isNull(incompleteRegistrations.completedAt), // Não completado
+          isNull(incompleteRegistrations.abandonedAt), // Não marcado como abandonado
+          lt(incompleteRegistrations.createdAt, cutoffDate) // Mais antigo que X dias
+        )
+      )
+      .orderBy(desc(incompleteRegistrations.createdAt));
+  }
+
+  async getIncompleteRegistrationsStats(): Promise<{
+    total: number;
+    formCompleted: number;
+    planSelected: number;
+    checkoutStarted: number;
+    abandoned: number;
+    completed: number;
+  }> {
+    const stats = await db
+      .select({
+        currentStep: incompleteRegistrations.currentStep,
+        completedAt: incompleteRegistrations.completedAt,
+        abandonedAt: incompleteRegistrations.abandonedAt,
+        count: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(incompleteRegistrations)
+      .groupBy(
+        incompleteRegistrations.currentStep,
+        incompleteRegistrations.completedAt,
+        incompleteRegistrations.abandonedAt
+      );
+
+    const result = {
+      total: 0,
+      formCompleted: 0,
+      planSelected: 0,
+      checkoutStarted: 0,
+      abandoned: 0,
+      completed: 0,
+    };
+
+    stats.forEach(stat => {
+      result.total += stat.count;
+      
+      if (stat.completedAt) {
+        result.completed += stat.count;
+      } else if (stat.abandonedAt) {
+        result.abandoned += stat.count;
+      } else {
+        switch (stat.currentStep) {
+          case 'form_completed':
+            result.formCompleted += stat.count;
+            break;
+          case 'plan_selected':
+            result.planSelected += stat.count;
+            break;
+          case 'checkout_started':
+            result.checkoutStarted += stat.count;
+            break;
+        }
+      }
+    });
+
+    return result;
+  }
 }
 
-// Versão com o banco de dados PostgreSQL
 export const storage = new DatabaseStorage();

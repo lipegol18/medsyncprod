@@ -20,7 +20,7 @@ declare global {
 }
 
 export function setupAuth(app: Express) {
-  const isProduction = process.env.NODE_ENV === 'development';
+  const isProduction = process.env.NODE_ENV === 'production';
   console.log("🔐 Configurando autenticação - Ambiente:", isProduction ? 'production' : 'development');
   
   const sessionSettings: session.SessionOptions = {
@@ -204,13 +204,40 @@ export function setupAuth(app: Express) {
         roleId: req.body.roleId
       });
 
+      // Separar dados de endereço dos dados do usuário
+      const { cep, logradouro, numero, complemento, bairro, cidade, uf, ...userData } = req.body;
+
       const user = await storage.createUser({
-        ...req.body,
+        ...userData,
         active: false, // Forçar usuários novos como inativos
         password: await hashPassword(req.body.password),
       });
 
       console.log("Usuário criado com sucesso, ID:", user.id);
+
+      // Se foram fornecidos dados de endereço, criar o endereço
+      if (cep && logradouro && cidade && uf) {
+        try {
+          const addressData = {
+            userId: user.id,
+            isPrimary: true, // Primeiro endereço é sempre principal
+            cep: cep,
+            logradouro: logradouro,
+            numero: numero || '',
+            complemento: complemento || '',
+            bairro: bairro || '',
+            cidade: cidade,
+            uf: uf,
+            country: 'BR'
+          };
+          
+          const address = await storage.createUserAddress(addressData);
+          console.log("Endereço criado com sucesso para usuário:", user.id, "- Endereço ID:", address.id);
+        } catch (addressError) {
+          console.error("Erro ao criar endereço durante registro:", addressError);
+          // Não falhar o registro se houver erro no endereço
+        }
+      }
       
       // Notificar o webhook sobre o novo usuário criado (de forma assíncrona)
       WebhookService.notifyNewUser(user);
@@ -224,6 +251,123 @@ export function setupAuth(app: Express) {
       });
     } catch (error) {
       console.error("Erro ao registrar usuário:", error);
+      next(error);
+    }
+  });
+
+  // Endpoint de registro com sistema de planos e trial
+  app.post("/api/register-with-plan", async (req, res, next) => {
+    try {
+      console.log("Registro com plano - dados recebidos:", req.body);
+      
+      const { planId, ...registrationData } = req.body;
+      
+      // Verificar se plano existe
+      const plan = await storage.getSubscriptionPlan(planId);
+      if (!plan) {
+        return res.status(400).json({ message: "Plano de assinatura inválido" });
+      }
+      
+      // Verificar se já existe usuário com esse username ou email
+      const existingUser = await storage.getUserByUsername(registrationData.username);
+      if (existingUser) {
+        return res.status(400).json({ message: "Nome de usuário já existe" });
+      }
+      
+      const existingEmail = await storage.getUserByEmail(registrationData.email);
+      if (existingEmail) {
+        return res.status(400).json({ message: "Email já está em uso" });
+      }
+      
+      // Atribuir papel padrão se não foi especificado
+      if (!registrationData.roleId) {
+        const defaultRole = await storage.getDefaultRole();
+        if (defaultRole) {
+          registrationData.roleId = defaultRole.id;
+        }
+      }
+      
+      // Separar dados de endereço
+      const { cep, logradouro, numero, complemento, bairro, cidade, uf, ...userData } = registrationData;
+      
+      // Garantir que o campo name seja criado corretamente
+      const fullName = registrationData.name || `${registrationData.firstName} ${registrationData.lastName}`;
+      
+      // Lógica específica por tipo de plano
+      const now = new Date();
+      let userToCreate = {
+        ...userData,
+        name: fullName, // Garantir que name seja sempre definido
+        password: await hashPassword(registrationData.password),
+        active: false, // Por padrão inativo
+      };
+      
+      // Se for plano START (ID 1), configurar trial
+      if (planId === 1) {
+        const trialDays = plan.trialDays || 15; // Default 15 dias
+        const trialEndDate = new Date(now.getTime() + (trialDays * 24 * 60 * 60 * 1000));
+        
+        userToCreate = {
+          ...userToCreate,
+          active: true, // Ativar imediatamente para trial
+          trialStartDate: now,
+          trialEndDate: trialEndDate,
+          trialStatus: 'active',
+          trialDaysOverride: trialDays
+        };
+        
+        console.log(`Configurando trial de ${trialDays} dias para plano START`);
+      }
+      
+      const user = await storage.createUser(userToCreate);
+      console.log("Usuário criado com sucesso, ID:", user.id);
+      
+      // Criar endereço se fornecido
+      if (cep && logradouro && cidade && uf) {
+        try {
+          const addressData = {
+            userId: user.id,
+            isPrimary: true,
+            cep, logradouro, numero: numero || '', complemento: complemento || '',
+            bairro: bairro || '', cidade, uf, country: 'BR'
+          };
+          await storage.createUserAddress(addressData);
+        } catch (addressError) {
+          console.error("Erro ao criar endereço:", addressError);
+        }
+      }
+      
+      // Notificar webhook
+      WebhookService.notifyNewUser(user);
+      
+      const { password, ...userWithoutPassword } = user;
+      
+      if (planId === 1) {
+        // Para plano START, fazer login automático e retornar sucesso
+        req.login(user, (err) => {
+          if (err) {
+            console.error("Erro no login automático:", err);
+            return res.status(500).json({ message: "Erro no login automático" });
+          }
+          
+          res.status(201).json({
+            ...userWithoutPassword,
+            message: "Conta criada com sucesso! Você tem 15 dias gratuitos para testar o sistema.",
+            trialActive: true,
+            trialEndDate: user.trialEndDate
+          });
+        });
+      } else {
+        // Para outros planos, retornar que precisa de pagamento
+        res.status(201).json({
+          ...userWithoutPassword,
+          message: "Dados salvos com sucesso. Complete o pagamento para ativar sua conta.",
+          requiresPayment: true,
+          planId: planId
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao registrar usuário com plano:", error);
       next(error);
     }
   });
@@ -478,6 +622,60 @@ export function isAuthenticated(req: any, res: any, next: any) {
   
   console.log("❌ Usuário não autenticado");
   res.status(401).json({ message: "Não autorizado" });
+}
+
+// Middleware para verificar status do trial
+export function checkTrialStatus(req: any, res: any, next: any) {
+  // Se não está autenticado, passar adiante para outros middlewares lidarem
+  if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
+    return next();
+  }
+
+  const user = req.user;
+  
+  // Se não tem campos de trial definidos, assumir que não está em trial
+  if (!user.trialStatus || !user.trialEndDate) {
+    return next();
+  }
+
+  const now = new Date();
+  const trialEndDate = new Date(user.trialEndDate);
+
+  console.log("🔍 Verificação de trial:", {
+    userId: user.id,
+    trialStatus: user.trialStatus,
+    trialEndDate: user.trialEndDate,
+    now: now.toISOString(),
+    isExpired: now > trialEndDate
+  });
+
+  // Se trial expirou
+  if (user.trialStatus === 'active' && now > trialEndDate) {
+    console.log(`❌ Trial expirado para usuário ${user.id}`);
+    
+    // Atualizar status do trial no banco
+    storage.updateUser(user.id, { trialStatus: 'expired' })
+      .catch(error => console.error("Erro ao atualizar status do trial:", error));
+    
+    return res.status(403).json({ 
+      message: "Seu período de teste expirou. Faça upgrade do seu plano para continuar usando o sistema.",
+      trialExpired: true,
+      trialEndDate: user.trialEndDate
+    });
+  }
+
+  // Se trial está cancelado
+  if (user.trialStatus === 'cancelled') {
+    console.log(`❌ Trial cancelado para usuário ${user.id}`);
+    return res.status(403).json({
+      message: "Sua conta trial foi cancelada. Entre em contato com o suporte.",
+      trialCancelled: true
+    });
+  }
+
+  // Trial ativo, continuar
+  console.log(`✅ Trial ativo para usuário ${user.id} até ${trialEndDate.toISOString()}`);
+  next();
 }
 
 // Middleware para verificar permissões específicas
