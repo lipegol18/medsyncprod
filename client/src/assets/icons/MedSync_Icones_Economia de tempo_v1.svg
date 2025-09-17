@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <defs>
+    <style>
+      .cls-1 {
+        stroke: #00a4e8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: .65px;
+      }
+
+      .cls-1, .cls-2 {
+        fill: none;
+      }
+
+      .cls-2 {
+        stroke: #26a9e0;
+        stroke-miterlimit: 10;
+        stroke-width: .74px;
+      }
+    </style>
+  </defs>
+  <g id="Economia_de_tempo" data-name="Economia de tempo">
+    <rect class="cls-2" x=".39" y=".39" width="19.22" height="19.22" rx="1.41" ry="1.41"/>
+  </g>
+  <g id="Economia_de_Tempo" data-name="Economia de Tempo">
+    <g>
+      <path class="cls-1" d="M6.12,9.69c0-2.42,1.96-4.39,4.39-4.39s4.39,1.96,4.39,4.39-1.96,4.39-4.39,4.39"/>
+      <polyline class="cls-1" points="10.47 7.65 10.47 9.94 12.04 10.94"/>
+      <line class="cls-1" x1="5.1" y1="11.65" x2="7.41" y2="11.65"/>
+      <line class="cls-1" x1="5.11" y1="13.19" x2="8.3" y2="13.19"/>
+      <line class="cls-1" x1="5.11" y1="14.69" x2="9.17" y2="14.69"/>
+    </g>
+  </g>
+</svg>

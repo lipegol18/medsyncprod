@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Avião_de_papel_-_Enviar" data-name="Avião de papel - Enviar" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #27aae1;
+      }
+
+      .cls-2 {
+        fill: none;
+        stroke: #26a9e0;
+        stroke-miterlimit: 10;
+        stroke-width: .74px;
+      }
+    </style>
+  </defs>
+  <rect class="cls-2" x=".39" y=".39" width="19.22" height="19.22" rx="1.41" ry="1.41"/>
+  <path class="cls-1" d="M9.17,10.83l-3.24-1.56c-.25-.16-.19-.46.08-.54l7.85-2.94c.22-.07.43.13.36.36l-2.94,7.85c-.08.25-.35.33-.52.11l-1.59-3.27ZM12.8,6.78l-6.02,2.27,2.54,1.2,3.47-3.47ZM10.94,13.21l2.27-6.02-3.49,3.49,1.22,2.53Z"/>
+</svg>

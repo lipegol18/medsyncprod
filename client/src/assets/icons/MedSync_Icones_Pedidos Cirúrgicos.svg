@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Pedidos_Cirúrgicos" data-name="Pedidos Cirúrgicos" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <defs>
+    <style>
+      .cls-1 {
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .cls-1, .cls-2 {
+        stroke: #00a4e8;
+        stroke-width: .65px;
+      }
+
+      .cls-1, .cls-2, .cls-3 {
+        fill: none;
+      }
+
+      .cls-2, .cls-3 {
+        stroke-miterlimit: 10;
+      }
+
+      .cls-3 {
+        stroke: #26a9e0;
+        stroke-width: .74px;
+      }
+    </style>
+  </defs>
+  <g>
+    <path class="cls-2" d="M12.41,5.78h1.01c.79,0,1.43.64,1.43,1.43v6.81c0,.79-.64,1.43-1.43,1.43h-6.85c-.79,0-1.43-.64-1.43-1.43v-6.81c0-.79.64-1.43,1.43-1.43h1.09"/>
+    <rect class="cls-2" x="7.62" y="4.56" width="4.89" height="2.74" rx="1.11" ry="1.11"/>
+  </g>
+  <polyline class="cls-1" points="7.85 10.55 9.28 11.92 12.15 9.05"/>
+  <rect class="cls-3" x=".39" y=".39" width="19.22" height="19.22" rx="1.41" ry="1.41"/>
+</svg>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Inserir_novo_pedido" data-name="Inserir novo pedido" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <defs>
+    <style>
+      .cls-1 {
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .cls-1, .cls-2 {
+        stroke: #00a4e8;
+        stroke-width: .65px;
+      }
+
+      .cls-1, .cls-2, .cls-3 {
+        fill: none;
+      }
+
+      .cls-2, .cls-3 {
+        stroke-miterlimit: 10;
+      }
+
+      .cls-3 {
+        stroke: #26a9e0;
+        stroke-width: .74px;
+      }
+    </style>
+  </defs>
+  <g>
+    <circle class="cls-2" cx="10" cy="10" r="4.11"/>
+    <line class="cls-1" x1="10" y1="8.02" x2="10" y2="11.98"/>
+    <line class="cls-1" x1="11.98" y1="10" x2="8.02" y2="10"/>
+  </g>
+  <rect class="cls-3" x=".39" y=".39" width="19.22" height="19.22" rx="1.41" ry="1.41"/>
+</svg>

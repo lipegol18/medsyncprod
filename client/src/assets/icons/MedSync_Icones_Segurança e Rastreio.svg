@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Segurança_e_Rastreio" data-name="Segurança e Rastreio" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <defs>
+    <style>
+      .cls-1 {
+        stroke-width: .65px;
+      }
+
+      .cls-1, .cls-2 {
+        stroke: #00a4e8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .cls-1, .cls-2, .cls-3 {
+        fill: none;
+      }
+
+      .cls-2 {
+        stroke-width: .5px;
+      }
+
+      .cls-3 {
+        stroke: #26a9e0;
+        stroke-miterlimit: 10;
+        stroke-width: .74px;
+      }
+    </style>
+  </defs>
+  <path class="cls-1" d="M10.43,15.39c2.79-1.15,4.23-2.93,4.28-5.29v-3.11c0-.59-.38-1.12-.94-1.31l-3.37-1.12c-.1-.03-.21-.03-.31,0l-3.37,1.12c-.56.19-.94.71-.94,1.31v3.12c.05,2.08,1.47,3.85,4.24,5.27.13.07.28.07.41.02Z"/>
+  <rect class="cls-1" x="7.5" y="8.62" width="3.04" height="2.48" rx=".64" ry=".64"/>
+  <line class="cls-1" x1="9.02" y1="9.75" x2="9.02" y2="10.04"/>
+  <path class="cls-1" d="M9.03,7.28h0c.47,0,.85.38.85.85v.28c0,.09-.08.17-.17.17h-1.36c-.09,0-.17-.08-.17-.17v-.28c0-.47.38-.85.85-.85Z"/>
+  <path class="cls-2" d="M11.44,8.78h.62c.22,0,.4-.18.4-.4v-.49"/>
+  <circle class="cls-2" cx="12.46" cy="7.48" r=".39"/>
+  <circle class="cls-2" cx="12.5" cy="9.82" r=".36"/>
+  <line class="cls-2" x1="11.41" y1="9.81" x2="12.08" y2="9.81"/>
+  <path class="cls-2" d="M11.48,10.92h.62c.22,0,.4.18.4.4v.5"/>
+  <circle class="cls-2" cx="12.5" cy="12.27" r=".38"/>
+  <rect class="cls-3" x=".39" y=".39" width="19.22" height="19.22" rx="1.41" ry="1.41"/>
+</svg>
