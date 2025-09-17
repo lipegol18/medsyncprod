@@ -1,7 +1,29 @@
-import { pgTable, text, serial, integer, boolean, date, timestamp, pgEnum, numeric, varchar, jsonb, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, date, timestamp, pgEnum, numeric, varchar, jsonb, unique, check, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
+
+// Especialidades Médicas
+export const medicalSpecialties = pgTable("medical_specialties", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(), // Ex: "Ortopedista", "Neurocirurgião", "Dermatologista"
+  description: text("description"), // Descrição detalhada da especialidade
+  code: text("code").unique(), // Código interno da especialidade (ex: "ORTO", "NEURO")
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertMedicalSpecialtySchema = createInsertSchema(medicalSpecialties).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MedicalSpecialty = typeof medicalSpecialties.$inferSelect;
+export type InsertMedicalSpecialty = z.infer<typeof insertMedicalSpecialtySchema>;
+
+
 
 // Regiões Anatômicas do Corpo Humano
 export const anatomicalRegions = pgTable("anatomical_regions", {
@@ -419,11 +441,7 @@ export type InsertSurgicalApproachSupplier = z.infer<typeof insertSurgicalApproa
 // Tabela para justificativas clínicas pré-definidas
 export const clinicalJustifications = pgTable("clinical_justifications", {
   id: serial("id").primaryKey(),
-  title: text("title").notNull(), // Título da justificativa para identificação
   content: text("content").notNull(), // Texto completo da justificativa
-  category: text("category"), // Categoria (ex: "Ortopedia", "Cardiologia", "Neurologia")
-  specialty: text("specialty"), // Especialidade médica específica
-  procedureType: text("procedure_type"), // Tipo de procedimento (ex: "Cirúrgico", "Diagnóstico")
   isActive: boolean("is_active").default(true), // Se está ativa para uso
   createdBy: integer("created_by").references(() => users.id), // Usuário que criou
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -440,11 +458,7 @@ export const clinicalJustificationsRelations = relations(clinicalJustifications,
 }));
 
 export const insertClinicalJustificationSchema = createInsertSchema(clinicalJustifications).pick({
-  title: true,
   content: true,
-  category: true,
-  specialty: true,
-  procedureType: true,
   isActive: true,
   createdBy: true,
 });
@@ -700,9 +714,12 @@ export const users = pgTable("users", {
   password: text("password").notNull(), // Será armazenado como hash bcrypt
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
-  phone: text("phone"), // Telefone celular no formato +5521999999999
+  phone: text("phone").unique(), // Telefone celular no formato +5521999999999
+  cpf: text("cpf").unique(), // CPF do usuário
   roleId: integer("role_id").notNull().references(() => roles.id),
   crm: integer("crm"), // Número CRM para médicos
+  crmUf: varchar("crm_uf", { length: 2 }).references(() => brazilianStates.stateCode), // UF do CRM registrado
+  medicalSpecialtyId: integer("medical_specialty_id").references(() => medicalSpecialties.id), // Especialidade médica do usuário
   active: boolean("active").default(false),
   lastLogin: timestamp("last_login"),
   passwordResetToken: text("password_reset_token"),
@@ -713,6 +730,21 @@ export const users = pgTable("users", {
   signatureUrl: text("signature_url"), // URL da assinatura do médico
   signatureNote: text("signature_note"), // Nota de texto para aparecer embaixo da assinatura
   logoUrl: text("logo_url"), // URL do logotipo do médico
+  
+  // Stripe payment fields
+  stripeCustomerId: text("stripe_customer_id").unique(), // ID do cliente no Stripe
+  stripeSubscriptionId: text("stripe_subscription_id").unique(), // ID da assinatura no Stripe
+  subscriptionStatus: text("subscription_status"), // Status da assinatura: active, canceled, past_due, etc.
+  // Usar sistema existente de userSubscriptions ao invés de referência direta
+  subscriptionStartDate: timestamp("subscription_start_date"), // Data de início da assinatura
+  subscriptionEndDate: timestamp("subscription_end_date"), // Data de fim da assinatura
+  
+  // Campos para sistema de trial personalizado
+  trialStartDate: timestamp("trial_start_date"), // Data de início do trial
+  trialEndDate: timestamp("trial_end_date"), // Data de fim do trial
+  trialDaysOverride: integer("trial_days_override"), // Override personalizado de dias de trial (30, 60, etc.)
+  trialStatus: text("trial_status").default("inactive"), // inactive, active, expired, converted
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -723,8 +755,11 @@ export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   name: true,
   phone: true,
+  cpf: true,
   roleId: true,
   crm: true,
+  crmUf: true,
+  medicalSpecialtyId: true,
   active: true,
   signatureNote: true,
 });
@@ -741,6 +776,240 @@ export const insertUserPermissionSchema = createInsertSchema(userPermissions).pi
   userId: true,
   permission: true,
   granted: true,
+});
+
+// User Addresses table - separating address management from users
+export const userAddresses = pgTable("user_addresses", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  isPrimary: boolean("is_primary").notNull().default(true),
+  
+  // Address fields
+  cep: varchar("cep", { length: 9 }).notNull(), // 00000-000
+  logradouro: text("logradouro").notNull(), // Street name
+  numero: text("numero").notNull(), // House/building number (accepts "S/N", "123A")
+  complemento: text("complemento"), // Apartment, block, etc.
+  bairro: text("bairro"), // Neighborhood
+  cidade: text("cidade").notNull(), // City
+  uf: varchar("uf", { length: 2 }).notNull().references(() => brazilianStates.stateCode), // State code (FK to brazilian_states)
+  country: varchar("country", { length: 2 }).notNull().default('BR'), // Country code
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Relations for user addresses
+export const userAddressesRelations = relations(userAddresses, ({ one }) => ({
+  user: one(users, {
+    fields: [userAddresses.userId],
+    references: [users.id],
+    relationName: "userAddresses",
+  }),
+  state: one(brazilianStates, {
+    fields: [userAddresses.uf],
+    references: [brazilianStates.stateCode],
+    relationName: "addressState",
+  }),
+}));
+
+// Add relation from users to addresses and other entities
+export const usersRelations = relations(users, ({ one, many }) => ({
+  role: one(roles, {
+    fields: [users.roleId],
+    references: [roles.id],
+    relationName: "userRole",
+  }),
+  medicalSpecialty: one(medicalSpecialties, {
+    fields: [users.medicalSpecialtyId],
+    references: [medicalSpecialties.id],
+    relationName: "userMedicalSpecialty",
+  }),
+  addresses: many(userAddresses, {
+    relationName: "userAddresses",
+  }),
+  userSubscription: one(userSubscriptions, {
+    fields: [users.id],
+    references: [userSubscriptions.userId],
+    relationName: "userSubscription",
+  }),
+}));
+
+export const insertUserAddressSchema = createInsertSchema(userAddresses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserAddress = typeof userAddresses.$inferSelect;
+export type InsertUserAddress = z.infer<typeof insertUserAddressSchema>;
+
+// Subscription Plans table
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(), // "Trial", "Individual", "Team"
+  description: text("description").notNull(),
+  priceMonthly: integer("price_monthly").default(0), // Preço em centavos (R$ 199,90 = 19990)
+  priceYearly: integer("price_yearly").default(0), // Preço anual em centavos
+  maxUsers: integer("max_users").default(1), // Número máximo de usuários
+  features: text("features").array().default([]), // Array de funcionalidades
+  trialDays: integer("trial_days").default(0), // Dias de trial gratuito
+  stripePriceId: text("stripe_price_id").unique(), // ID do preço no Stripe
+  isPopular: boolean("is_popular").default(false), // Destacar como popular
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).pick({
+  name: true,
+  description: true,
+  priceMonthly: true,
+  priceYearly: true,
+  maxUsers: true,
+  features: true,
+  trialDays: true,
+  stripePriceId: true,
+  isPopular: true,
+  isActive: true,
+});
+
+// User Subscriptions table
+export const userSubscriptions = pgTable("user_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  planId: integer("plan_id").notNull().references(() => subscriptionPlans.id),
+  status: text("status").notNull().default("trial"), // trial, active, expired, cancelled, past_due, lifetime
+  startedAt: timestamp("started_at").defaultNow(),
+  expiresAt: timestamp("expires_at"), // Data de expiração da assinatura paga (NULL para vitalício)
+  trialEndsAt: timestamp("trial_ends_at"), // Data de término do trial
+  // Campos de desconto e preço personalizado
+  originalPrice: integer("original_price"), // Preço original em centavos
+  discountPercent: integer("discount_percent").default(0), // Porcentagem de desconto (0-100)
+  discountAmount: integer("discount_amount").default(0), // Valor fixo de desconto em centavos
+  finalPrice: integer("final_price"), // Preço final após desconto em centavos
+  discountCode: text("discount_code"), // Código do cupom de desconto utilizado
+  discountDescription: text("discount_description"), // Descrição do desconto aplicado
+  // Campos para desconto promocional temporal
+  promotionalPrice: integer("promotional_price"), // Preço promocional em centavos
+  promotionalEndsAt: timestamp("promotional_ends_at"), // Data de fim da promoção
+  promotionalDescription: text("promotional_description"), // Descrição da promoção
+  // Campos genéricos para qualquer plataforma de pagamento
+  paymentProviderCustomerId: text("payment_provider_customer_id"), // ID do cliente na plataforma de pagamento
+  paymentProviderSubscriptionId: text("payment_provider_subscription_id"), // ID da assinatura na plataforma
+  paymentProvider: text("payment_provider").default("none"), // "stripe", "pagar_me", "mercado_pago", etc.
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertUserSubscriptionSchema = createInsertSchema(userSubscriptions).pick({
+  userId: true,
+  planId: true,
+  status: true,
+  expiresAt: true,
+  trialEndsAt: true,
+  originalPrice: true,
+  discountPercent: true,
+  discountAmount: true,
+  finalPrice: true,
+  discountCode: true,
+  discountDescription: true,
+  promotionalPrice: true,
+  promotionalEndsAt: true,
+  promotionalDescription: true,
+  paymentProviderCustomerId: true,
+  paymentProviderSubscriptionId: true,
+  paymentProvider: true,
+});
+
+// Incomplete Registrations table (para tracking de leads)
+export const incompleteRegistrations = pgTable("incomplete_registrations", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(), // Email para identificar lead
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  cpf: text("cpf"),
+  phone: text("phone"),
+  username: text("username"),
+  selectedPlanId: integer("selected_plan_id").references(() => subscriptionPlans.id),
+  currentStep: text("current_step").notNull(), // 'form_completed', 'plan_selected', 'checkout_started'
+  userAgent: text("user_agent"), // Browser info
+  ipAddress: text("ip_address"), // IP para analytics
+  source: text("source").default("direct"), // Como chegou: 'direct', 'google', 'facebook', etc.
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"), // Quando finalizou (se finalizou)
+  abandonedAt: timestamp("abandoned_at"), // Quando foi considerado abandonado
+}, (table) => ({
+  // Index para buscar por email rapidamente
+  emailIdx: index("incomplete_registrations_email_idx").on(table.email),
+  // Index para buscar por data
+  createdAtIdx: index("incomplete_registrations_created_at_idx").on(table.createdAt),
+}));
+
+export const insertIncompleteRegistrationSchema = createInsertSchema(incompleteRegistrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type IncompleteRegistration = typeof incompleteRegistrations.$inferSelect;
+export type InsertIncompleteRegistration = z.infer<typeof insertIncompleteRegistrationSchema>;
+
+// Subscription Payments table
+export const subscriptionPayments = pgTable("subscription_payments", {
+  id: serial("id").primaryKey(),
+  subscriptionId: integer("subscription_id").notNull().references(() => userSubscriptions.id, { onDelete: 'cascade' }),
+  amount: integer("amount").notNull(), // Valor em centavos
+  currency: text("currency").default("BRL"),
+  status: text("status").notNull(), // pending, succeeded, failed, refunded
+  paymentProviderIntentId: text("payment_provider_intent_id"), // ID da transação na plataforma
+  paymentProvider: text("payment_provider").notNull(), // "stripe", "pagar_me", etc.
+  paidAt: timestamp("paid_at"),
+  failedAt: timestamp("failed_at"),
+  failureReason: text("failure_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertSubscriptionPaymentSchema = createInsertSchema(subscriptionPayments).pick({
+  subscriptionId: true,
+  amount: true,
+  currency: true,
+  status: true,
+  paymentProviderIntentId: true,
+  paymentProvider: true,
+  paidAt: true,
+  failedAt: true,
+  failureReason: true,
+});
+
+// Discount Codes table
+export const discountCodes = pgTable("discount_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  description: text("description").notNull(),
+  discountType: text("discount_type").notNull(), // 'percentage' ou 'fixed_amount'
+  discountValue: integer("discount_value").notNull(), // Porcentagem (0-100) ou valor fixo em centavos
+  maxUses: integer("max_uses"), // NULL = ilimitado
+  currentUses: integer("current_uses").default(0),
+  validFrom: timestamp("valid_from").defaultNow(),
+  validUntil: timestamp("valid_until"),
+  applicablePlans: integer("applicable_plans").array(), // Array de IDs de planos aplicáveis, NULL = todos
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertDiscountCodeSchema = createInsertSchema(discountCodes).pick({
+  code: true,
+  description: true,
+  discountType: true,
+  discountValue: true,
+  maxUses: true,
+  validFrom: true,
+  validUntil: true,
+  applicablePlans: true,
+  isActive: true,
 });
 
 // Export types
@@ -893,6 +1162,21 @@ export type InsertScannedDocument = z.infer<typeof insertScannedDocumentSchema>;
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+
+export type UserSubscription = typeof userSubscriptions.$inferSelect;
+export type InsertUserSubscription = z.infer<typeof insertUserSubscriptionSchema>;
+
+export type SubscriptionPayment = typeof subscriptionPayments.$inferSelect;
+export type InsertSubscriptionPayment = z.infer<typeof insertSubscriptionPaymentSchema>;
+
+export type IncompleteRegistration = typeof incompleteRegistrations.$inferSelect;
+export type InsertIncompleteRegistration = z.infer<typeof insertIncompleteRegistrationSchema>;
+
+export type DiscountCode = typeof discountCodes.$inferSelect;
+export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
 
 export type Role = typeof roles.$inferSelect;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
@@ -1531,5 +1815,38 @@ export const insertMedicalOrderSupplierManufacturerSchema = createInsertSchema(m
 
 export type MedicalOrderSupplierManufacturer = typeof medicalOrderSupplierManufacturers.$inferSelect;
 export type InsertMedicalOrderSupplierManufacturer = z.infer<typeof insertMedicalOrderSupplierManufacturerSchema>;
+
+// Relações para especialidades médicas
+export const medicalSpecialtiesRelations = relations(medicalSpecialties, ({ many }) => ({
+  users: many(users),
+}));
+
+// Users relations now handled above with addresses relationship
+
+// Relações para planos de assinatura
+export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }) => ({
+  userSubscriptions: many(userSubscriptions),
+}));
+
+// Relações para assinaturas de usuários
+export const userSubscriptionsRelations = relations(userSubscriptions, ({ one, many }) => ({
+  user: one(users, {
+    fields: [userSubscriptions.userId],
+    references: [users.id],
+  }),
+  plan: one(subscriptionPlans, {
+    fields: [userSubscriptions.planId],
+    references: [subscriptionPlans.id],
+  }),
+  payments: many(subscriptionPayments),
+}));
+
+// Relações para pagamentos de assinatura
+export const subscriptionPaymentsRelations = relations(subscriptionPayments, ({ one }) => ({
+  subscription: one(userSubscriptions, {
+    fields: [subscriptionPayments.subscriptionId],
+    references: [userSubscriptions.id],
+  }),
+}));
 
 
