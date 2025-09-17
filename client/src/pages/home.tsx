@@ -41,6 +41,7 @@ import NovoPedidoIcon from "@/assets/icons/novo-pedido-icon.svg";
 import PedidosIcon from "@/assets/icons/pedidos-icon.svg";
 import PacienteIcon from "@/assets/icons/paciente-icon.svg";
 import AvatarCroped from "@/assets/Avatar_croped.png";
+import CentroCirurgicoImage from "@/assets/Medsync_Banner_CentroCirurgico_cropped.png";
 import { TrialExpiredModal } from "@/components/trial/trial-expired-modal";
 import { ToastFilterTest } from "@/components/toast-filter-test";
 
@@ -377,7 +378,13 @@ export default function Home() {
                                 <div className="container mx-auto px-4 py-6 max-w-8xl overflow-visible">
                                         {/* Cabeçalho do Dashboard */}
                                         <div className="mb-8 overflow-visible">
-                                                <div className="relative flex flex-col lg:flex-row items-center justify-between mb-8 rounded-xl bg-gradient-to-r from-blue-400 to-blue-200 overflow-visible">
+                                                <div 
+                                                        className="relative flex flex-col lg:flex-row items-center justify-between mb-8 rounded-xl overflow-visible bg-cover bg-center min-h-[150px] md:min-h-[225px] lg:min-h-[300px]"
+                                                        style={{
+                                                                backgroundImage: `url(${CentroCirurgicoImage})`,
+                                                                backgroundBlendMode: 'overlay'
+                                                        }}
+                                                >
                                                         <div className="flex flex-col p-6 lg:p-10 text-center lg:text-left">
                                                                 <h1 className="text-2xl lg:text-3xl font-bold text-white">
                                                                         Olá
@@ -425,23 +432,17 @@ export default function Home() {
                                                                         )}
                                                                 </div>
                                                         </div>
-                                                        <div className="flex-shrink-0 relative mr-0 lg:mr-48 mt-4 lg:mt-0">
-                                                                <img
-                                                                        src={
-                                                                                AvatarCroped
-                                                                        }
-                                                                        alt="Avatar do médico"
-                                                                        className="w-32 h-32 lg:w-56 lg:h-56 object-contain -mt-6 lg:-mt-12"
-                                                                />
-                                                        </div>
                                                 </div>
 
                                                 {/* Cards de Estatísticas */}
                                                 <div className="grid grid-cols-1 lg:grid-cols-6 gap-6 mb-8">
                                                         {/* Coluna esquerda - 3 cards pequenos */}
                                                         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                                {/* Total de Pedidos */}
-                                                                <Card className="border-gray-200 bg-card shadow-sm">
+                                                                {/* Total de Pedidos - Clicável */}
+                                                                <Card 
+                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        onClick={() => navigate("/orders")}
+                                                                >
                                                                         <CardContent className="p-6">
                                                                                 <div className="flex flex-col items-center justify-center">
                                                                                         <p className="text-5xl font-bold text-medsync-blue">
@@ -457,12 +458,19 @@ export default function Home() {
                                                                                                         Cadastrados
                                                                                                 </p>
                                                                                         </div>
+                                                                                        <div className="text-sm text-muted-foreground mt-2 opacity-70">
+                                                                                                Clique para ver todos
+                                                                                        </div>
                                                                                 </div>
                                                                         </CardContent>
                                                                 </Card>
 
-                                                                {/* Pedidos Aguardando Envio */}
-                                                                <Card className="border-gray-200 bg-card shadow-sm">
+                                                                {/* Pedidos Aguardando Envio - Clicável */}
+                                                                <Card 
+                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        onClick={() => navigate("/orders?statusId=8")}
+                                                                        data-testid="card-pedidos-aguardando-envio"
+                                                                >
                                                                         <CardContent className="p-6">
                                                                                 <div className="flex flex-col items-center justify-center">
                                                                                         <p
@@ -479,12 +487,19 @@ export default function Home() {
                                                                                                         Envio
                                                                                                 </p>
                                                                                         </div>
+                                                                                        <div className="text-sm text-muted-foreground mt-2 opacity-70">
+                                                                                                Clique para filtrar
+                                                                                        </div>
                                                                                 </div>
                                                                         </CardContent>
                                                                 </Card>
 
-                                                                {/* Aguardando Agendamento */}
-                                                                <Card className="border-gray-200 bg-card shadow-sm">
+                                                                {/* Aguardando Agendamento - Clicável */}
+                                                                <Card 
+                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        onClick={() => navigate("/orders?needsScheduling=1")}
+                                                                        data-testid="card-pedidos-aguardando-agendamento"
+                                                                >
                                                                         <CardContent className="p-6">
                                                                                 <div className="flex flex-col items-center justify-center">
                                                                                         <p
@@ -503,12 +518,19 @@ export default function Home() {
                                                                                                         Agendamento
                                                                                                 </p>
                                                                                         </div>
+                                                                                        <div className="text-sm text-muted-foreground mt-2 opacity-70">
+                                                                                                Clique para filtrar
+                                                                                        </div>
                                                                                 </div>
                                                                         </CardContent>
                                                                 </Card>
 
-                                                                {/* Pedidos Autorizados - Segunda linha */}
-                                                                <Card className="border-gray-200 bg-card shadow-sm">
+                                                                {/* Pedidos Autorizados - Clicável */}
+                                                                <Card 
+                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        onClick={() => navigate("/orders?authorized=1")}
+                                                                        data-testid="card-pedidos-autorizados"
+                                                                >
                                                                         <CardContent className="p-6">
                                                                                 <div className="flex flex-col items-center justify-center">
                                                                                         <p className="text-5xl font-bold text-medsync-blue">
@@ -519,12 +541,19 @@ export default function Home() {
                                                                                         <p className="text-xl font-bold text-muted-foreground mt-2">
                                                                                                 Autorizados
                                                                                         </p>
+                                                                                        <div className="text-sm text-muted-foreground mt-2 opacity-70">
+                                                                                                Clique para filtrar
+                                                                                        </div>
                                                                                 </div>
                                                                         </CardContent>
                                                                 </Card>
 
-                                                                {/* Pedidos com Pendências - Segunda linha */}
-                                                                <Card className="border-gray-200 bg-card shadow-sm">
+                                                                {/* Pedidos com Pendências - Clicável */}
+                                                                <Card 
+                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        onClick={() => navigate("/orders?statusId=5")}
+                                                                        data-testid="card-pedidos-pendencias"
+                                                                >
                                                                         <CardContent className="p-6">
                                                                                 <div className="flex flex-col items-center justify-center">
                                                                                         <p
@@ -544,12 +573,19 @@ export default function Home() {
                                                                                         <p className="text-xl font-bold text-muted-foreground mt-2">
                                                                                                 Pendências
                                                                                         </p>
+                                                                                        <div className="text-sm text-muted-foreground mt-2 opacity-70">
+                                                                                                Clique para filtrar
+                                                                                        </div>
                                                                                 </div>
                                                                         </CardContent>
                                                                 </Card>
 
-                                                                {/* Aguardando Recurso - Segunda linha */}
-                                                                <Card className="border-gray-200 bg-card shadow-sm">
+                                                                {/* Aguardando Recurso - Clicável */}
+                                                                <Card 
+                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        onClick={() => navigate("/orders?statusId=10")}
+                                                                        data-testid="card-pedidos-aguardando-recurso"
+                                                                >
                                                                         <CardContent className="p-6">
                                                                                 <div className="flex flex-col items-center justify-center">
                                                                                         <p
@@ -573,6 +609,9 @@ export default function Home() {
                                                                                                 <p>
                                                                                                         Recurso
                                                                                                 </p>
+                                                                                        </div>
+                                                                                        <div className="text-sm text-muted-foreground mt-2 opacity-70">
+                                                                                                Clique para filtrar
                                                                                         </div>
                                                                                 </div>
                                                                         </CardContent>
@@ -660,14 +699,25 @@ export default function Home() {
                                                                                                                                 key={
                                                                                                                                         appointment.id
                                                                                                                                 }
-                                                                                                                                className={`grid grid-cols-7 gap-4 px-3 py-2 rounded-lg border-gray-200 border ${
+                                                                                                                                className={`grid grid-cols-7 gap-4 px-3 py-2 rounded-lg border-gray-200 border cursor-pointer hover:shadow-md transition-all duration-200 ${
                                                                                                                                         new Date(
                                                                                                                                                 appointment.scheduledDate,
                                                                                                                                         ).toDateString() ===
                                                                                                                                         new Date().toDateString()
-                                                                                                                                                ? "bg-green-50"
-                                                                                                                                                : "bg-muted/50"
+                                                                                                                                                ? "bg-green-50 hover:bg-green-100"
+                                                                                                                                                : "bg-muted/50 hover:bg-accent/10"
                                                                                                                                 }`}
+                                                                                                                                onClick={() => appointment.medicalOrderId && navigate(`/order/${appointment.medicalOrderId}`)}
+                                                                                                                                onKeyDown={(e) => {
+                                                                                                                                        if ((e.key === 'Enter' || e.key === ' ') && appointment.medicalOrderId) {
+                                                                                                                                                e.preventDefault();
+                                                                                                                                                navigate(`/order/${appointment.medicalOrderId}`);
+                                                                                                                                        }
+                                                                                                                                }}
+                                                                                                                                role="button"
+                                                                                                                                tabIndex={0}
+                                                                                                                                aria-label={`Ver detalhes do pedido de ${appointment.patientName || 'paciente'} - ${appointment.surgicalProcedureName || 'cirurgia'} agendada para ${appointment.scheduledDate ? new Date(appointment.scheduledDate).toLocaleDateString('pt-BR') : 'data não informada'}`}
+                                                                                                                                data-testid={`surgery-card-${appointment.medicalOrderId}`}
                                                                                                                         >
                                                                                                                                 {/* Coluna 1-3: Nome do Paciente e Procedimentos */}
                                                                                                                                 <div className="col-span-3 flex flex-col">
