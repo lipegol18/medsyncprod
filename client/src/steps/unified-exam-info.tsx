@@ -50,11 +50,11 @@ export function UnifiedExamInfo({
       <div className="mb-6 text-foreground">
         <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
           {/* Título com fundo azul */}
-          <div className="bg-accent-light px-4 py-3">
+          <div className="bg-medsync-blue px-4 py-3">
             <div className="flex items-center">
-              <FileText className="mr-2 h-5 w-5 text-muted-foreground" />
+              <FileText className="mr-2 h-5 w-5 text-white" />
               <div>
-                <h3 className="text-lg font-semibold text-muted-foreground">Indicação Clínica <span className="text-destructive">*</span></h3>
+                <h3 className="text-lg font-semibold text-white">Indicação Clínica <span className="text-red-300">*</span></h3>
               </div>
             </div>
           </div>
@@ -88,11 +88,11 @@ export function UnifiedExamInfo({
       <div className="mb-6 text-foreground">
         <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
           {/* Título com fundo azul */}
-          <div className="bg-accent-light px-4 py-3">
+          <div className="bg-medsync-blue px-4 py-3">
             <div className="flex items-center">
-              <StickyNote className="mr-2 h-5 w-5 text-muted-foreground" />
+              <StickyNote className="mr-2 h-5 w-5 text-white" />
               <div>
-                <h3 className="text-lg font-semibold text-muted-foreground">Observações Adicionais</h3>
+                <h3 className="text-lg font-semibold text-white">Observações Adicionais</h3>
               </div>
             </div>
           </div>

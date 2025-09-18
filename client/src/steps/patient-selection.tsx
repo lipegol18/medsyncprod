@@ -29,11 +29,11 @@ export function PatientSelection({
     <div className="mb-6 text-foreground">
       <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
         {/* Título com fundo azul */}
-        <div className="bg-accent-light px-4 py-3">
+        <div className="bg-medsync-blue px-4 py-3">
           <div className="flex items-center">
-            <User className="mr-2 h-5 w-5 text-muted-foreground" />
+            <User className="mr-2 h-5 w-5 text-white" />
             <div>
-              <h3 className="text-lg font-semibold text-muted-foreground">Dados do Paciente</h3>
+              <h3 className="text-lg font-semibold text-white">Dados do Paciente</h3>
             </div>
           </div>
         </div>

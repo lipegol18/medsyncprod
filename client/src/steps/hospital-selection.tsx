@@ -50,11 +50,11 @@ export function HospitalSelection({ selectedHospital, setSelectedHospital }: Hos
     <div className="mb-6 text-foreground">
       <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
         {/* Título com fundo azul */}
-        <div className="bg-accent-light px-4 py-3">
+        <div className="bg-medsync-blue px-4 py-3">
           <div className="flex items-center">
-            <Building2 className="mr-2 h-5 w-5 text-muted-foreground" />
+            <Building2 className="mr-2 h-5 w-5 text-white" />
             <div>
-              <h3 className="text-lg font-semibold text-muted-foreground">Selecione o Hospital</h3>
+              <h3 className="text-lg font-semibold text-white">Selecione o Hospital</h3>
             </div>
           </div>
         </div>
