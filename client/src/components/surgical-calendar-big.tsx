@@ -328,10 +328,20 @@ export function SurgicalCalendarBig({
           views={[Views.MONTH, Views.WEEK, Views.DAY]}
           formats={{
             timeGutterFormat: 'HH:mm',
-            dayFormat: (date: Date) => moment(date).format('ddd DD/MM'),
-            weekdayFormat: (date: Date) => moment(date).format('dddd'),
+            dayFormat: (date: Date) => {
+              const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+              const dayIndex = moment(date).day();
+              return `${dayNames[dayIndex]} ${moment(date).format('DD/MM')}`;
+            },
+            weekdayFormat: (date: Date) => {
+              const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+              return dayNames[moment(date).day()];
+            },
             monthHeaderFormat: (date: Date) => moment(date).format('MMMM YYYY'),
-            dayHeaderFormat: (date: Date) => moment(date).format('dddd, DD [de] MMMM'),
+            dayHeaderFormat: (date: Date) => {
+              const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+              return `${dayNames[moment(date).day()]}, ${moment(date).format('DD [de] MMMM')}`;
+            },
             dayRangeHeaderFormat: ({ start, end }: { start: Date; end: Date }) =>
               `${moment(start).format('DD/MM')} - ${moment(end).format('DD/MM/YYYY')}`,
           }}
