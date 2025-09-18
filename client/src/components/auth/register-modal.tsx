@@ -38,6 +38,7 @@ export function RegisterModal({
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [crmValidationStatus, setCrmValidationStatus] = useState<{ [key: string]: 'validating' | 'valid' | 'invalid' }>({});
 
   // Buscar planos de assinatura
   const { data: plans } = useQuery<SubscriptionPlan[]>({
@@ -89,6 +90,59 @@ export function RegisterModal({
       // Ir para tela de erro ao invés de apenas mostrar toast
       setCurrentStep('error');
     }
+  });
+
+  // Mutation para validar CRM via webhook externo
+  const validateCrmMutation = useMutation({
+    mutationFn: async ({ crm, crmUf }: { crm: string; crmUf: string }) => {
+      const response = await fetch('https://lipegol18.app.n8n.cloud/webhook/validar-crm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ crm, crmUf }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Falha na validação do CRM');
+      }
+      
+      return response.json();
+    },
+    onMutate: ({ crm, crmUf }) => {
+      // Definir status como validando
+      const crmKey = `${crm}-${crmUf}`;
+      setCrmValidationStatus(prev => ({ ...prev, [crmKey]: 'validating' }));
+    },
+    onSuccess: (data, { crm, crmUf }) => {
+      const crmKey = `${crm}-${crmUf}`;
+      // Assumir que o webhook retorna { valid: boolean }
+      setCrmValidationStatus(prev => ({ ...prev, [crmKey]: data.valid ? 'valid' : 'invalid' }));
+      
+      if (!data.valid) {
+        toast({
+          title: "CRM Inválido",
+          description: "O número de CRM informado não foi encontrado no sistema do CFM.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "CRM Validado",
+          description: "CRM confirmado no sistema do CFM.",
+          variant: "default",
+        });
+      }
+    },
+    onError: (error: any, { crm, crmUf }) => {
+      const crmKey = `${crm}-${crmUf}`;
+      setCrmValidationStatus(prev => ({ ...prev, [crmKey]: 'invalid' }));
+      
+      toast({
+        title: "Erro na Validação",
+        description: "Não foi possível validar o CRM. Tente novamente.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Mutation para criar assinatura no Stripe (planos pagos)
@@ -209,6 +263,20 @@ export function RegisterModal({
     // Executar a ação do plano selecionado
     if (selectedPlanId) {
       handlePlanAction(selectedPlanId);
+    }
+  };
+
+  // Função para validar campos incluindo validação de CRM via webhook
+  const handleFieldValidation = (field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string, additionalData?: any) => {
+    // Chamar a validação original
+    onFieldValidation(field, value);
+    
+    // Se for campo CRM e tivermos dados suficientes, validar via webhook
+    if (field === 'crm' && value && additionalData?.crmUf) {
+      validateCrmMutation.mutate({ 
+        crm: value, 
+        crmUf: additionalData.crmUf 
+      });
     }
   };
 
@@ -662,7 +730,7 @@ export function RegisterModal({
         onSwitchToLogin={onSwitchToLogin}
         isLoading={isLoading}
         validationErrors={validationErrors}
-        onFieldValidation={onFieldValidation}
+        onFieldValidation={handleFieldValidation}
       />
     </div>
   );

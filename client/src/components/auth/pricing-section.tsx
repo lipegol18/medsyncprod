@@ -261,7 +261,7 @@ export function PricingSection({ onPlanSelection, selectedPlanId, onAdvanceToPay
               hoveredPlan === 'CLINICA' ? 'shadow-xl scale-105' : ''
             } ${selectedPlanCard === 'CLINICA' ? 'ring-2 ring-sky-400 ring-offset-2' : ''}`}
           >
-            <div className="bg-sky-600 px-3 lg:px-4 py-2 lg:py-3">
+            <div className="bg-medsync-blue px-3 lg:px-4 py-2 lg:py-3">
               <h3 className="text-xs lg:text-sm font-black text-white text-center" style={{fontFamily: 'Nunito, sans-serif'}}>Plano CLÍNICA</h3>
             </div>
             <div className="text-center px-3 pb-1 pt-2 lg:px-2 lg:pb-2 lg:pt-2">
@@ -329,7 +329,7 @@ export function PricingSection({ onPlanSelection, selectedPlanId, onAdvanceToPay
           <div className={`bg-white rounded-xl shadow-lg flex flex-col overflow-hidden relative z-10 transition-all duration-200 ${
             hoveredPlan === 'CLINICA' ? 'shadow-xl scale-105' : ''
           } ${selectedPlanCard === 'CLINICA' ? 'ring-2 ring-sky-400 ring-offset-2' : ''}`}>
-            <div className="bg-sky-600 px-3 lg:px-4 py-2 lg:py-3">
+            <div className="bg-medsync-blue px-3 lg:px-4 py-2 lg:py-3">
               <p className="text-xs font-medium text-white text-center" style={{fontFamily: 'Nunito, sans-serif'}}>Funções turbinadas</p>
             </div>
             <div className="p-3 lg:p-4 space-y-1 text-xs" style={{fontFamily: 'Nunito, sans-serif'}}>
@@ -477,7 +477,7 @@ export function PricingSection({ onPlanSelection, selectedPlanId, onAdvanceToPay
               hoveredPlan === 'CLINICA' ? 'shadow-xl scale-105' : ''
             } ${selectedPlanCard === 'CLINICA' ? 'ring-2 ring-sky-400 ring-offset-2' : ''}`}
           >
-            <div className="bg-sky-600 px-3 lg:px-4 py-2 lg:py-3">
+            <div className="bg-medsync-blue px-3 lg:px-4 py-2 lg:py-3">
               <h3 className="text-xs lg:text-sm font-black text-white text-center" style={{fontFamily: 'Nunito, sans-serif'}}>Plano CLÍNICA</h3>
             </div>
             <div className="text-center px-3 pb-1 pt-2 lg:px-2 lg:pb-2 lg:pt-2">
@@ -628,7 +628,7 @@ export function PricingSection({ onPlanSelection, selectedPlanId, onAdvanceToPay
           <div className={`bg-white rounded-xl shadow-lg flex flex-col overflow-hidden relative z-10 transition-all duration-200 ${
             hoveredPlan === 'CLINICA' ? 'shadow-xl scale-105' : ''
           } ${selectedPlanCard === 'CLINICA' ? 'ring-2 ring-sky-400 ring-offset-2' : ''}`}>
-            <div className="bg-sky-600 px-3 lg:px-4 py-2 lg:py-3">
+            <div className="bg-medsync-blue px-3 lg:px-4 py-2 lg:py-3">
               <p className="text-xs font-medium text-white text-center" style={{fontFamily: 'Nunito, sans-serif'}}>Funções turbinadas</p>
             </div>
             <div className="p-3 lg:p-4 space-y-1 text-xs" style={{fontFamily: 'Nunito, sans-serif'}}>

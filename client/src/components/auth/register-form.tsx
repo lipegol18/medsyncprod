@@ -16,7 +16,7 @@ interface RegisterFormProps {
   onSwitchToLogin: () => void;
   isLoading: boolean;
   validationErrors: Record<string, string>;
-  onFieldValidation: (field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string) => void;
+  onFieldValidation: (field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string, additionalData?: any) => void;
 }
 
 export function RegisterForm({
@@ -35,7 +35,7 @@ export function RegisterForm({
       firstName: '', lastName: '', email: '', phone: '', username: '',
       password: '', confirmPassword: '', address: '', number: '', cep: '',
       complement: '', neighborhood: '', city: '', state: '',
-      roleId: 2, medicalSpecialtyId: undefined, crm: ''
+      roleId: 2, medicalSpecialtyId: undefined, crm: '', crmUf: ''
     }
   });
 
@@ -72,6 +72,11 @@ export function RegisterForm({
   // Fetch medical specialties for registration
   const specialtiesQuery = useQuery({
     queryKey: ['/api/medical-specialties/public']
+  });
+
+  // Fetch Brazilian states for CRM UF selection
+  const statesQuery = useQuery({
+    queryKey: ['/api/brazilian-states']
   });
 
   const handleSubmit = (data: RegisterForm) => {
@@ -166,7 +171,7 @@ export function RegisterForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 -mt-1">
+        <div className="grid grid-cols-3 gap-3 -mt-1">
           <div className="space-y-0.5">
             <Label htmlFor="reg-cpf" className="text-sm text-gray-700 font-bold">CPF</Label>
             <Input
@@ -197,7 +202,28 @@ export function RegisterForm({
             )}
           </div>
           <div className="space-y-0.5">
-            <Label htmlFor="reg-crm-top" className="text-sm text-gray-700 font-bold">CRM</Label>
+            <Label htmlFor="reg-crm-uf" className="text-sm text-gray-700 font-bold">UF do CRM</Label>
+            <Select
+              value={registerForm.watch('crmUf') || ""}
+              onValueChange={(value) => registerForm.setValue('crmUf', value)}
+            >
+              <SelectTrigger className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent">
+                <SelectValue placeholder="UF" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.isArray(statesQuery.data) && statesQuery.data?.map((state: any) => (
+                  <SelectItem key={state.stateCode} value={state.stateCode}>
+                    {state.stateCode} - {state.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {registerForm.formState.errors.crmUf && (
+              <p className="text-red-500 text-xs">{registerForm.formState.errors.crmUf.message}</p>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            <Label htmlFor="reg-crm-top" className="text-sm text-gray-700 font-bold">Nº do CRM</Label>
             <Input
               {...registerForm.register('crm')}
               id="reg-crm-top"
@@ -205,7 +231,8 @@ export function RegisterForm({
               placeholder="123456"
               onBlur={(e) => {
                 setTimeout(() => {
-                  onFieldValidation('crm', e.target.value);
+                  const crmUf = registerForm.getValues('crmUf');
+                  onFieldValidation('crm', e.target.value, { crmUf });
                 }, 100);
               }}
               className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"

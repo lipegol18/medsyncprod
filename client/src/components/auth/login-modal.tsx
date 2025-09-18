@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +21,8 @@ export function LoginModal({
   onSwitchToForgotPassword, 
   isLoading 
 }: LoginModalProps) {
+  const [showPassword, setShowPassword] = useState(false);
+  
   const loginForm = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: { username: '', password: '', remember: false }
@@ -38,11 +41,11 @@ export function LoginModal({
 
       <form onSubmit={loginForm.handleSubmit(handleSubmit)} className="space-y-5">
         <div className="space-y-3">
-          <Label htmlFor="username" className="text-gray-700 font-bold text-base">E-mail</Label>
+          <Label htmlFor="username" className="text-gray-700 font-bold text-base">E-mail ou Nome de Usuário</Label>
           <Input
             {...loginForm.register('username')}
             id="username"
-            placeholder="m@example.com"
+            placeholder="Digite seu e-mail ou nome de usuário"
             className="w-full h-12 rounded-xl border border-gray-300 focus:border-accent focus:outline-none transition-all text-base px-4"
           />
           {loginForm.formState.errors.username && (
@@ -61,13 +64,26 @@ export function LoginModal({
               Esqueceu a sua senha?
             </button>
           </div>
-          <Input
-            {...loginForm.register('password')}
-            id="password"
-            type="password"
-            placeholder="Digite sua senha"
-            className="w-full h-12 rounded-xl border border-gray-300 focus:border-accent focus:outline-none transition-all text-base px-4"
-          />
+          <div className="relative">
+            <Input
+              {...loginForm.register('password')}
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Digite sua senha"
+              className="w-full h-12 rounded-xl border border-gray-300 focus:border-accent focus:outline-none transition-all text-base px-4 pr-12"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              {showPassword ? (
+                <EyeOff className="h-5 w-5" />
+              ) : (
+                <Eye className="h-5 w-5" />
+              )}
+            </button>
+          </div>
           {loginForm.formState.errors.password && (
             <p className="text-red-500 text-sm">{loginForm.formState.errors.password.message}</p>
           )}
