@@ -36,10 +36,12 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Plus, Edit, Trash2, Link2, Settings, X } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Link2, Settings, X, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { CreateProcedureModal } from "@/components/CreateProcedureModal";
+import { CreateApproachModal } from "@/components/CreateApproachModal";
+import CloneAssociationsModal from "@/components/CloneAssociationsModal";
 
 type AnatomicalRegion = {
   id: number;
@@ -82,9 +84,12 @@ export default function ProcedureAssociationsPage() {
   const [selectedProcedure, setSelectedProcedure] = useState<number | null>(null);
   const [selectedApproach, setSelectedApproach] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [approachSearchTerm, setApproachSearchTerm] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCreateProcedureModalOpen, setIsCreateProcedureModalOpen] = useState(false);
+  const [isCreateApproachModalOpen, setIsCreateApproachModalOpen] = useState(false);
+  const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
   
   // Estados para busca de associações
   const [cidSearchTerm, setCidSearchTerm] = useState("");
@@ -1056,6 +1061,14 @@ export default function ProcedureAssociationsPage() {
     proc.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const filteredApproaches = (approaches as SurgicalApproach[])
+    .filter((approach: SurgicalApproach) =>
+      approach.name.toLowerCase().includes(approachSearchTerm.toLowerCase())
+    )
+    .filter((approach: SurgicalApproach) => 
+      !procedureApproaches?.some((pa: any) => pa.id === approach.id)
+    );
+
   const selectedProcedureData = (procedures as SurgicalProcedure[]).find((p: SurgicalProcedure) => p.id === selectedProcedure);
 
   return (
@@ -1356,39 +1369,65 @@ export default function ProcedureAssociationsPage() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {/* Campo para adicionar nova conduta */}
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1">
-                          <Label htmlFor="approach-select">Adicionar Conduta Cirúrgica</Label>
-                          <Select
-                            value=""
-                            onValueChange={(value) => {
-                              if (selectedProcedure && value !== "none") {
-                                addApproachMutation.mutate({
-                                  procedureId: selectedProcedure,
-                                  approachId: parseInt(value)
-                                });
-                              }
-                            }}
-                            disabled={addApproachMutation.isPending || !selectedProcedure}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Escolha uma conduta para adicionar..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Selecione uma conduta</SelectItem>
-                              {(approaches as any[])
-                                .filter((approach: any) => 
-                                  !procedureApproaches?.some((pa: any) => pa.id === approach.id)
-                                )
-                                .map((approach: any) => (
-                                  <SelectItem key={approach.id} value={approach.id.toString()}>
-                                    {approach.name}
-                                  </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                      {/* Campo de busca para adicionar nova conduta */}
+                      <div>
+                        <Label htmlFor="approach-search">Buscar e Adicionar Condutas Cirúrgicas</Label>
+                        <div className="flex items-center space-x-2 mt-2">
+                          <Search className="h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="approach-search"
+                            placeholder="Buscar condutas para adicionar..."
+                            value={approachSearchTerm}
+                            onChange={(e) => setApproachSearchTerm(e.target.value)}
+                            disabled={!selectedProcedure}
+                          />
                         </div>
+                        {approachSearchTerm && (
+                          <div className="mt-2 max-h-48 overflow-y-auto border rounded">
+                            {filteredApproaches.length > 0 ? (
+                              filteredApproaches.map((approach: SurgicalApproach) => (
+                                <div
+                                  key={approach.id}
+                                  className="p-3 hover:bg-muted cursor-pointer border-b last:border-b-0 transition-colors"
+                                  onClick={() => {
+                                    if (selectedProcedure) {
+                                      addApproachMutation.mutate({
+                                        procedureId: selectedProcedure,
+                                        approachId: approach.id
+                                      }, {
+                                        onSuccess: () => {
+                                          setApproachSearchTerm("");
+                                        }
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <div className="font-medium">{approach.name}</div>
+                                  {approach.description && (
+                                    <div className="text-sm text-muted-foreground">
+                                      {approach.description}
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="p-4 text-center">
+                                <div className="text-muted-foreground mb-2">
+                                  Nenhuma conduta encontrada para "{approachSearchTerm}"
+                                </div>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => setIsCreateApproachModalOpen(true)}
+                                  disabled={addApproachMutation.isPending}
+                                >
+                                  <Plus className="mr-2 h-4 w-4" />
+                                  Criar Nova Conduta
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                       
                       {/* Mostrar condutas associadas */}
@@ -1465,13 +1504,24 @@ export default function ProcedureAssociationsPage() {
                       <h3 className="text-lg font-semibold">
                         Detalhes da Conduta: {procedureApproaches?.find((a: any) => a.id === selectedApproach)?.name}
                       </h3>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedApproach(null)}
-                      >
-                        Fechar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsCloneModalOpen(true)}
+                          data-testid="button-clone-approach-associations"
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          Clonar Associações
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedApproach(null)}
+                        >
+                          Fechar
+                        </Button>
+                      </div>
                     </div>
 
 
@@ -2228,6 +2278,44 @@ export default function ProcedureAssociationsPage() {
           
           // Limpar termo de busca para mostrar o novo procedimento
           setSearchTerm("");
+        }}
+      />
+
+      {/* Modal para criar nova conduta */}
+      <CreateApproachModal
+        isOpen={isCreateApproachModalOpen}
+        onOpenChange={setIsCreateApproachModalOpen}
+        onSuccess={(createdApproach) => {
+          // Invalidar query para atualizar a lista
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/surgical-approaches"] });
+          
+          // Se há um procedimento selecionado, associar automaticamente a nova conduta
+          if (selectedProcedure && createdApproach) {
+            addApproachMutation.mutate({
+              procedureId: selectedProcedure,
+              approachId: createdApproach.id
+            }, {
+              onSuccess: () => {
+                // Limpar termo de busca para mostrar a nova conduta associada
+                setApproachSearchTerm("");
+              }
+            });
+          }
+        }}
+      />
+
+      {/* Modal para clonar associações */}
+      <CloneAssociationsModal
+        isOpen={isCloneModalOpen}
+        onOpenChange={setIsCloneModalOpen}
+        sourceProcedureId={selectedProcedure}
+        sourceApproachId={selectedApproach}
+        approaches={procedureApproaches || []}
+        onSuccess={() => {
+          // Atualizar as queries após clonagem bem-sucedida
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/procedure-associations"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/procedure-approaches"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/procedure-regions"] });
         }}
       />
 
