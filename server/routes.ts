@@ -45,7 +45,7 @@ import { relationalOrderService } from "./relational-services";
 import { randomUUID } from "crypto";
 import { db, pool } from "./db";
 import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans } from "../shared/schema";
-import { eq, and, isNull, sql, desc, asc, not, ne, count } from "drizzle-orm";
+import { eq, and, or, isNull, sql, desc, asc, not, ne, count, isNotNull } from "drizzle-orm";
 import { normalizeText } from "./utils/normalize";
 import { extractTextFromImage, processIdentityDocument, processInsuranceCard } from "./services/google-vision";
 import { normalizeExtractedData } from "./services/data-normalizer";
@@ -790,7 +790,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     if (endDate) {
-      query += ` AND mo.created_at::date <= $${paramIndex}`;
+      query += ` AND mo.created_at < $${paramIndex}::date + interval '1 day'`;
       params.push(endDate);
       paramIndex++;
     }
@@ -1508,7 +1508,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const userId = req.user?.id || 83;
         const isAdmin = req.user?.roleId === 1;
         
-        console.log(`Buscando distribuição de cirurgias por convênio - usuário ${userId}, isAdmin: ${isAdmin}`);
+        // Extrair filtros de data
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
+        
+        console.log(`Buscando distribuição de cirurgias por convênio - usuário ${userId}, isAdmin: ${isAdmin}, filtros: ${startDate} a ${endDate}`);
+        
+        // Construir condições WHERE dinamicamente
+        let whereConditions = [];
+        let params = [];
+        let paramIndex = 1;
+        
+        if (startDate && endDate) {
+          whereConditions.push(`mo.created_at >= $${paramIndex} AND mo.created_at < $${paramIndex + 1}::date + interval '1 day'`);
+          params.push(startDate, endDate);
+          paramIndex += 2;
+        }
+        
+        if (!isAdmin) {
+          whereConditions.push(`mo.user_id = $${paramIndex}`);
+          params.push(userId);
+          paramIndex++;
+        }
+        
+        const whereClause = whereConditions.length > 0 ? whereConditions.join(' AND ') : '1=1';
         
         // Consulta SQL para extrair dados reais do banco
         const query = `
@@ -1530,8 +1553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           JOIN 
             patients p ON mo.patient_id = p.id
           WHERE 
-            ${isAdmin ? '' : 'mo.user_id = $1 AND'} 
-            1=1
+            ${whereClause}
           GROUP BY 
             CASE 
               WHEN p.insurance LIKE 'BRADESCO SAÚDE%' THEN 'BRADESCO SAÚDE'
@@ -1556,9 +1578,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         FROM 
           insurance_counts
         `;
-        
-        // Parâmetros da consulta
-        const params = isAdmin ? [] : [userId];
         
         try {
           // Executar a consulta diretamente no pool do PostgreSQL
@@ -1602,7 +1621,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isAdmin = req.user?.roleId === 1;
         const limit = Number(req.query.limit) || 5; // Quantidade de procedimentos a retornar
         
-        console.log(`Buscando principais procedimentos cirúrgicos - usuário ${userId}, isAdmin: ${isAdmin}, limit: ${limit}`);
+        // Extrair filtros de data
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
+        
+        console.log(`Buscando principais procedimentos cirúrgicos - usuário ${userId}, isAdmin: ${isAdmin}, limit: ${limit}, filtros: ${startDate} a ${endDate}`);
+        
+        // Construir condições WHERE dinamicamente
+        let whereConditions = [];
+        let params = [];
+        let paramIndex = 1;
+        
+        if (startDate && endDate) {
+          whereConditions.push(`mo.created_at >= $${paramIndex} AND mo.created_at < $${paramIndex + 1}::date + interval '1 day'`);
+          params.push(startDate, endDate);
+          paramIndex += 2;
+        }
+        
+        if (!isAdmin) {
+          whereConditions.push(`mo.user_id = $${paramIndex}`);
+          params.push(userId);
+          paramIndex++;
+        }
+        
+        params.push(limit);
+        const limitParam = paramIndex;
+        
+        const whereClause = whereConditions.length > 0 ? whereConditions.join(' AND ') : '1=1';
         
         // Consulta SQL para obter os procedimentos cirúrgicos mais frequentes
         const query = `
@@ -1618,12 +1663,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           JOIN 
             surgical_procedures sp ON mosp.surgical_procedure_id = sp.id
           WHERE 
-            ${isAdmin ? '1=1' : 'mo.user_id = $1'}
+            ${whereClause}
           GROUP BY 
             sp.id, sp.name
           ORDER BY 
             count DESC
-          LIMIT $${isAdmin ? '1' : '2'}
+          LIMIT $${limitParam}
         )
         SELECT 
           id,
@@ -1636,9 +1681,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         FROM 
           surgical_procedure_counts
         `;
-        
-        // Parâmetros da consulta
-        const params = isAdmin ? [limit] : [userId, limit];
         
         try {
           // Executar a consulta diretamente no pool do PostgreSQL
@@ -1682,7 +1724,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const userId = req.user?.id;
         const isAdmin = req.user?.roleId === 1;
         
-        console.log(`Buscando taxa de cancelamento de cirurgias - usuário ${userId}, isAdmin: ${isAdmin}`);
+        // Extrair filtros de data
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
+        
+        console.log(`Buscando taxa de cancelamento de cirurgias - usuário ${userId}, isAdmin: ${isAdmin}, filtros: ${startDate} a ${endDate}`);
+        
+        // Construir condições WHERE dinamicamente
+        let whereConditions = ['status_id != 1'];
+        let params = [];
+        let paramIndex = 1;
+        
+        if (startDate && endDate) {
+          whereConditions.push(`created_at >= $${paramIndex} AND created_at < $${paramIndex + 1}::date + interval '1 day'`);
+          params.push(startDate, endDate);
+          paramIndex += 2;
+        }
+        
+        if (!isAdmin) {
+          whereConditions.push(`user_id = $${paramIndex}`);
+          params.push(userId);
+          paramIndex++;
+        }
+        
+        const whereClause = whereConditions.join(' AND ');
         
         // Consulta SQL para extrair dados reais do banco
         const query = `
@@ -1691,7 +1756,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             COUNT(*) FILTER (WHERE status_id = 7) as cancelled_count,
             COUNT(*) as total_count
           FROM medical_orders
-          WHERE ${isAdmin ? '' : 'user_id = $1 AND'} status_id != 1
+          WHERE ${whereClause}
         )
         SELECT 
           CASE 
@@ -1702,9 +1767,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           total_count
         FROM order_counts
         `;
-        
-        // Parâmetros da consulta
-        const params = isAdmin ? [] : [userId];
         
         try {
           // Executar a consulta diretamente no pool do PostgreSQL
@@ -1746,7 +1808,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const userId = req.user?.id || 83; // Fallback para Roitman
         const isAdmin = req.user?.roleId === 1 || false;
         
-        console.log(`Buscando estatísticas de cirurgias eletivas vs urgência - usuário ${userId}, isAdmin: ${isAdmin}`);
+        // Extrair filtros de data
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
+        
+        console.log(`Buscando estatísticas de cirurgias eletivas vs urgência - usuário ${userId}, isAdmin: ${isAdmin}, filtros: ${startDate} a ${endDate}`);
+        
+        // Construir condições WHERE dinamicamente
+        let whereConditions = ['status_id != 1'];
+        let params = [];
+        let paramIndex = 1;
+        
+        if (startDate && endDate) {
+          whereConditions.push(`created_at >= $${paramIndex} AND created_at < $${paramIndex + 1}::date + interval '1 day'`);
+          params.push(startDate, endDate);
+          paramIndex += 2;
+        }
+        
+        if (!isAdmin) {
+          whereConditions.push(`user_id = $${paramIndex}`);
+          params.push(userId);
+          paramIndex++;
+        }
+        
+        const whereClause = whereConditions.join(' AND ');
         
         // Consulta SQL para extrair dados reais do banco - usando 'procedure_type' que existe na tabela
         const query = `
@@ -1758,16 +1843,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             END as surgery_type,
             COUNT(*) as count
           FROM medical_orders
-          WHERE ${isAdmin ? '' : 'user_id = $1 AND'} status_id != 1
+          WHERE ${whereClause}
           GROUP BY surgery_type
         )
         SELECT surgery_type as name, count as value 
         FROM order_types
         ORDER BY name
         `;
-        
-        // Parâmetros da consulta
-        const params = isAdmin ? [] : [userId];
         
         try {
           // Executar a consulta diretamente no pool do PostgreSQL
@@ -1829,14 +1911,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isAdmin = req.user?.roleId === 1;
         const period = req.query.period as 'weekly' | 'monthly' | 'annual' || 'monthly';
         
-        console.log(`Buscando estatísticas de volume de cirurgias para período ${period} - usuário ${userId}, isAdmin: ${isAdmin}`);
+        // Extrair filtros de data
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
+        
+        console.log(`Buscando estatísticas de volume de cirurgias para período ${period} - usuário ${userId}, isAdmin: ${isAdmin}, filtros: ${startDate} a ${endDate}`);
         
         let result = [];
         
         try {
           if (period === 'monthly') {
-            // Para período mensal, garantir que todos os 12 meses do ano corrente sejam exibidos
+            // Para período mensal, aplicar filtros de data se fornecidos
             const currentYear = new Date().getFullYear();
+            
+            // Construir condições WHERE dinamicamente
+            let whereConditions = [];
+            let params = [];
+            let paramIndex = 1;
+            
+            if (startDate && endDate) {
+              whereConditions.push(`created_at >= $${paramIndex} AND created_at < $${paramIndex + 1}::date + interval '1 day'`);
+              params.push(startDate, endDate);
+              paramIndex += 2;
+            } else {
+              whereConditions.push(`EXTRACT(YEAR FROM created_at) = ${currentYear}`);
+            }
+            
+            if (!isAdmin) {
+              whereConditions.push(`user_id = $${paramIndex}`);
+              params.push(userId);
+              paramIndex++;
+            }
+            
+            const whereClause = whereConditions.join(' AND ');
             
             const query = `
             WITH all_months AS (
@@ -1863,8 +1970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 END as status_group,
                 count(*) as count
               FROM medical_orders
-              WHERE EXTRACT(YEAR FROM created_at) = ${currentYear} 
-                ${isAdmin ? '' : `AND user_id = ${userId}`}
+              WHERE ${whereClause}
               GROUP BY period_name, month_num, status_group
             )
             SELECT 
@@ -1880,7 +1986,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             `;
             
             // Executar a consulta diretamente no pool do PostgreSQL
-            const queryResult = await pool.query(query);
+            const queryResult = await pool.query(query, params);
             
             if (queryResult && queryResult.rows) {
               console.log(`DADOS REAIS DE CIRURGIAS POR MÊS (${currentYear}):`, queryResult.rows);
@@ -1915,7 +2021,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }));
             }
           } else {
-            // Para outros períodos (weekly, annual), manter lógica original
+            // Para outros períodos (weekly, annual), aplicar filtros de data
+            
+            // Definir formato de data com base no período
+            let dateFormat = 'dy'; // dia da semana (weekly)
+            if (period === 'annual') {
+              dateFormat = 'yyyy'; // ano
+            }
+            
+            // Construir condições WHERE dinamicamente
+            let whereConditions = [];
+            let params = [dateFormat];
+            let paramIndex = 2;
+            
+            if (startDate && endDate) {
+              whereConditions.push(`created_at >= $${paramIndex} AND created_at < $${paramIndex + 1}::date + interval '1 day'`);
+              params.push(startDate, endDate);
+              paramIndex += 2;
+            }
+            
+            if (!isAdmin) {
+              whereConditions.push(`user_id = $${paramIndex}`);
+              params.push(userId);
+              paramIndex++;
+            }
+            
+            const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+            
             const query = `
             WITH date_periods AS (
               SELECT 
@@ -1935,7 +2067,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 END as status_group,
                 count(*) as count
               FROM medical_orders
-              WHERE ${isAdmin ? '' : 'user_id = $2'}
+              ${whereClause}
               GROUP BY period_name, status_group
             )
             SELECT 
@@ -1947,17 +2079,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             GROUP BY period_name
             ORDER BY name
             `;
-            
-            // Definir formato de data com base no período
-            let dateFormat = 'dy'; // dia da semana (weekly)
-            if (period === 'annual') {
-              dateFormat = 'yyyy'; // ano
-            }
-            
-            // Parâmetros da consulta
-            const params = isAdmin 
-              ? [dateFormat]
-              : [dateFormat, userId];
               
             // Executar a consulta diretamente no pool do PostgreSQL
             const queryResult = await pool.query(query, params);
@@ -6175,38 +6296,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // API para buscar fornecedores por termo de busca (nome ou CNPJ) sem autenticação
-  app.get("/api/suppliers/search", async (req: Request, res: Response) => {
-    try {
-      const searchTerm = req.query.term as string;
-
-      // Se não tiver termo de busca ou termo vazio, retornar todos os fornecedores ativos
-      if (!searchTerm || searchTerm.trim().length === 0) {
-        const allSuppliers = await storage.getSuppliers();
-        console.log(
-          `Retornando todos os ${allSuppliers.length} fornecedores ativos`,
-        );
-        return res.status(200).json(allSuppliers);
-      }
-
-      // Se tiver termo de busca com menos de 2 caracteres
-      if (searchTerm.trim().length < 2) {
-        return res
-          .status(400)
-          .json({ message: "Termo de busca deve ter pelo menos 2 caracteres" });
-      }
-
-      const suppliers = await storage.searchSuppliers(searchTerm);
-      console.log(
-        `Encontrados ${suppliers.length} fornecedores para o termo "${searchTerm}"`,
-      );
-
-      res.status(200).json(suppliers);
-    } catch (error) {
-      console.error("Erro ao buscar fornecedores:", error);
-      res.status(500).json({ message: "Erro ao buscar fornecedores" });
-    }
-  });
 
   // API para criar novo fornecedor
   app.post("/api/suppliers",  async (req: Request, res: Response) => {
@@ -10765,10 +10854,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const searchTerm = (req.query.q as string) || '';
       
       if (!searchTerm || searchTerm.trim().length < 2) {
-        return res.status(400).json({ error: 'Termo de busca deve ter pelo menos 2 caracteres' });
+        return res.json([]);
       }
-
-      console.log(`🔍 Buscando fornecedores por termo: "${searchTerm}"`);
 
       const searchPattern = `%${searchTerm.toLowerCase()}%`;
       
@@ -10785,8 +10872,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           and(
             eq(suppliers.active, true),
             or(
-              sql`LOWER(${suppliers.companyName}) LIKE ${searchPattern}`,
               sql`LOWER(${suppliers.tradeName}) LIKE ${searchPattern}`,
+              sql`LOWER(${suppliers.companyName}) LIKE ${searchPattern}`,
               sql`REPLACE(${suppliers.cnpj}, '.', '') LIKE ${searchPattern.replace(/\./g, '')}`,
               sql`REPLACE(REPLACE(REPLACE(${suppliers.cnpj}, '.', ''), '/', ''), '-', '') LIKE ${searchPattern.replace(/[\.\/-]/g, '')}`
             )
@@ -10794,8 +10881,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         )
         .limit(20)
         .orderBy(sql`COALESCE(${suppliers.tradeName}, ${suppliers.companyName})`);
-
-      console.log(`📋 Encontrados ${foundSuppliers.length} fornecedores para "${searchTerm}"`);
       
       res.json(foundSuppliers);
     } catch (error) {
@@ -11790,6 +11875,241 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Associação removida com sucesso" });
     } catch (error) {
       console.error("Erro ao remover associação:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  // POST /api/admin/approach-associations/clone - Clonar associações de uma conduta específica para outra
+  app.post("/api/admin/approach-associations/clone", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { source, target } = req.body;
+      
+      if (!source || !target || !source.procedureId || !source.approachId || !target.procedureId || !target.approachId) {
+        return res.status(400).json({ message: "Source e target com procedureId e approachId são obrigatórios" });
+      }
+
+      const sourceProcedureId = parseInt(source.procedureId);
+      const sourceApproachId = parseInt(source.approachId);
+      const targetProcedureId = parseInt(target.procedureId);
+      const targetApproachId = parseInt(target.approachId);
+
+      if (isNaN(sourceProcedureId) || isNaN(sourceApproachId) || isNaN(targetProcedureId) || isNaN(targetApproachId)) {
+        return res.status(400).json({ message: "IDs devem ser números válidos" });
+      }
+
+      if (sourceProcedureId === targetProcedureId && sourceApproachId === targetApproachId) {
+        return res.status(400).json({ message: "Conduta de origem e destino devem ser diferentes" });
+      }
+
+      console.log(`🔄 Iniciando clonagem de associações: Conduta ${sourceApproachId} (Proc ${sourceProcedureId}) -> Conduta ${targetApproachId} (Proc ${targetProcedureId})`);
+
+      // Verificar se as condutas existem e estão associadas aos seus respectivos procedimentos
+      const sourceExists = await db
+        .select({ count: count() })
+        .from(surgicalProcedureApproaches)
+        .where(and(
+          eq(surgicalProcedureApproaches.surgicalProcedureId, sourceProcedureId),
+          eq(surgicalProcedureApproaches.surgicalApproachId, sourceApproachId)
+        ));
+
+      if (sourceExists[0].count === 0) {
+        return res.status(400).json({ message: "Conduta de origem não encontrada no procedimento especificado" });
+      }
+
+      // Garantir que a conduta de destino está associada ao procedimento de destino
+      const targetExists = await db
+        .select({ count: count() })
+        .from(surgicalProcedureApproaches)
+        .where(and(
+          eq(surgicalProcedureApproaches.surgicalProcedureId, targetProcedureId),
+          eq(surgicalProcedureApproaches.surgicalApproachId, targetApproachId)
+        ));
+
+      if (targetExists[0].count === 0) {
+        // Criar associação procedimento -> conduta se não existir
+        try {
+          await db
+            .insert(surgicalProcedureApproaches)
+            .values({
+              surgicalProcedureId: targetProcedureId,
+              surgicalApproachId: targetApproachId,
+            })
+            .onConflictDoNothing();
+          console.log(`✅ Associação criada: Procedimento ${targetProcedureId} -> Conduta ${targetApproachId}`);
+        } catch (error) {
+          console.log("Erro ao criar associação de destino:", error);
+          return res.status(400).json({ message: "Erro ao criar associação entre conduta e procedimento de destino" });
+        }
+      }
+
+      let counters = {
+        cids: 0,
+        cbhpm: 0,
+        opme: 0,
+        suppliers: 0,
+        justifications: 0
+      };
+
+      // 1. Clonar associações CID-10
+      const cidAssociations = await db
+        .select()
+        .from(surgicalProcedureConductCids)
+        .where(and(
+          eq(surgicalProcedureConductCids.surgicalProcedureId, sourceProcedureId),
+          eq(surgicalProcedureConductCids.surgicalApproachId, sourceApproachId)
+        ));
+
+      for (const cidAssoc of cidAssociations) {
+        try {
+          await db
+            .insert(surgicalProcedureConductCids)
+            .values({
+              surgicalProcedureId: targetProcedureId,
+              surgicalApproachId: targetApproachId,
+              cidCodeId: cidAssoc.cidCodeId,
+              isPrimaryCid: cidAssoc.isPrimaryCid,
+              notes: cidAssoc.notes,
+            })
+            .onConflictDoNothing();
+          counters.cids++;
+        } catch (error) {
+          console.log(`CID ${cidAssoc.cidCodeId} já associado à conduta ${targetApproachId} do procedimento ${targetProcedureId}`);
+        }
+      }
+
+      // 2. Clonar associações CBHPM (procedimentos)
+      const cbhpmAssociations = await db
+        .select()
+        .from(surgicalApproachProcedures)
+        .where(and(
+          eq(surgicalApproachProcedures.surgicalProcedureId, sourceProcedureId),
+          eq(surgicalApproachProcedures.surgicalApproachId, sourceApproachId)
+        ));
+
+      for (const cbhpmAssoc of cbhpmAssociations) {
+        try {
+          await db
+            .insert(surgicalApproachProcedures)
+            .values({
+              surgicalProcedureId: targetProcedureId,
+              surgicalApproachId: targetApproachId,
+              procedureId: cbhpmAssoc.procedureId,
+              quantity: cbhpmAssoc.quantity,
+              isPreferred: cbhpmAssoc.isPreferred,
+              complexity: cbhpmAssoc.complexity,
+              estimatedDuration: cbhpmAssoc.estimatedDuration,
+              notes: cbhpmAssoc.notes,
+            })
+            .onConflictDoNothing();
+          counters.cbhpm++;
+        } catch (error) {
+          console.log(`Procedimento CBHPM ${cbhpmAssoc.procedureId} já associado à conduta ${targetApproachId} do procedimento ${targetProcedureId}`);
+        }
+      }
+
+      // 3. Clonar associações OPME
+      const opmeAssociations = await db
+        .select()
+        .from(surgicalApproachOpmeItems)
+        .where(and(
+          eq(surgicalApproachOpmeItems.surgicalProcedureId, sourceProcedureId),
+          eq(surgicalApproachOpmeItems.surgicalApproachId, sourceApproachId)
+        ));
+
+      for (const opmeAssoc of opmeAssociations) {
+        try {
+          await db
+            .insert(surgicalApproachOpmeItems)
+            .values({
+              surgicalProcedureId: targetProcedureId,
+              surgicalApproachId: targetApproachId,
+              opmeItemId: opmeAssoc.opmeItemId,
+              quantity: opmeAssoc.quantity,
+              isRequired: opmeAssoc.isRequired,
+              alternativeItems: opmeAssoc.alternativeItems,
+              notes: opmeAssoc.notes,
+            })
+            .onConflictDoNothing();
+          counters.opme++;
+        } catch (error) {
+          console.log(`OPME ${opmeAssoc.opmeItemId} já associado à conduta ${targetApproachId} do procedimento ${targetProcedureId}`);
+        }
+      }
+
+      // 4. Clonar associações de fornecedores (suppliers)
+      const supplierAssociations = await db
+        .select()
+        .from(surgicalApproachSuppliers)
+        .where(and(
+          eq(surgicalApproachSuppliers.surgicalProcedureId, sourceProcedureId),
+          eq(surgicalApproachSuppliers.surgicalApproachId, sourceApproachId)
+        ));
+
+      for (const supplierAssoc of supplierAssociations) {
+        try {
+          await db
+            .insert(surgicalApproachSuppliers)
+            .values({
+              surgicalProcedureId: targetProcedureId,
+              surgicalApproachId: targetApproachId,
+              supplierId: supplierAssoc.supplierId,
+            })
+            .onConflictDoNothing();
+          counters.suppliers++;
+        } catch (error) {
+          console.log(`Fornecedor ${supplierAssoc.supplierId} já associado à conduta ${targetApproachId} do procedimento ${targetProcedureId}`);
+        }
+      }
+
+      // 5. Clonar justificativas clínicas específicas
+      const justificationAssociations = await db
+        .select()
+        .from(surgicalApproachJustifications)
+        .where(and(
+          eq(surgicalApproachJustifications.surgicalProcedureId, sourceProcedureId),
+          eq(surgicalApproachJustifications.surgicalApproachId, sourceApproachId)
+        ));
+
+      for (const justAssoc of justificationAssociations) {
+        if (justAssoc.justificationId) {
+          try {
+            await db
+              .insert(surgicalApproachJustifications)
+              .values({
+                surgicalProcedureId: targetProcedureId,
+                surgicalApproachId: targetApproachId,
+                justificationId: justAssoc.justificationId,
+                isPreferred: justAssoc.isPreferred,
+                customNotes: justAssoc.customNotes || "Justificativa clonada automaticamente",
+              })
+              .onConflictDoNothing();
+            counters.justifications++;
+          } catch (error) {
+            console.log(`Justificativa ${justAssoc.justificationId} já associada à conduta ${targetApproachId} do procedimento ${targetProcedureId}`);
+          }
+        }
+      }
+
+      const totalCloned = counters.cids + counters.cbhpm + counters.opme + counters.suppliers + counters.justifications;
+
+      console.log(`✅ Clonagem de conduta concluída: ${totalCloned} associações clonadas`);
+      console.log(`📊 Detalhes: ${counters.cids} CIDs, ${counters.cbhpm} CBHPM, ${counters.opme} OPME, ${counters.suppliers} fornecedores, ${counters.justifications} justificativas`);
+      
+      res.json({ 
+        message: "Associações da conduta clonadas com sucesso",
+        cloned: counters,
+        totalCloned,
+        source: {
+          procedureId: sourceProcedureId,
+          approachId: sourceApproachId
+        },
+        target: {
+          procedureId: targetProcedureId,
+          approachId: targetApproachId
+        }
+      });
+    } catch (error) {
+      console.error("Erro ao clonar associações da conduta:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   });
