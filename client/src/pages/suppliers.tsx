@@ -66,9 +66,9 @@ export default function SuppliersPage() {
 
   // Consulta para obter todos os fornecedores
   const { data: suppliers = [], isLoading, error } = useQuery({
-    queryKey: ["/api/suppliers/search", showInactive],
+    queryKey: ["/api/suppliers", showInactive],
     queryFn: async () => {
-      const response = await fetch(`/api/suppliers/search${showInactive ? "?showAll=true" : ""}`);
+      const response = await fetch(`/api/suppliers${showInactive ? "?showAll=true" : ""}`);
       if (!response.ok) {
         throw new Error("Falha ao buscar fornecedores");
       }
