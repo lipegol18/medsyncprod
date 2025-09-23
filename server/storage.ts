@@ -202,6 +202,10 @@ export interface IStorage {
   getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined>;
   getSubscriptionPlanByName(name: string): Promise<SubscriptionPlan | undefined>;
   createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
+  updateSubscriptionPlan(id: number, plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
+  deleteSubscriptionPlan(id: number): Promise<void>;
+  hasActiveSubscriptionsForPlan(planId: number): Promise<boolean>;
+  toggleSubscriptionPlanStatus(id: number): Promise<SubscriptionPlan>;
   
   // User subscriptions operations
   getUserSubscription(userId: number): Promise<UserSubscription | undefined>;
@@ -453,6 +457,17 @@ export interface IStorage {
   createCidCode(cidCode: InsertCidCode): Promise<CidCode>;
   updateCidCode(id: number, cidCode: Partial<InsertCidCode>): Promise<CidCode | undefined>;
   deleteCidCode(id: number): Promise<boolean>;
+
+  // ========================================
+  // FASE 2: MÉTODOS INCOMPLETE REGISTRATIONS
+  // ========================================
+  
+  // Métodos para gerenciar registros incompletos com regToken
+  createIncompleteRegistration(registration: Partial<InsertIncompleteRegistration>): Promise<IncompleteRegistration>;
+  getIncompleteRegistrationByEmail(email: string): Promise<IncompleteRegistration | undefined>;
+  getIncompleteRegistrationByToken(regToken: string): Promise<IncompleteRegistration | undefined>;
+  updateIncompleteRegistration(id: number, updates: Partial<InsertIncompleteRegistration>): Promise<IncompleteRegistration>;
+  deleteIncompleteRegistration(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3882,7 +3897,8 @@ export class DatabaseStorage implements IStorage {
   // Subscription Plans methods
   async getAllSubscriptionPlans(): Promise<SubscriptionPlan[]> {
     try {
-      return await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.isActive, true));
+      // Retorna TODOS os planos (incluindo inativos) para administradores
+      return await db.select().from(subscriptionPlans);
     } catch (error) {
       console.error("Erro ao buscar todos os planos de assinatura:", error);
       return [];
@@ -3890,8 +3906,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
-    // Usar o método getAllSubscriptionPlans para evitar duplicação
-    return await this.getAllSubscriptionPlans();
+    try {
+      // Retorna apenas planos ativos para usuários comuns
+      return await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.isActive, true));
+    } catch (error) {
+      console.error("Erro ao buscar planos de assinatura ativos:", error);
+      return [];
+    }
   }
 
   async getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined> {
@@ -3923,6 +3944,97 @@ export class DatabaseStorage implements IStorage {
       return newPlan;
     } catch (error) {
       console.error("Erro ao criar plano de assinatura:", error);
+      throw error;
+    }
+  }
+
+  async updateSubscriptionPlan(id: number, plan: InsertSubscriptionPlan): Promise<SubscriptionPlan> {
+    try {
+      // Filtrar dados para evitar violação de unique constraint em campos do Stripe
+      const updateData: any = { ...plan, updatedAt: new Date() };
+      
+      // Se os campos de pagamento estão vazios/nulos, remover do update para manter valor existente
+      if (!updateData.productId || updateData.productId.trim() === '') {
+        delete updateData.productId;
+      }
+      if (!updateData.priceIdMonthly || updateData.priceIdMonthly.trim() === '') {
+        delete updateData.priceIdMonthly;
+      }
+      if (!updateData.priceIdYearly || updateData.priceIdYearly.trim() === '') {
+        delete updateData.priceIdYearly;
+      }
+
+      const [updatedPlan] = await db
+        .update(subscriptionPlans)
+        .set(updateData)
+        .where(eq(subscriptionPlans.id, id))
+        .returning();
+      
+      if (!updatedPlan) {
+        throw new Error("Plano não encontrado");
+      }
+      
+      return updatedPlan;
+    } catch (error) {
+      console.error("Erro ao atualizar plano de assinatura:", error);
+      throw error;
+    }
+  }
+
+  async deleteSubscriptionPlan(id: number): Promise<void> {
+    try {
+      await db.delete(subscriptionPlans).where(eq(subscriptionPlans.id, id));
+    } catch (error) {
+      console.error("Erro ao deletar plano de assinatura:", error);
+      throw error;
+    }
+  }
+
+  async hasActiveSubscriptionsForPlan(planId: number): Promise<boolean> {
+    try {
+      const [result] = await db
+        .select({ count: count() })
+        .from(userSubscriptions)
+        .where(and(
+          eq(userSubscriptions.planId, planId),
+          or(
+            eq(userSubscriptions.status, 'active'),
+            eq(userSubscriptions.status, 'trial')
+          )
+        ));
+      
+      return (result?.count || 0) > 0;
+    } catch (error) {
+      console.error("Erro ao verificar assinaturas ativas:", error);
+      return false;
+    }
+  }
+
+  async toggleSubscriptionPlanStatus(id: number): Promise<SubscriptionPlan> {
+    try {
+      // Primeiro buscar o plano atual
+      const currentPlan = await this.getSubscriptionPlan(id);
+      if (!currentPlan) {
+        throw new Error("Plano não encontrado");
+      }
+
+      // Alternar o status
+      const [updatedPlan] = await db
+        .update(subscriptionPlans)
+        .set({ 
+          isActive: !currentPlan.isActive,
+          updatedAt: new Date()
+        })
+        .where(eq(subscriptionPlans.id, id))
+        .returning();
+      
+      if (!updatedPlan) {
+        throw new Error("Falha ao atualizar status do plano");
+      }
+      
+      return updatedPlan;
+    } catch (error) {
+      console.error("Erro ao alternar status do plano:", error);
       throw error;
     }
   }
@@ -4468,6 +4580,14 @@ export class DatabaseStorage implements IStorage {
     if (existing.length > 0) {
       // Atualizar registro existente - merge inteligente (não sobrescrever dados existentes com null)
       const existingData = existing[0];
+      
+      // Extrair dados adicionais (CRM, endereço, etc.) que não são campos básicos
+      const { email, firstName, lastName, cpf, phone, username, selectedPlanId, currentStep, userAgent, ipAddress, source, ...additionalData } = data;
+      
+      // Merge do userDataJson existente com novos dados
+      const existingUserData = existingData.userDataJson || {};
+      const mergedUserData = { ...existingUserData, ...additionalData };
+      
       const mergedData = {
         firstName: data.firstName || existingData.firstName,
         lastName: data.lastName || existingData.lastName,
@@ -4479,6 +4599,8 @@ export class DatabaseStorage implements IStorage {
         userAgent: data.userAgent || existingData.userAgent,
         ipAddress: data.ipAddress || existingData.ipAddress,
         source: data.source || existingData.source,
+        // Salvar dados extras como JSON
+        userDataJson: Object.keys(mergedUserData).length > 0 ? mergedUserData : {},
         updatedAt: new Date(),
       };
       
@@ -4491,7 +4613,18 @@ export class DatabaseStorage implements IStorage {
       return updated[0];
     } else {
       // Criar novo registro
-      const result = await db.insert(incompleteRegistrations).values(data).returning();
+      // Extrair dados adicionais (CRM, endereço, etc.) que não são campos básicos
+      const { email, firstName, lastName, cpf, phone, username, selectedPlanId, currentStep, userAgent, ipAddress, source, ...additionalData } = data;
+      
+      const newRegistration = {
+        ...data,
+        // Salvar dados extras como JSON
+        userDataJson: Object.keys(additionalData).length > 0 ? additionalData : {},
+        createdAt: new Date(),
+        lastActivityAt: new Date()
+      };
+      
+      const result = await db.insert(incompleteRegistrations).values(newRegistration).returning();
       return result[0];
     }
   }
@@ -4593,6 +4726,54 @@ export class DatabaseStorage implements IStorage {
 
     return result;
   }
+
+  async getIncompleteRegistrationByEmail(email: string): Promise<IncompleteRegistration | undefined> {
+    console.log('🔍 Buscando registro incompleto por email:', email);
+    
+    const result = await db
+      .select()
+      .from(incompleteRegistrations)
+      .where(eq(incompleteRegistrations.email, email))
+      .limit(1);
+    
+    return result[0];
+  }
+
+  async getIncompleteRegistrationByToken(regToken: string): Promise<IncompleteRegistration | undefined> {
+    console.log('🔍 Buscando registro incompleto por token:', regToken);
+    
+    const result = await db
+      .select()
+      .from(incompleteRegistrations)
+      .where(eq(incompleteRegistrations.regToken, regToken))
+      .limit(1);
+    
+    return result[0];
+  }
+
+  async updateIncompleteRegistration(id: number, updates: Partial<InsertIncompleteRegistration>): Promise<IncompleteRegistration> {
+    console.log('📝 Atualizando registro incompleto:', { id, updates });
+    
+    const result = await db
+      .update(incompleteRegistrations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(incompleteRegistrations.id, id))
+      .returning();
+    
+    return result[0];
+  }
+
+  async deleteIncompleteRegistration(id: number): Promise<boolean> {
+    console.log('🗑️ Deletando registro incompleto:', { id });
+    
+    const result = await db
+      .delete(incompleteRegistrations)
+      .where(eq(incompleteRegistrations.id, id))
+      .returning();
+    
+    return result.length > 0;
+  }
+
 }
 
 export const storage = new DatabaseStorage();

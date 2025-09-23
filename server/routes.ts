@@ -43,8 +43,9 @@ import { registerDoctorImageRoutes } from "./doctor-images-routes";
 import relationalRoutes from "./relational-routes";
 import { relationalOrderService } from "./relational-services";
 import { randomUUID } from "crypto";
+import { getPaymentProvider } from "./payments";
 import { db, pool } from "./db";
-import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans } from "../shared/schema";
+import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans, medicalSpecialties, userSubscriptions } from "../shared/schema";
 import { eq, and, or, isNull, sql, desc, asc, not, ne, count, isNotNull } from "drizzle-orm";
 import { normalizeText } from "./utils/normalize";
 import { extractTextFromImage, processIdentityDocument, processInsuranceCard } from "./services/google-vision";
@@ -2900,6 +2901,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const roleIdFilter = req.query.roleId
           ? parseInt(req.query.roleId as string)
           : null;
+        
+        // Filtros adicionais por outros campos
+        const idFilter = req.query.id
+          ? parseInt(req.query.id as string)
+          : null;
+        const searchFilter = req.query.search as string;
 
         // Construir condições de filtro
         let conditions: any[] = []; // Mostrar todos os usuários (ativos e inativos) para gestão administrativa
@@ -2918,6 +2925,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           conditions.push(eq(users.roleId, roleIdFilter));
         }
 
+        // Filtro por ID
+        if (idFilter) {
+          conditions.push(eq(users.id, idFilter));
+        }
+
+        // Filtro por busca (nome ou email)
+        if (searchFilter) {
+          const { ilike, or } = await import("drizzle-orm");
+          conditions.push(
+            or(
+              ilike(users.name, `%${searchFilter}%`),
+              ilike(users.email, `%${searchFilter}%`)
+            )
+          );
+        }
+
         // Consulta dos usuários com filtros combinados
         const query = conditions.length > 0 
           ? db.select().from(users).where(and(...conditions))
@@ -2927,26 +2950,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const allUsers = await query;
 
         // Mapear para o formato esperado pela interface
-        // Buscar os nomes das funções
+        // Buscar os nomes das funções e especialidades médicas
         const rolesData = await db.select().from(roles);
+        const specialtiesData = await db.select().from(medicalSpecialties);
 
-        // Mapear usuários incluindo o nome da função
+        // Mapear usuários incluindo o nome da função e especialidade
         const mappedUsers = allUsers.map((user) => {
           // Encontrar a função (role) associada ao usuário
           const userRole = rolesData.find((role) => role.id === user.roleId);
+          
+          // Encontrar a especialidade médica associada ao usuário
+          const userSpecialty = specialtiesData.find((specialty) => specialty.id === user.medicalSpecialtyId);
 
           return {
             id: user.id,
             username: user.username,
             email: user.email,
             name: user.name,
+            phone: user.phone,
+            cpf: user.cpf,
             roleId: user.roleId,
             roleName: userRole ? userRole.name : "Não atribuído", // Nome da função
             crm: user.crm,
+            crmUf: user.crmUf,
+            medicalSpecialtyId: user.medicalSpecialtyId,
+            medicalSpecialtyName: userSpecialty ? userSpecialty.name : null, // Nome da especialidade
             active: user.active,
             consentAccepted: user.consentAccepted,
-            created_at: user.createdAt,
-            updated_at: user.updatedAt,
+            createdAt: user.createdAt, // Corrigido para createdAt
+            updatedAt: user.updatedAt, // Corrigido para updatedAt
+            lastLogin: user.lastLogin,
+            failedLoginAttempts: user.failedLoginAttempts,
+            lockoutUntil: user.lockoutUntil,
+            passwordResetToken: user.passwordResetToken,
+            passwordResetExpires: user.passwordResetExpires,
           };
         });
 
@@ -4508,6 +4545,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // API para obter dados de assinatura de um usuário
+  app.get(
+    "/api/users/:userId/subscription",
+    
+    async (req: Request, res: Response) => {
+      try {
+        const userId = parseInt(req.params.userId);
+
+        if (isNaN(userId)) {
+          return res.status(400).json({ message: "ID de usuário inválido" });
+        }
+
+        // Buscar assinatura do usuário
+        const [subscription] = await db
+          .select()
+          .from(userSubscriptions)
+          .where(eq(userSubscriptions.userId, userId))
+          .limit(1);
+
+        if (!subscription) {
+          return res.status(404).json({ message: "Assinatura não encontrada" });
+        }
+
+        res.status(200).json(subscription);
+      } catch (error) {
+        console.error("Erro ao buscar assinatura do usuário:", error);
+        res
+          .status(500)
+          .json({ message: "Erro ao buscar assinatura do usuário" });
+      }
+    },
+  );
+
   // Endpoint para atualizar um paciente
   app.put(
     "/api/patients/:id",
@@ -5286,27 +5356,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trackingData = req.body;
       console.log("📧 Lead tracking recebido:", trackingData);
       
-      // Salvar no banco via storage
+      // Salvar no banco via storage usando o método que faz merge
       if (trackingData.email) {
-        await storage.createIncompleteRegistration({
-          email: trackingData.email,
-          firstName: trackingData.firstName || null,
-          lastName: trackingData.lastName || null,
-          cpf: trackingData.cpf || null,
-          phone: trackingData.phone || null,
-          username: trackingData.username || null,
-          selectedPlanId: trackingData.selectedPlanId || null,
-          currentStep: trackingData.currentStep,
-          userAgent: trackingData.userAgent || null,
-          ipAddress: req.ip || null,
-          source: trackingData.source || "direct"
-        });
+        // Usar o método que já faz merge automático (não tentará criar duplicata)
+        await storage.createIncompleteRegistration(trackingData);
       }
       
       res.json({ success: true });
     } catch (error) {
       console.error("Erro ao processar tracking:", error);
       res.json({ success: false }); // Não falhar o registro
+    }
+  });
+
+  // API para recuperar dados de registro incompleto pelo email
+  app.get('/api/incomplete-registration/:email', async (req: Request, res: Response) => {
+    try {
+      const { email } = req.params;
+      
+      if (!email) {
+        return res.status(400).json({ error: 'Email é obrigatório' });
+      }
+
+      console.log('🔍 Buscando registro incompleto para email:', email);
+      
+      const registration = await storage.getIncompleteRegistrationByEmail(email);
+      
+      if (!registration) {
+        return res.status(404).json({ error: 'Registro não encontrado' });
+      }
+
+      // Retornar apenas os dados necessários para preencher o formulário
+      let additionalData = {};
+      
+      // Tentar fazer parse do userDataJson de forma segura
+      if (registration.userDataJson) {
+        try {
+          // Verificar se é string válida antes de fazer parse
+          if (typeof registration.userDataJson === 'string' && registration.userDataJson !== '[object Object]') {
+            additionalData = JSON.parse(registration.userDataJson);
+          } else {
+            console.log('⚠️ userDataJson não é string JSON válida:', registration.userDataJson);
+          }
+        } catch (error) {
+          console.error('❌ Erro ao fazer parse do userDataJson:', error);
+        }
+      }
+      
+      const formData = {
+        firstName: registration.firstName,
+        lastName: registration.lastName, 
+        cpf: registration.cpf,
+        email: registration.email,
+        phone: registration.phone,
+        username: registration.username,
+        // Dados específicos do registro que podem ter sido salvos
+        ...additionalData
+      };
+
+      console.log('✅ Dados encontrados:', { email, hasData: Object.keys(formData).length });
+      
+      res.json({
+        success: true,
+        data: formData,
+        selectedPlanId: registration.selectedPlanId || null
+      });
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar registro incompleto:', error);
+      res.status(500).json({ 
+        error: 'Erro interno do servidor',
+        details: error instanceof Error ? error.message : 'Erro desconhecido'
+      });
     }
   });
 
@@ -7378,6 +7499,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Erro ao processar mensagem de contato:", error);
+      res.status(500).json({ 
+        error: "Erro interno do servidor"
+      });
+    }
+  });
+
+  // API para buscar mensagens de contato (admin)
+  app.get("/api/contact", reportAuth, async (req: Request, res: Response) => {
+    try {
+      // Verificar se é administrador
+      const user = (req as any).user;
+      if (user.roleId !== 1) {
+        return res.status(403).json({ 
+          error: "Acesso negado. Apenas administradores podem visualizar mensagens de contato." 
+        });
+      }
+
+      // Buscar todas as mensagens de contato
+      const messages = await storage.getContactMessages();
+
+      res.json(messages);
+    } catch (error) {
+      console.error("Erro ao buscar mensagens de contato:", error);
       res.status(500).json({ 
         error: "Erro interno do servidor"
       });
@@ -12731,27 +12875,534 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // =================== STRIPE PAYMENT ENDPOINTS ===================
+  // =================== WEBHOOK ENDPOINTS ===================
   
-  // Inicializar Stripe
-  let stripe: any;
-  try {
-    // Usar chave secreta de teste
-    const STRIPE_SECRET_KEY = 'sk_test_51S43b8BDo1YVjn0iA29tn753TDK4YTsWFc8QfYJV90EpdltYqJ0xoZbp8akaT9IHEyQwtsPyPF2YhbDfW7PcNfvH00hBlxfmCd';
-    const { default: Stripe } = await import('stripe');
-    stripe = new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: "2023-10-16",
-    });
-    console.log('✅ Stripe inicializado com sucesso');
-  } catch (error) {
-    console.error('❌ Erro ao inicializar Stripe:', error);
-  }
-  
-  // POST /api/stripe/create-payment-intent - Criar intenção de pagamento único
-  app.post("/api/stripe/create-payment-intent", isAuthenticated, async (req: Request, res: Response) => {
+  // FASE 3: Funções auxiliares para processar eventos de webhook com materialização idempotente
+  async function handleCheckoutSessionCompleted(session: any): Promise<boolean> {
     try {
-      if (!stripe) {
-        return res.status(500).json({ message: "Stripe não configurado" });
+      console.log(`🛒 [FASE 3] Processando checkout.session.completed: ${session.id}`);
+      
+      const { customer, subscription, metadata } = session;
+
+      // NOVO FLUXO: Detectar registro via regToken (FASE 2)
+      if (metadata?.regToken && metadata?.registrationId) {
+        return await handleRegTokenBasedRegistration(session);
+      }
+
+      // FLUXO ANTIGO: Manter compatibilidade 
+      if (!metadata?.flow || metadata.flow !== 'registration') {
+        console.log(`⚠️ Sessão não é de registro (fluxo antigo) - ignorando`);
+        return true;
+      }
+
+      const planId = parseInt(metadata.planId);
+      const userEmail = metadata.userId; // Email foi usado como userId temporário
+      
+      console.log(`📝 [FLUXO ANTIGO] Registrando subscription: Plan ${planId}, Customer ${customer}, Email ${userEmail}`);
+      console.log(`✅ Checkout session ${session.id} processado para registro (fluxo antigo)`);
+      
+      return true;
+    } catch (error: any) {
+      console.error(`❌ Erro ao processar checkout session completed:`, error);
+      return false;
+    }
+  }
+
+  // FASE 3: Handler para materialização idempotente com regToken
+  async function handleRegTokenBasedRegistration(session: any): Promise<boolean> {
+    try {
+      const { customer, subscription, metadata, amount_total } = session;
+      const { regToken, registrationId, planId: planIdStr } = metadata;
+      
+      console.log(`🎯 [MATERIALIZAÇÃO] Iniciando para regToken: ${regToken}`);
+
+      // 1. IDEMPOTÊNCIA: Verificar se já foi processado
+      const existingUser = await db
+        .select()
+        .from(users)
+        .where(sql`metadata_json->>'stripe_session_id' = ${session.id}`)
+        .limit(1);
+
+      if (existingUser.length > 0) {
+        console.log(`✅ [IDEMPOTENTE] Usuário já materializado para session ${session.id}`);
+        return true;
+      }
+
+      // 2. Buscar registro incompleto
+      const registration = await storage.getIncompleteRegistrationByToken(regToken);
+      if (!registration) {
+        console.error(`❌ [MATERIALIZAÇÃO] Registro não encontrado para regToken: ${regToken}`);
+        return false;
+      }
+
+      if (registration.completedAt) {
+        console.log(`✅ [IDEMPOTENTE] Registro já completado: ${registration.id}`);
+        return true;
+      }
+
+      // 3. Buscar plano
+      const planId = parseInt(planIdStr);
+      const plan = await storage.getSubscriptionPlan(planId);
+      if (!plan) {
+        console.error(`❌ [MATERIALIZAÇÃO] Plano não encontrado: ${planId}`);
+        return false;
+      }
+
+      // 4. MATERIALIZAR usuário completo
+      console.log(`🔄 [MATERIALIZAÇÃO] Criando usuário para: ${registration.email}`);
+      
+      const userData = {
+        email: registration.email,
+        username: registration.username || `user_${Date.now()}`,
+        name: registration.firstName && registration.lastName 
+          ? `${registration.firstName} ${registration.lastName}` 
+          : registration.email.split('@')[0],
+        password: registration.password, // Já hasheada
+        roleId: registration.roleId || 1, // Default role
+        cpf: registration.cpf,
+        phone: registration.phone,
+        crm: registration.crm,
+        crmUf: registration.crmUf,
+        medicalSpecialtyId: registration.medicalSpecialtyId,
+        active: true, // Ativar imediatamente após pagamento
+        consentAccepted: new Date(),
+        // Metadados para tracking
+        metadataJson: {
+          stripe_session_id: session.id,
+          stripe_customer_id: customer,
+          registration_id: registration.id,
+          materialized_at: new Date().toISOString()
+        }
+      };
+
+      const user = await storage.createUser(userData);
+      console.log(`✅ [MATERIALIZAÇÃO] Usuário criado: ${user.id}`);
+
+      // 5. Criar endereço se fornecido
+      if (registration.address || registration.city) {
+        try {
+          const addressData = {
+            userId: user.id,
+            logradouro: registration.address || '',
+            numero: registration.number || '',
+            complemento: registration.complement || '',
+            bairro: registration.neighborhood || '',
+            cidade: registration.city || '',
+            uf: registration.state || '',
+            country: 'BR'
+          };
+          await storage.createUserAddress(addressData);
+          console.log(`✅ [MATERIALIZAÇÃO] Endereço criado para usuário: ${user.id}`);
+        } catch (addressError) {
+          console.error("⚠️ [MATERIALIZAÇÃO] Erro ao criar endereço:", addressError);
+        }
+      }
+
+      // 6. Criar assinatura se não for plano gratuito
+      if (planId !== 1 && subscription) {
+        try {
+          const subscriptionData = {
+            userId: user.id,
+            planId: planId,
+            stripeSubscriptionId: subscription,
+            stripeCustomerId: customer,
+            status: 'active',
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: new Date(Date.now() + (plan.billingCycle === 'annual' ? 365 : 30) * 24 * 60 * 60 * 1000),
+            priceAtSubscription: amount_total ? amount_total / 100 : plan.fullPrice
+          };
+          
+          await storage.createUserSubscription(subscriptionData);
+          console.log(`✅ [MATERIALIZAÇÃO] Assinatura criada para usuário: ${user.id}`);
+        } catch (subscriptionError) {
+          console.error("⚠️ [MATERIALIZAÇÃO] Erro ao criar assinatura:", subscriptionError);
+        }
+      }
+
+      // 7. Marcar registro como completado
+      await storage.updateIncompleteRegistration(registration.id, {
+        completedAt: new Date(),
+        leadStatus: 'paid',
+        stripeCustomerId: customer,
+        stripeCheckoutSessionId: session.id
+      });
+
+      console.log(`🎉 [MATERIALIZAÇÃO] Processo completo para usuário: ${user.id} (${user.email})`);
+      return true;
+
+    } catch (error: any) {
+      console.error(`❌ [MATERIALIZAÇÃO] Erro no processo:`, error);
+      return false;
+    }
+  }
+
+  async function handleSubscriptionChanged(subscription: any): Promise<boolean> {
+    try {
+      console.log(`🔄 Processando subscription ${subscription.status}: ${subscription.id}`);
+      
+      const { customer, status, current_period_start, current_period_end, items } = subscription;
+      
+      // Obter o price_id do primeiro item da subscription
+      const priceId = items?.data?.[0]?.price?.id;
+      if (!priceId) {
+        console.log(`⚠️ Subscription sem price_id - ignorando`);
+        return true;
+      }
+
+      // Buscar qual plano corresponde a este priceId
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(or(
+          eq(subscriptionPlans.priceIdMonthly, priceId),
+          eq(subscriptionPlans.priceIdYearly, priceId)
+        ));
+
+      if (!plan) {
+        console.log(`⚠️ Plano não encontrado para priceId ${priceId}`);
+        return true;
+      }
+
+      // Buscar usuário pelo customerId (em um sistema real, você teria essa associação)
+      // Por enquanto, vamos apenas logar
+      console.log(`✅ Subscription ${subscription.id} atualizada: status=${status}, plano=${plan.name}`);
+      
+      return true;
+    } catch (error: any) {
+      console.error(`❌ Erro ao processar subscription changed:`, error);
+      return false;
+    }
+  }
+
+  async function handleInvoicePaid(invoice: any): Promise<boolean> {
+    try {
+      console.log(`💰 Processando invoice.paid: ${invoice.id}`);
+      
+      const { customer, subscription, amount_paid } = invoice;
+      
+      console.log(`✅ Pagamento processado: Customer ${customer}, Valor ${amount_paid / 100}`);
+      
+      return true;
+    } catch (error: any) {
+      console.error(`❌ Erro ao processar invoice paid:`, error);
+      return false;
+    }
+  }
+
+  async function handleInvoicePaymentFailed(invoice: any): Promise<boolean> {
+    try {
+      console.log(`⚠️ Processando invoice.payment_failed: ${invoice.id}`);
+      
+      const { customer, subscription, amount_due } = invoice;
+      
+      console.log(`❌ Falha no pagamento: Customer ${customer}, Valor ${amount_due / 100}`);
+      
+      return true;
+    } catch (error: any) {
+      console.error(`❌ Erro ao processar invoice payment failed:`, error);
+      return false;
+    }
+  }
+
+  // Endpoint para verificar status do checkout após pagamento
+  app.get('/api/payments/checkout-success', async (req, res) => {
+    const sessionId = req.query.session_id as string;
+    
+    if (!sessionId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Session ID é obrigatório' 
+      });
+    }
+
+    try {
+      console.log(`🔍 Verificando status do checkout session: ${sessionId}`);
+
+      // Obter provider de pagamento
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Provedor de pagamento não configurado' 
+        });
+      }
+
+      // Buscar session no Stripe
+      const session = await paymentProvider.getCheckoutSession(sessionId);
+      console.log(`📋 Session status: ${session.status}, payment_status: ${session.payment_status}`);
+
+      // Verificar se há metadata do usuário
+      const userId = session.metadata?.userId;
+      const planId = session.metadata?.planId;
+
+      if (!userId || !planId) {
+        return res.json({
+          success: false,
+          message: 'Processando dados do checkout...',
+          session: {
+            id: session.id,
+            status: session.status,
+            payment_status: session.payment_status,
+            customer_email: session.customer_details?.email,
+            amount_total: session.amount_total
+          }
+        });
+      }
+
+      // Buscar usuário no banco
+      const user = await db.select().from(users).where(eq(users.id, parseInt(userId))).limit(1);
+      const userRecord = user[0];
+      
+      if (!userRecord) {
+        console.log(`❌ Usuário não encontrado: ${userId}`);
+        return res.json({
+          success: false,
+          message: 'Usuário não encontrado. Processamento em andamento...'
+        });
+      }
+
+      // Buscar subscription do usuário
+      let subscriptionQuery = await db.select().from(userSubscriptions).where(eq(userSubscriptions.userId, userRecord.id)).limit(1);
+      let subscription = subscriptionQuery[0];
+      
+      // Se não existe subscription e o pagamento foi aprovado, criar automaticamente
+      if (!subscription && session.status === 'complete' && session.payment_status === 'paid') {
+        console.log(`🔧 Criando subscription para usuário ${userRecord.id} - Pagamento confirmado`);
+        
+        try {
+          // Determinar o billing interval baseado no plano selecionado
+          const planQuery = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, parseInt(planId))).limit(1);
+          const planData = planQuery[0];
+          
+          // Por padrão, assumir mensal. Podemos expandir isso futuramente se necessário
+          let billingInterval = 'monthly';
+          
+          const subscriptionData = {
+            userId: userRecord.id,
+            planId: parseInt(planId),
+            status: 'active' as const,
+            paymentProviderSubscriptionId: session.subscription || session.id,
+            paymentProviderCustomerId: session.customer || session.customer_details?.email || '',
+            paymentProvider: 'stripe',
+            
+            // Novos campos do Stripe Checkout Session
+            checkoutSessionId: session.id,
+            checkoutCreatedAt: new Date(session.created * 1000), // Converter timestamp Unix para Date
+            checkoutExpiresAt: new Date(session.expires_at * 1000),
+            amountTotal: session.amount_total,
+            currency: session.currency || 'brl',
+            paymentStatus: session.payment_status,
+            billingInterval: billingInterval,
+            finalPrice: session.amount_total, // Valor pago final
+            
+            // Timestamps de assinatura
+            startedAt: new Date(),
+            expiresAt: billingInterval === 'yearly' 
+              ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 ano
+              : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 dias
+          };
+          
+          await db.insert(userSubscriptions).values(subscriptionData);
+          console.log(`✅ Subscription criada automaticamente para usuário ${userRecord.id}`);
+          
+          // Buscar a subscription recém-criada
+          subscriptionQuery = await db.select().from(userSubscriptions).where(eq(userSubscriptions.userId, userRecord.id)).limit(1);
+          subscription = subscriptionQuery[0];
+        } catch (error) {
+          console.log(`❌ Erro ao criar subscription automaticamente:`, error);
+          return res.json({
+            success: false,
+            message: 'Erro ao ativar assinatura. Tente novamente em alguns instantes.',
+            session: {
+              id: session.id,
+              status: session.status,
+              payment_status: session.payment_status,
+              customer_email: session.customer_details?.email,
+              amount_total: session.amount_total
+            }
+          });
+        }
+      }
+      
+      if (!subscription || subscription.status !== 'active') {
+        console.log(`⏳ Subscription ainda não ativa para usuário ${userRecord.id}`);
+        return res.json({
+          success: false,
+          message: 'Ativando assinatura...',
+          session: {
+            id: session.id,
+            status: session.status,
+            payment_status: session.payment_status,
+            customer_email: session.customer_details?.email,
+            amount_total: session.amount_total
+          }
+        });
+      }
+
+      // Buscar dados do plano
+      const planQuery = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, subscription.planId)).limit(1);
+      const plan = planQuery[0];
+      
+      // Tudo processado com sucesso
+      console.log(`✅ Checkout processado com sucesso para usuário ${userRecord.id}`);
+      
+      return res.json({
+        success: true,
+        session: {
+          id: session.id,
+          status: session.status,
+          payment_status: session.payment_status,
+          customer_email: session.customer_details?.email,
+          amount_total: session.amount_total,
+          subscription: {
+            id: subscription.stripeSubscriptionId,
+            status: subscription.status,
+            current_period_start: subscription.currentPeriodStart?.getTime() / 1000,
+            current_period_end: subscription.currentPeriodEnd?.getTime() / 1000
+          },
+          metadata: {
+            userId: userId,
+            planId: planId
+          }
+        },
+        user: {
+          id: userRecord.id,
+          email: userRecord.email,
+          firstName: userRecord.firstName,
+          subscription: {
+            status: subscription.status,
+            planName: plan?.name || 'Plano Desconhecido'
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Erro ao verificar status do checkout:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro interno do servidor' 
+      });
+    }
+  });
+
+  // POST /api/webhooks/stripe - Webhook para eventos do Stripe (sem autenticação)
+  app.post('/api/webhooks/stripe', (req: any, res: any, next: any) => {
+    if (req.headers['content-type'] === 'application/json') {
+      req.setEncoding('utf8');
+      req.rawBody = '';
+      req.on('data', (chunk: any) => {
+        req.rawBody += chunk;
+      });
+      req.on('end', () => {
+        next();
+      });
+    } else {
+      next();
+    }
+  }, async (req: Request, res: Response) => {
+    try {
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({ message: "Provedor de pagamento não configurado" });
+      }
+
+      const signature = req.headers['stripe-signature'] as string;
+      if (!signature) {
+        return res.status(400).json({ message: "Assinatura do webhook não encontrada" });
+      }
+
+      // Verificar e parsear o evento do Stripe
+      const rawBody = (req as any).rawBody || req.body;
+      const event = await paymentProvider.processWebhook(rawBody, signature);
+      
+      console.log(`🎯 Webhook recebido: ${event.type} - ${event.id}`);
+
+      // Verificar idempotência - prevenir processamento duplicado
+      const [existingEvent] = await db
+        .select()
+        .from(webhookEvents)
+        .where(eq(webhookEvents.eventId, event.id));
+
+      if (existingEvent?.processed) {
+        console.log(`✅ Evento ${event.id} já processado - ignorando`);
+        return res.status(200).json({ received: true, message: "Evento já processado" });
+      }
+
+      // Criar registro do evento (ou atualizar se existir)
+      await db
+        .insert(webhookEvents)
+        .values({
+          eventId: event.id,
+          eventType: event.type,
+          processed: false,
+          data: event.data as any
+        })
+        .onConflictDoUpdate({
+          target: webhookEvents.eventId,
+          set: {
+            eventType: event.type,
+            data: event.data as any,
+            updatedAt: sql`NOW()`
+          }
+        });
+
+      // Processar evento baseado no tipo
+      let processed = false;
+
+      switch (event.type) {
+        case 'checkout.session.completed':
+          processed = await handleCheckoutSessionCompleted(event.data.object as any);
+          break;
+          
+        case 'customer.subscription.created':
+        case 'customer.subscription.updated':
+          processed = await handleSubscriptionChanged(event.data.object as any);
+          break;
+          
+        case 'invoice.paid':
+          processed = await handleInvoicePaid(event.data.object as any);
+          break;
+          
+        case 'invoice.payment_failed':
+          processed = await handleInvoicePaymentFailed(event.data.object as any);
+          break;
+          
+        default:
+          console.log(`⚠️ Tipo de evento não suportado: ${event.type}`);
+          processed = true; // Marcar como processado para não reprocessar
+      }
+
+      // Atualizar status de processamento
+      if (processed) {
+        await db
+          .update(webhookEvents)
+          .set({
+            processed: true,
+            processedAt: sql`NOW()`,
+            updatedAt: sql`NOW()`
+          })
+          .where(eq(webhookEvents.eventId, event.id));
+
+        console.log(`✅ Evento ${event.id} processado com sucesso`);
+      } else {
+        console.log(`❌ Falha ao processar evento ${event.id}`);
+      }
+
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error("❌ Erro ao processar webhook:", error);
+      res.status(400).json({ message: "Erro ao processar webhook: " + error.message });
+    }
+  });
+
+  // =================== PAYMENT ENDPOINTS ===================
+  
+  // POST /api/payments/create-payment-intent - Criar intenção de pagamento único
+  app.post("/api/payments/create-payment-intent", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({ message: "Provedor de pagamento não configurado" });
       }
       
       const { amount } = req.body;
@@ -12760,29 +13411,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Valor do pagamento inválido" });
       }
       
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // Converter para centavos
+      const paymentIntent = await paymentProvider.createPaymentIntent({
+        amount: amount,
         currency: "brl",
         metadata: {
           userId: req.user!.id.toString(),
         },
       });
       
-      res.json({ clientSecret: paymentIntent.client_secret });
+      res.json({ clientSecret: paymentIntent.clientSecret });
     } catch (error: any) {
       console.error("Erro ao criar payment intent:", error);
       res.status(500).json({ message: "Erro ao criar pagamento: " + error.message });
     }
   });
 
-  // POST /api/stripe/create-subscription-for-registration - Criar assinatura para registro (sem autenticação)
-  app.post('/api/stripe/create-subscription-for-registration', async (req: Request, res: Response) => {
+  // POST /api/payments/create-subscription-for-registration - Criar assinatura para registro (sem autenticação)
+  app.post('/api/payments/create-subscription-for-registration', async (req: Request, res: Response) => {
     try {
-      if (!stripe) {
-        return res.status(500).json({ message: "Stripe não configurado" });
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({ message: "Provedor de pagamento não configurado" });
       }
       
-      const { planId, userData } = req.body;
+      const { planId, userData, billingInterval = 'monthly' } = req.body;
       
       if (!planId || !userData) {
         return res.status(400).json({ message: "ID do plano e dados do usuário são obrigatórios" });
@@ -12798,35 +13450,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Plano não encontrado" });
       }
       
-      if (!plan.stripePriceId) {
-        return res.status(400).json({ message: "Plano não tem preço configurado no Stripe" });
+      // Determinar qual preço usar baseado no período de cobrança
+      const priceId = billingInterval === 'yearly' ? plan.priceIdYearly : plan.priceIdMonthly;
+      
+      if (!priceId) {
+        return res.status(400).json({ message: `Plano não tem preço ${billingInterval === 'yearly' ? 'anual' : 'mensal'} configurado` });
       }
+      
+      console.log(`💳 Usando preço existente: ${priceId} para plano ${plan.name} (${billingInterval})`);
 
-      // Criar cliente temporário no Stripe para o registro
-      const customer = await stripe.customers.create({
+      // Criar cliente temporário para o registro
+      const customer = await paymentProvider.createOrUpdateCustomer({
         email: userData.email,
         name: `${userData.firstName} ${userData.lastName}`,
+        phone: userData.phone,
+        cpf: userData.cpf, // CPF para compliance fiscal
+        address: {
+          line1: `${userData.address}, ${userData.number}`,
+          city: userData.city,
+          state: userData.state,
+          postal_code: userData.cep?.replace(/\D/g, '') || '', // Remove formatação do CEP
+          country: 'BR'
+        },
         metadata: {
           planId: planId.toString(),
-          registrationData: JSON.stringify(userData),
+          registrationFlow: 'true',
+          timestamp: new Date().toISOString(),
         },
       });
 
-      // Criar assinatura
-      const subscription = await stripe.subscriptions.create({
-        customer: customer.id,
-        items: [{
-          price: plan.stripePriceId,
-        }],
-        payment_behavior: 'default_incomplete',
-        payment_settings: { save_default_payment_method: 'on_subscription' },
-        expand: ['latest_invoice.payment_intent'],
+      // Para registro, criar apenas PaymentIntent (não subscription ainda)
+      // A subscription será criada após confirmação do pagamento via webhook
+      const paymentIntent = await paymentProvider.createPaymentIntent({
+        amount: billingInterval === 'yearly' ? (plan.priceYearly || 0) : (plan.priceMonthly || 0),
+        currency: 'brl',
+        metadata: {
+          customerId: customer.id,
+          planId: planId.toString(),
+          priceId: priceId,
+          billingInterval: billingInterval,
+          registrationFlow: 'true'
+        }
       });
 
       res.json({
-        subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
-        status: subscription.status
+        customerId: customer.id,
+        clientSecret: paymentIntent.clientSecret,
+        status: 'requires_payment_method'
       });
     } catch (error: any) {
       console.error("Erro ao criar assinatura para registro:", error);
@@ -12834,15 +13504,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/stripe/create-subscription - Criar ou recuperar assinatura
-  app.post('/api/stripe/create-subscription', isAuthenticated, async (req: Request, res: Response) => {
+  // POST /api/payments/checkout-session-for-registration - Criar Checkout Session para registro (substitui PaymentIntent)
+  app.post('/api/payments/checkout-session-for-registration', async (req: Request, res: Response) => {
     try {
-      if (!stripe) {
-        return res.status(500).json({ message: "Stripe não configurado" });
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({ message: "Provedor de pagamento não configurado" });
+      }
+      
+      const { planId, userData, billingInterval = 'monthly', couponCode } = req.body;
+      
+      if (!planId || !userData) {
+        return res.status(400).json({ message: "ID do plano e dados do usuário são obrigatórios" });
+      }
+      
+      // Buscar plano no banco de dados
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.id, planId));
+        
+      if (!plan) {
+        return res.status(404).json({ message: "Plano não encontrado" });
+      }
+      
+      // Determinar qual preço usar baseado no período de cobrança
+      const priceId = billingInterval === 'yearly' ? plan.priceIdYearly : plan.priceIdMonthly;
+      
+      if (!priceId) {
+        return res.status(400).json({ message: `Plano não tem preço ${billingInterval === 'yearly' ? 'anual' : 'mensal'} configurado` });
+      }
+      
+      console.log(`🛒 Criando Checkout Session para plano ${plan.name} (${billingInterval}), preço: ${priceId}`);
+
+      // Criar ou encontrar cliente
+      const customer = await paymentProvider.createOrUpdateCustomer({
+        email: userData.email,
+        name: `${userData.firstName} ${userData.lastName}`,
+        phone: userData.phone,
+        cpf: userData.cpf, // CPF para compliance fiscal
+        address: {
+          line1: `${userData.address}, ${userData.number}`,
+          city: userData.city,
+          state: userData.state,
+          postal_code: userData.cep?.replace(/\D/g, '') || '', // Remove formatação do CEP
+          country: 'BR'
+        },
+        metadata: {
+          planId: planId.toString(),
+          registrationFlow: 'true',
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      // Preparar URLs de retorno
+      const baseUrl = req.headers.origin || 'http://localhost:5000';
+      const successUrl = `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${baseUrl}/checkout/cancel`;
+
+      // Buscar usuário pelo email para obter o userId real
+      const userQuery = await db.select().from(users).where(eq(users.email, userData.email)).limit(1);
+      const existingUser = userQuery[0];
+      
+      if (!existingUser) {
+        return res.status(400).json({ message: "Usuário não encontrado. Complete o registro primeiro." });
+      }
+
+      // Criar sessão de checkout
+      const checkoutSession = await paymentProvider.createCheckoutSession({
+        mode: 'subscription',
+        priceId: priceId,
+        customerId: customer.id,
+        successUrl: successUrl,
+        cancelUrl: cancelUrl,
+        allowPromotionCodes: true,
+        couponId: couponCode ? couponCode : undefined,
+        metadata: {
+          planId: planId.toString(),
+          userId: existingUser.id.toString(), // Usar userId real do banco
+          billingInterval: billingInterval,
+          flow: 'registration'
+        }
+      });
+
+      console.log(`✅ Checkout Session criado: ${checkoutSession.id}`);
+
+      res.json({
+        sessionId: checkoutSession.id,
+        url: checkoutSession.url,
+        customerId: customer.id
+      });
+    } catch (error: any) {
+      console.error("❌ Erro ao criar checkout session para registro:", error);
+      res.status(500).json({ message: "Erro ao criar checkout session: " + error.message });
+    }
+  });
+
+  // POST /api/payments/create-subscription - Criar ou recuperar assinatura
+  app.post('/api/payments/create-subscription', isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({ message: "Provedor de pagamento não configurado" });
       }
       
       const user = req.user!;
-      const { planId } = req.body;
+      const { planId, billingInterval = 'monthly' } = req.body;
       
       if (!planId) {
         return res.status(400).json({ message: "ID do plano é obrigatório" });
@@ -12858,28 +13625,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Plano não encontrado" });
       }
       
-      if (!plan.stripePriceId) {
-        return res.status(400).json({ message: "Plano não tem preço configurado no Stripe" });
+      // Determinar qual preço usar baseado no período de cobrança
+      const priceId = billingInterval === 'yearly' ? plan.priceIdYearly : plan.priceIdMonthly;
+      
+      if (!priceId) {
+        return res.status(400).json({ message: `Plano não tem preço ${billingInterval === 'yearly' ? 'anual' : 'mensal'} configurado` });
       }
 
-      // Verificar se já tem assinatura ativa
-      if (user.stripeSubscriptionId) {
-        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+      // Verificar se já tem assinatura ativa na nova estrutura
+      const [existingSubscription] = await db
+        .select()
+        .from(userSubscriptions)
+        .where(eq(userSubscriptions.userId, user.id))
+        .limit(1);
+      
+      if (existingSubscription?.paymentProviderSubscriptionId) {
+        const subscription = await paymentProvider.retrieveSubscription({
+          subscriptionId: existingSubscription.paymentProviderSubscriptionId
+        });
         
         if (subscription.status === 'active') {
+          // Criar PaymentIntent para compatibilidade com resposta original
+          const paymentIntent = await paymentProvider.createPaymentIntent({
+            amount: billingInterval === 'yearly' ? (plan.priceYearly || 0) : (plan.priceMonthly || 0),
+            currency: 'brl',
+            metadata: {
+              subscriptionId: subscription.id,
+              userId: user.id.toString()
+            }
+          });
+
           return res.json({
             subscriptionId: subscription.id,
-            clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+            clientSecret: paymentIntent.clientSecret,
             status: subscription.status
           });
         }
       }
 
-      // Criar ou recuperar cliente no Stripe
-      let customerId = user.stripeCustomerId;
+      // Criar ou recuperar cliente
+      let customerId = existingSubscription?.paymentProviderCustomerId;
       
       if (!customerId) {
-        const customer = await stripe.customers.create({
+        const customer = await paymentProvider.createOrUpdateCustomer({
           email: user.email,
           name: user.name,
           metadata: {
@@ -12888,37 +13676,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         customerId = customer.id;
-        
-        // Atualizar usuário com customer ID
-        await db
-          .update(users)
-          .set({ stripeCustomerId: customerId })
-          .where(eq(users.id, user.id));
       }
 
       // Criar assinatura
-      const subscription = await stripe.subscriptions.create({
-        customer: customerId,
-        items: [{
-          price: plan.stripePriceId,
-        }],
-        payment_behavior: 'default_incomplete',
-        expand: ['latest_invoice.payment_intent'],
+      const subscription = await paymentProvider.createSubscription(
+        customerId,
+        priceId,
+        {
+          userId: user.id.toString(),
+          planId: planId.toString()
+        }
+      );
+
+      // Criar PaymentIntent para compatibilidade com a API original
+      const paymentIntent = await paymentProvider.createPaymentIntent({
+        amount: billingInterval === 'yearly' ? (plan.priceYearly || 0) : (plan.priceMonthly || 0),
+        currency: 'brl',
+        metadata: {
+          subscriptionId: subscription.id,
+          customerId: customerId,
+          userId: user.id.toString()
+        }
       });
 
-      // Atualizar usuário com subscription ID
-      await db
-        .update(users)
-        .set({ 
-          stripeSubscriptionId: subscription.id,
-          subscriptionStatus: subscription.status,
-          subscriptionStartDate: new Date()
-        })
-        .where(eq(users.id, user.id));
+      // Criar ou atualizar assinatura no user_subscriptions
+      const providerName = paymentProvider.getProviderName();
+      if (existingSubscription) {
+        await db
+          .update(userSubscriptions)
+          .set({
+            paymentProviderCustomerId: customerId,
+            paymentProviderSubscriptionId: subscription.id,
+            status: subscription.status === 'active' ? 'active' : 'trial',
+            startedAt: new Date(),
+            paymentProvider: providerName,
+            planId: planId,
+            updatedAt: new Date()
+          })
+          .where(eq(userSubscriptions.userId, user.id));
+      } else {
+        await db
+          .insert(userSubscriptions)
+          .values({
+            userId: user.id,
+            planId: planId,
+            status: subscription.status === 'active' ? 'active' : 'trial',
+            startedAt: new Date(),
+            paymentProviderCustomerId: customerId,
+            paymentProviderSubscriptionId: subscription.id,
+            paymentProvider: providerName,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+      }
 
       res.json({
         subscriptionId: subscription.id,
-        clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
+        clientSecret: paymentIntent.clientSecret,
         status: subscription.status
       });
     } catch (error: any) {
@@ -12927,38 +13741,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // GET /api/stripe/subscription-status - Verificar status da assinatura
-  app.get('/api/stripe/subscription-status', isAuthenticated, async (req: Request, res: Response) => {
+  // GET /api/payments/subscription-status - Verificar status da assinatura
+  app.get('/api/payments/subscription-status', isAuthenticated, async (req: Request, res: Response) => {
     try {
-      if (!stripe) {
-        return res.status(500).json({ message: "Stripe não configurado" });
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({ message: "Provedor de pagamento não configurado" });
       }
       
       const user = req.user!;
       
-      if (!user.stripeSubscriptionId) {
+      // Buscar assinatura na nova estrutura
+      const [userSubscription] = await db
+        .select()
+        .from(userSubscriptions)
+        .where(eq(userSubscriptions.userId, user.id))
+        .limit(1);
+      
+      if (!userSubscription?.paymentProviderSubscriptionId) {
         return res.json({ status: 'no_subscription' });
       }
       
-      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+      const subscription = await paymentProvider.retrieveSubscription({
+        subscriptionId: userSubscription.paymentProviderSubscriptionId
+      });
       
       // Atualizar status no banco se mudou
-      if (subscription.status !== user.subscriptionStatus) {
+      if (subscription.status !== userSubscription.status) {
         await db
-          .update(users)
+          .update(userSubscriptions)
           .set({ 
-            subscriptionStatus: subscription.status,
-            subscriptionEndDate: subscription.current_period_end 
-              ? new Date(subscription.current_period_end * 1000) 
-              : null
+            status: subscription.status === 'active' ? 'active' : subscription.status,
+            expiresAt: subscription.currentPeriodEnd,
+            updatedAt: new Date()
           })
-          .where(eq(users.id, user.id));
+          .where(eq(userSubscriptions.userId, user.id));
       }
       
       res.json({
         status: subscription.status,
-        current_period_end: subscription.current_period_end,
-        cancel_at_period_end: subscription.cancel_at_period_end,
+        current_period_end: Math.floor(subscription.currentPeriodEnd.getTime() / 1000), // Compatibilidade com timestamp Unix
+        cancel_at_period_end: false, // PaymentProvider não tem essa informação - pode ser estendido futuramente
       });
     } catch (error: any) {
       console.error("Erro ao verificar status da assinatura:", error);
@@ -13053,6 +13876,519 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Erro ao atualizar quantidade OPME:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  // GET /api/user/subscription - Buscar assinatura do usuário atual
+  app.get('/api/user/subscription', isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const userSubscription = await storage.getUserSubscription(user.id);
+      
+      res.json(userSubscription);
+    } catch (error) {
+      console.error("Erro ao buscar assinatura do usuário:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  // =================== FASE 4: ADMIN ENDPOINTS ===================
+  
+  // POST /api/admin/cleanup - Executar limpeza de registros expirados
+  app.post('/api/admin/cleanup', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { CleanupService } = await import('../services/cleanup-service');
+      const { hoursOld, leadStatus, dryRun } = req.body;
+      
+      console.log('🧹 [ADMIN] Executando limpeza administrativa...');
+      
+      let stats;
+      if (hoursOld || leadStatus || dryRun) {
+        // Limpeza com filtros específicos
+        stats = await CleanupService.cleanupWithFilters({
+          hoursOld: hoursOld ? parseInt(hoursOld) : undefined,
+          leadStatus,
+          dryRun: dryRun === true
+        });
+      } else {
+        // Limpeza padrão (24h expirados)
+        stats = await CleanupService.cleanupExpiredRegistrations();
+      }
+      
+      console.log(`✅ [ADMIN] Limpeza concluída: ${stats.totalCleaned} registros removidos`);
+      
+      res.json({
+        success: true,
+        stats,
+        message: `Limpeza executada com sucesso. ${stats.totalCleaned} registros removidos.`
+      });
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro na limpeza:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro na limpeza: ${error.message}` 
+      });
+    }
+  });
+
+  // GET /api/admin/cleanup/stats - Obter estatísticas de limpeza sem executar
+  app.get('/api/admin/cleanup/stats', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { CleanupService } = await import('../services/cleanup-service');
+      
+      const stats = await CleanupService.getCleanupStats();
+      
+      res.json({
+        success: true,
+        stats,
+        message: 'Estatísticas obtidas com sucesso'
+      });
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro ao obter estatísticas:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro ao obter estatísticas: ${error.message}` 
+      });
+    }
+  });
+
+  // GET /api/admin/reports/conversion - Relatório de conversão
+  app.get('/api/admin/reports/conversion', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { ReportingService } = await import('../services/reporting-service');
+      const { startDate, endDate, period } = req.query;
+      
+      let start: Date;
+      let end: Date = new Date();
+      
+      if (startDate && endDate) {
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else {
+        // Períodos pré-definidos
+        const now = new Date();
+        switch (period) {
+          case '7d':
+            start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case '30d':
+            start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            break;
+          case '90d':
+            start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            break;
+          default:
+            start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // Default: 30 dias
+        }
+      }
+      
+      const metrics = await ReportingService.getConversionMetrics(start, end);
+      
+      res.json({
+        success: true,
+        data: metrics,
+        message: 'Relatório de conversão gerado com sucesso'
+      });
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro no relatório de conversão:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro no relatório: ${error.message}` 
+      });
+    }
+  });
+
+  // GET /api/admin/reports/performance - Relatório completo de performance
+  app.get('/api/admin/reports/performance', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { ReportingService } = await import('../services/reporting-service');
+      
+      const report = await ReportingService.getPerformanceReport();
+      
+      res.json({
+        success: true,
+        data: report,
+        message: 'Relatório de performance gerado com sucesso'
+      });
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro no relatório de performance:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro no relatório: ${error.message}` 
+      });
+    }
+  });
+
+  // GET /api/admin/reports/dashboard - Métricas simplificadas para dashboard
+  app.get('/api/admin/reports/dashboard', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { ReportingService } = await import('../services/reporting-service');
+      
+      const metrics = await ReportingService.getDashboardMetrics();
+      
+      res.json({
+        success: true,
+        data: metrics,
+        message: 'Métricas do dashboard obtidas com sucesso'
+      });
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro nas métricas do dashboard:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro nas métricas: ${error.message}` 
+      });
+    }
+  });
+
+  // === GESTÃO DE CÓDIGOS DE DESCONTO ===
+  
+  // GET /api/admin/discount-codes - Listar todos os códigos de desconto
+  app.get('/api/admin/discount-codes', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const codes = await db.select().from(discountCodes).orderBy(desc(discountCodes.createdAt));
+      
+      res.json({
+        success: true,
+        data: codes,
+        message: 'Códigos de desconto carregados com sucesso'
+      });
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro ao carregar códigos de desconto:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro ao carregar códigos: ${error.message}` 
+      });
+    }
+  });
+
+  // POST /api/admin/discount-codes - Criar novo código de desconto
+  app.post('/api/admin/discount-codes', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertDiscountCodeSchema.parse({
+        ...req.body,
+        createdBy: req.user?.id
+      });
+
+      // Criar no banco local primeiro
+      const [newCode] = await db.insert(discountCodes).values(validatedData).returning();
+      
+      // Se for Stripe, criar também no Stripe
+      if (validatedData.paymentProvider === 'stripe') {
+        try {
+          const paymentProvider = getPaymentProvider();
+          if (paymentProvider) {
+            const stripeCoupon = await paymentProvider.createCoupon({
+              id: validatedData.code,
+              percent_off: validatedData.discountType === 'percentage' ? validatedData.discountValue : undefined,
+              amount_off: validatedData.discountType === 'fixed_amount' ? validatedData.discountValue : undefined,
+              currency: validatedData.discountType === 'fixed_amount' ? 'brl' : undefined,
+              duration: 'once', // Por padrão, uso único
+              max_redemptions: validatedData.maxUses || undefined,
+              redeem_by: validatedData.validUntil ? Math.floor(validatedData.validUntil.getTime() / 1000) : undefined
+            });
+
+            // Atualizar com IDs do Stripe
+            await db.update(discountCodes)
+              .set({
+                stripeCouponId: stripeCoupon.id,
+                syncStatus: 'synced',
+                lastSyncAt: new Date()
+              })
+              .where(eq(discountCodes.id, newCode.id));
+          }
+        } catch (stripeError: any) {
+          console.warn('⚠️ Erro ao criar cupom no Stripe:', stripeError.message);
+          await db.update(discountCodes)
+            .set({
+              syncStatus: 'error',
+              syncErrorMessage: stripeError.message
+            })
+            .where(eq(discountCodes.id, newCode.id));
+        }
+      }
+
+      // Buscar o código atualizado
+      const [finalCode] = await db.select().from(discountCodes).where(eq(discountCodes.id, newCode.id));
+
+      res.json({
+        success: true,
+        data: finalCode,
+        message: 'Código de desconto criado com sucesso'
+      });
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro ao criar código de desconto:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro ao criar código: ${error.message}` 
+      });
+    }
+  });
+
+  // PUT /api/admin/discount-codes/:id - Atualizar código de desconto
+  app.put('/api/admin/discount-codes/:id', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validatedData = insertDiscountCodeSchema.partial().parse(req.body);
+
+      // Buscar código existente
+      const [existingCode] = await db.select().from(discountCodes).where(eq(discountCodes.id, id));
+      if (!existingCode) {
+        return res.status(404).json({
+          success: false,
+          message: 'Código de desconto não encontrado'
+        });
+      }
+
+      // Atualizar no banco
+      await db.update(discountCodes)
+        .set({ ...validatedData, updatedAt: new Date() })
+        .where(eq(discountCodes.id, id));
+
+      // Se for Stripe e tiver stripeCouponId, tentar atualizar no Stripe
+      if (existingCode.paymentProvider === 'stripe' && existingCode.stripeCouponId) {
+        try {
+          const paymentProvider = getPaymentProvider();
+          if (paymentProvider) {
+            // Stripe não permite alterar cupons existentes, apenas metadata
+            await paymentProvider.updateCoupon(existingCode.stripeCouponId, {
+              metadata: {
+                updated_at: new Date().toISOString(),
+                description: validatedData.description || existingCode.description
+              }
+            });
+
+            await db.update(discountCodes)
+              .set({
+                syncStatus: 'synced',
+                lastSyncAt: new Date()
+              })
+              .where(eq(discountCodes.id, id));
+          }
+        } catch (stripeError: any) {
+          console.warn('⚠️ Erro ao atualizar cupom no Stripe:', stripeError.message);
+          await db.update(discountCodes)
+            .set({
+              syncStatus: 'error',
+              syncErrorMessage: stripeError.message
+            })
+            .where(eq(discountCodes.id, id));
+        }
+      }
+
+      // Buscar código atualizado
+      const [updatedCode] = await db.select().from(discountCodes).where(eq(discountCodes.id, id));
+
+      res.json({
+        success: true,
+        data: updatedCode,
+        message: 'Código de desconto atualizado com sucesso'
+      });
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro ao atualizar código de desconto:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro ao atualizar código: ${error.message}` 
+      });
+    }
+  });
+
+  // DELETE /api/admin/discount-codes/:id - Excluir código de desconto
+  app.delete('/api/admin/discount-codes/:id', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+
+      // Buscar código existente
+      const [existingCode] = await db.select().from(discountCodes).where(eq(discountCodes.id, id));
+      if (!existingCode) {
+        return res.status(404).json({
+          success: false,
+          message: 'Código de desconto não encontrado'
+        });
+      }
+
+      // Se for Stripe e tiver stripeCouponId, desativar no Stripe
+      if (existingCode.paymentProvider === 'stripe' && existingCode.stripeCouponId) {
+        try {
+          const paymentProvider = getPaymentProvider();
+          if (paymentProvider) {
+            await paymentProvider.deleteCoupon(existingCode.stripeCouponId);
+          }
+        } catch (stripeError: any) {
+          console.warn('⚠️ Erro ao excluir cupom no Stripe:', stripeError.message);
+          // Continuar com a exclusão local mesmo com erro no Stripe
+        }
+      }
+
+      // Excluir do banco local
+      await db.delete(discountCodes).where(eq(discountCodes.id, id));
+
+      res.json({
+        success: true,
+        message: 'Código de desconto excluído com sucesso'
+      });
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro ao excluir código de desconto:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro ao excluir código: ${error.message}` 
+      });
+    }
+  });
+
+  // POST /api/admin/discount-codes/:id/sync - Sincronizar código com Stripe
+  app.post('/api/admin/discount-codes/:id/sync', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+
+      // Buscar código existente
+      const [existingCode] = await db.select().from(discountCodes).where(eq(discountCodes.id, id));
+      if (!existingCode) {
+        return res.status(404).json({
+          success: false,
+          message: 'Código de desconto não encontrado'
+        });
+      }
+
+      if (existingCode.paymentProvider !== 'stripe') {
+        return res.status(400).json({
+          success: false,
+          message: 'Código não é do tipo Stripe'
+        });
+      }
+
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({
+          success: false,
+          message: 'Provedor de pagamento não configurado'
+        });
+      }
+
+      try {
+        // Se não tem stripeCouponId, criar no Stripe
+        if (!existingCode.stripeCouponId) {
+          const stripeCoupon = await paymentProvider.createCoupon({
+            id: existingCode.code,
+            percent_off: existingCode.discountType === 'percentage' ? existingCode.discountValue : undefined,
+            amount_off: existingCode.discountType === 'fixed_amount' ? existingCode.discountValue : undefined,
+            currency: existingCode.discountType === 'fixed_amount' ? 'brl' : undefined,
+            duration: 'once',
+            max_redemptions: existingCode.maxUses || undefined,
+            redeem_by: existingCode.validUntil ? Math.floor(existingCode.validUntil.getTime() / 1000) : undefined
+          });
+
+          await db.update(discountCodes)
+            .set({
+              stripeCouponId: stripeCoupon.id,
+              syncStatus: 'synced',
+              lastSyncAt: new Date(),
+              syncErrorMessage: null
+            })
+            .where(eq(discountCodes.id, id));
+        } else {
+          // Verificar se existe no Stripe
+          const stripeCoupon = await paymentProvider.getCoupon(existingCode.stripeCouponId);
+          
+          await db.update(discountCodes)
+            .set({
+              syncStatus: 'synced',
+              lastSyncAt: new Date(),
+              syncErrorMessage: null
+            })
+            .where(eq(discountCodes.id, id));
+        }
+
+        // Buscar código atualizado
+        const [syncedCode] = await db.select().from(discountCodes).where(eq(discountCodes.id, id));
+
+        res.json({
+          success: true,
+          data: syncedCode,
+          message: 'Código sincronizado com sucesso'
+        });
+      } catch (stripeError: any) {
+        await db.update(discountCodes)
+          .set({
+            syncStatus: 'error',
+            syncErrorMessage: stripeError.message
+          })
+          .where(eq(discountCodes.id, id));
+
+        res.status(500).json({
+          success: false,
+          message: `Erro na sincronização: ${stripeError.message}`
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro na sincronização:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro na sincronização: ${error.message}` 
+      });
+    }
+  });
+
+  // GET /api/validate/discount-code/:code - Validar código de desconto (público)
+  app.get('/api/validate/discount-code/:code', async (req: Request, res: Response) => {
+    try {
+      const code = req.params.code.toUpperCase();
+
+      const [discountCode] = await db.select()
+        .from(discountCodes)
+        .where(and(
+          eq(discountCodes.code, code),
+          eq(discountCodes.isActive, true)
+        ));
+
+      if (!discountCode) {
+        return res.status(404).json({
+          success: false,
+          message: 'Código de desconto não encontrado ou inativo'
+        });
+      }
+
+      // Verificar validade temporal
+      const now = new Date();
+      if (discountCode.validFrom && discountCode.validFrom > now) {
+        return res.status(400).json({
+          success: false,
+          message: 'Código de desconto ainda não está válido'
+        });
+      }
+
+      if (discountCode.validUntil && discountCode.validUntil < now) {
+        return res.status(400).json({
+          success: false,
+          message: 'Código de desconto expirado'
+        });
+      }
+
+      // Verificar limite de uso
+      if (discountCode.maxUses && discountCode.currentUses >= discountCode.maxUses) {
+        return res.status(400).json({
+          success: false,
+          message: 'Código de desconto esgotado'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: discountCode.id,
+          code: discountCode.code,
+          description: discountCode.description,
+          discountType: discountCode.discountType,
+          discountValue: discountCode.discountValue,
+          applicablePlans: discountCode.applicablePlans
+        },
+        message: 'Código de desconto válido'
+      });
+    } catch (error: any) {
+      console.error('❌ Erro ao validar código de desconto:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro na validação: ${error.message}` 
+      });
     }
   });
 
