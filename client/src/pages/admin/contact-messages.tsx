@@ -61,10 +61,6 @@ export default function ContactMessagesPage() {
   // Obter todas as mensagens
   const { data: messages = [], isLoading, error } = useQuery<ContactMessage[]>({
     queryKey: ["/api/contact"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/contact");
-      return await res.json();
-    },
   });
 
   // Mutação para responder uma mensagem
