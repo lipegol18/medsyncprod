@@ -48,7 +48,18 @@ function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
   const { data: hospitalSurgeries, isLoading, error } = useQuery({
     queryKey: ['/api/hospital-distribution-working', appliedFilters],
     queryFn: async () => {
-      const response = await fetch(`/api/hospital-distribution-working`, {
+      const params = new URLSearchParams();
+      if (appliedFilters.statusFilter) params.append('status', appliedFilters.statusFilter);
+      if (appliedFilters.dateRange.startDate) params.append('startDate', appliedFilters.dateRange.startDate);
+      if (appliedFilters.dateRange.endDate) params.append('endDate', appliedFilters.dateRange.endDate);
+      if (appliedFilters.hospitalFilter && appliedFilters.hospitalFilter !== 'all') {
+        params.append('hospitalId', appliedFilters.hospitalFilter);
+      }
+      
+      const queryString = params.toString();
+      const url = queryString ? `/api/hospital-distribution-working?${queryString}` : '/api/hospital-distribution-working';
+      
+      const response = await fetch(url, {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -123,8 +134,20 @@ function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
     const fetchSupplierDistribution = async () => {
       try {
         console.log("=== Buscando distribuição de fornecedores ===");
+        console.log("Filtros aplicados:", appliedFilters);
         
-        const response = await fetch('/api/supplier-distribution-data', {
+        const params = new URLSearchParams();
+        if (appliedFilters.statusFilter) params.append('status', appliedFilters.statusFilter);
+        if (appliedFilters.dateRange.startDate) params.append('startDate', appliedFilters.dateRange.startDate);
+        if (appliedFilters.dateRange.endDate) params.append('endDate', appliedFilters.dateRange.endDate);
+        if (appliedFilters.hospitalFilter && appliedFilters.hospitalFilter !== 'all') {
+          params.append('hospitalId', appliedFilters.hospitalFilter);
+        }
+        
+        const queryString = params.toString();
+        const url = queryString ? `/api/supplier-distribution-data?${queryString}` : '/api/supplier-distribution-data';
+        
+        const response = await fetch(url, {
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
@@ -903,19 +926,8 @@ export default function Reports() {
     });
   };
 
-  // Aplicar filtros automaticamente quando houver mudanças
-  useEffect(() => {
-    setAppliedFilters({
-      statusFilter: statusFilter || '',
-      dateRange: {
-        startDate: dateRange.startDate || '',
-        endDate: dateRange.endDate || ''
-      },
-      hospitalFilter: hospitalFilter || 'all',
-      complexityFilter: complexityFilter || '',
-      doctorFilter: doctorFilter || 'all'
-    });
-  }, [statusFilter, dateRange, hospitalFilter, complexityFilter, doctorFilter]);
+  // Aplicar filtros apenas quando clicar no botão "Filtrar" 
+  // (removido useEffect automático para evitar filtragem indevida)
 
   // Função para limpar filtros
   const handleClearFilters = () => {
@@ -970,7 +982,7 @@ export default function Reports() {
       setIsLoading(true);
       try {
         // Buscar estatísticas gerais (contadores, desempenho por médico, volume por hospital)
-        const statsUrl = '/api/reports/stats';
+        const statsUrl = buildFilterUrl('/api/reports/stats');
         const statsResponse = await fetch(statsUrl);
         
         if (statsResponse.ok) {
@@ -1106,7 +1118,7 @@ export default function Reports() {
         
         // Buscar dados reais de cirurgias por convênio
         try {
-          const insuranceUrl = `/api/reports/insurance-distribution`;
+          const insuranceUrl = buildFilterUrl(`/api/reports/insurance-distribution`);
           console.log("Buscando dados de cirurgias por convênio");
           const insuranceResponse = await fetch(insuranceUrl);
           
@@ -1131,7 +1143,8 @@ export default function Reports() {
         
         // Buscar dados reais de cirurgias por hospital da API
         try {
-          const hospitalStatsResponse = await fetch('/api/hospital-distribution-debug', {
+          const hospitalUrl = buildFilterUrl('/api/hospital-distribution-debug');
+          const hospitalStatsResponse = await fetch(hospitalUrl, {
             credentials: 'include',
             headers: {
               'Content-Type': 'application/json',
@@ -1144,7 +1157,8 @@ export default function Reports() {
           } else {
             console.error('Erro ao buscar estatísticas de hospitais:', hospitalStatsResponse.statusText);
             // Se a API falhar, buscar dados usando a API de hospital-stats debug
-            const fallbackResponse = await fetch('/api/hospital-stats-debug', {
+            const fallbackUrl = buildFilterUrl('/api/hospital-stats-debug');
+            const fallbackResponse = await fetch(fallbackUrl, {
               credentials: 'include',
               headers: {
                 'Content-Type': 'application/json',
@@ -1165,7 +1179,8 @@ export default function Reports() {
 
         // Dados reais de cirurgias por fornecedor (via API debug)
         try {
-          const supplierResponse = await fetch('/api/supplier-stats-debug', {
+          const supplierUrl = buildFilterUrl('/api/supplier-stats-debug');
+          const supplierResponse = await fetch(supplierUrl, {
             credentials: 'include',
             headers: {
               'Content-Type': 'application/json',
