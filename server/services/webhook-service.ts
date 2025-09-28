@@ -9,14 +9,12 @@ const WEBHOOK_URLS = {
  // local: "http://localhost:8080/webhook",
 };
 
-// URL atual do webhook - use a URL de teste do webhook.site que sempre funciona
-// IMPORTANTE: Como não temos acesso ao webhook externo, vamos usar sempre o modo de teste (testMode=true)
-// Isso permite que possamos testar a formatação dos dados sem tentar enviar para um endpoint externo
-//const WEBHOOK_URL = WEBHOOK_URLS.n8n; // Usando o webhook real do n8n
+// URL atual do webhook - obtida da variável de ambiente ou padrão
+const WEBHOOK_URL = process.env.WEBHOOK_URL || WEBHOOK_URLS.n8n || "https://webhook.site/test";
 
 // Flag global para controlar se devemos forçar o modo de teste para todos os webhooks
 const FORCE_TEST_MODE = false; // Modo real ativado - os webhooks serão enviados
-const WEBHOOK_URL = process.env.WEBHOOK_URL;
+
 /**
  * Serviço para enviar notificações para o webhook externo
  * Implementado com tratamento de erro para não impactar a aplicação principal
