@@ -127,53 +127,55 @@ function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
 
 // Componente para listar fornecedores por número de cirurgias
 function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
-  const [supplierDistribution, setSupplierDistribution] = useState<{supplierName: string, surgeryCount: number}[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [summaryStats, setSummaryStats] = useState<{totalSuppliers: number, totalSurgeries: number}>({totalSuppliers: 0, totalSurgeries: 0});
 
-  useEffect(() => {
-    const fetchSupplierDistribution = async () => {
-      try {
-        console.log("=== Buscando distribuição de fornecedores ===");
-        console.log("Filtros aplicados:", appliedFilters);
-        
-        const params = new URLSearchParams();
-        if (appliedFilters.statusFilter) params.append('status', appliedFilters.statusFilter);
-        if (appliedFilters.dateRange.startDate) params.append('startDate', appliedFilters.dateRange.startDate);
-        if (appliedFilters.dateRange.endDate) params.append('endDate', appliedFilters.dateRange.endDate);
-        if (appliedFilters.hospitalFilter && appliedFilters.hospitalFilter !== 'all') {
-          params.append('hospitalId', appliedFilters.hospitalFilter);
-        }
-        
-        const queryString = params.toString();
-        const url = queryString ? `/api/supplier-distribution-data?${queryString}` : '/api/supplier-distribution-data';
-        
-        const response = await fetch(url, {
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log("Dados de distribuição de fornecedores recebidos:", data);
-          setSupplierDistribution(data);
-        } else {
-          const errorText = await response.text();
-          console.error("Erro na API supplier-distribution - Status:", response.status);
-          console.error("Erro na API supplier-distribution - Response:", errorText);
-          setSupplierDistribution([]);
-        }
-      } catch (error) {
-        console.error("Erro ao processar dados de distribuição de fornecedores:", error);
-        setSupplierDistribution([]);
-      } finally {
-        setLoading(false);
+  // Usar useQuery para garantir autenticação adequada
+  const { data: supplierDistribution = [], isLoading: loading } = useQuery({
+    queryKey: ['/api/supplier-distribution-data', appliedFilters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (appliedFilters.statusFilter) params.append('status', appliedFilters.statusFilter);
+      if (appliedFilters.dateRange.startDate) params.append('startDate', appliedFilters.dateRange.startDate);
+      if (appliedFilters.dateRange.endDate) params.append('endDate', appliedFilters.dateRange.endDate);
+      if (appliedFilters.hospitalFilter && appliedFilters.hospitalFilter !== 'all') {
+        params.append('hospitalId', appliedFilters.hospitalFilter);
       }
-    };
+      
+      const queryString = params.toString();
+      const url = queryString ? `/api/supplier-distribution-data?${queryString}` : '/api/supplier-distribution-data';
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Usuário não autenticado');
+        }
+        throw new Error(`Erro ${response.status}: ${await response.text()}`);
+      }
+      
+      const data = await response.json();
+      return data;
+    },
+    ...getReportsQueryConfig()
+  });
 
-    fetchSupplierDistribution();
-  }, [appliedFilters]);
+  // Calcular estatísticas quando os dados mudam
+  useEffect(() => {
+    if (supplierDistribution && supplierDistribution.length > 0) {
+      const totalSuppliers = supplierDistribution.length;
+      const totalSurgeries = supplierDistribution.reduce((sum: number, item: any) => sum + item.surgeryCount, 0);
+      setSummaryStats({ totalSuppliers, totalSurgeries });
+    } else {
+      setSummaryStats({ totalSuppliers: 0, totalSurgeries: 0 });
+    }
+  }, [supplierDistribution]);
 
   if (loading) {
     return (
@@ -194,13 +196,11 @@ function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
     );
   }
 
-  // Calcular o número único de cirurgias (assumindo que cada fornecedor aparece no mesmo número de cirurgias)
-  const uniqueSurgeries = supplierDistribution.length > 0 ? supplierDistribution[0].surgeryCount : 0;
-  const totalSurgeries = supplierDistribution.reduce((sum, item) => sum + item.surgeryCount, 0);
+  // As estatísticas agora são calculadas dinamicamente quando os dados chegam da API
 
   return (
     <div className="space-y-3">
-      {supplierDistribution.map((item, index) => (
+      {supplierDistribution.map((item: any, index: number) => (
         <div key={index} className="flex justify-between items-center p-3 bg-card rounded-lg border border-border">
           <div className="flex items-center gap-3">
             <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -217,7 +217,7 @@ function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
       
       <div className="mt-4 p-3 bg-accent rounded-lg border border-border">
         <p className="text-accent-foreground text-sm">
-          <strong>Resumo:</strong> Com fornecedores: 14 pedidos | Sem fornecedores: 3 | Total: 17
+          <strong>Resumo:</strong> {summaryStats.totalSuppliers} fornecedores selecionados em {summaryStats.totalSurgeries} cirurgia{summaryStats.totalSurgeries !== 1 ? 's' : ''}
         </p>
       </div>
     </div>
