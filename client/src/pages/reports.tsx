@@ -311,11 +311,18 @@ const COLORS = ["#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe", "#dbeafe"];
 
 // Componente para a aba de Valores Recebidos
 function ReceivedValuesTab({ appliedFilters }: { appliedFilters: any }) {
+  // Criar filtros sem o status para esta seção
+  const filtersWithoutStatus = {
+    ...appliedFilters,
+    statusFilter: null
+  };
+  
   const { data: receivedValuesData, isLoading, error } = useQuery({
-    queryKey: ['/api/reports/received-values', appliedFilters],
+    queryKey: ['/api/reports/received-values', filtersWithoutStatus],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (appliedFilters.statusFilter) params.append('status', appliedFilters.statusFilter);
+      // Não aplicar filtro de status na seção Valores Recebidos
+      // if (appliedFilters.statusFilter) params.append('status', appliedFilters.statusFilter);
       if (appliedFilters.dateRange.startDate) params.append('startDate', appliedFilters.dateRange.startDate);
       if (appliedFilters.dateRange.endDate) params.append('endDate', appliedFilters.dateRange.endDate);
       if (appliedFilters.hospitalFilter && appliedFilters.hospitalFilter !== 'all') {
@@ -483,8 +490,12 @@ export default function Reports() {
   const userRole = user?.roleId === 1 ? 'Administrador' : 'Médico';
   const [, setLocation] = useLocation();
   
+  // Estado para controlar a aba ativa
+  const [activeTab, setActiveTab] = useState("volume");
+  
   // Estados para filtros
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [yearFilter, setYearFilter] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<{startDate: string | null; endDate: string | null}>({
     startDate: null,
     endDate: null
@@ -914,12 +925,20 @@ export default function Reports() {
   // Função para aplicar filtros
   const handleApplyFilters = () => {
     setFiltersLoading(true);
+    
+    // Se um ano foi selecionado, converter para intervalo de datas
+    let finalDateRange = { startDate: dateRange.startDate || '', endDate: dateRange.endDate || '' };
+    
+    if (yearFilter) {
+      finalDateRange = {
+        startDate: `${yearFilter}-01-01`,
+        endDate: `${yearFilter}-12-31`
+      };
+    }
+    
     setAppliedFilters({
       statusFilter: statusFilter || '',
-      dateRange: {
-        startDate: dateRange.startDate || '',
-        endDate: dateRange.endDate || ''
-      },
+      dateRange: finalDateRange,
       hospitalFilter: hospitalFilter || 'all',
       complexityFilter: complexityFilter || '',
       doctorFilter: doctorFilter || 'all'
@@ -932,6 +951,7 @@ export default function Reports() {
   // Função para limpar filtros
   const handleClearFilters = () => {
     setStatusFilter('');
+    setYearFilter(null);
     setDateRange({ startDate: '', endDate: '' });
     setHospitalFilter('all');
     setComplexityFilter('');
@@ -1256,9 +1276,9 @@ export default function Reports() {
               {/* Removido aviso de dados carregados conforme solicitado */}
               
               {/* Filtros de relatórios */}
-              <div className="bg-card border border-border rounded-lg p-4 mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-card-foreground">Filtros de Relatório</h3>
+              <div className="bg-card border border-border rounded-lg p-3 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-base font-semibold text-card-foreground">Filtros de Relatório</h3>
                   {filtersLoading && (
                     <div className="flex items-center text-sm text-muted-foreground">
                       <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2"></div>
@@ -1266,21 +1286,28 @@ export default function Reports() {
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="flex flex-wrap gap-2">
                   {/* Filtro de Status */}
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
-                      Status do Pedido
+                  <div className="flex-1 min-w-[160px]">
+                    <label className={`block text-xs font-medium mb-1 ${
+                      activeTab === 'received-values' || activeTab === 'distribution' ? 'text-muted-foreground' : 'text-foreground'
+                    }`}>
+                      Status
                     </label>
                     <Select 
                       value={statusFilter || "all"} 
                       onValueChange={(value) => setStatusFilter(value === "all" ? null : value)}
+                      disabled={activeTab === 'received-values' || activeTab === 'distribution'}
                     >
-                      <SelectTrigger className="w-full bg-background border-border">
-                        <SelectValue placeholder="Todos os status" />
+                      <SelectTrigger className={`h-9 text-sm border-border ${
+                        activeTab === 'received-values' || activeTab === 'distribution'
+                          ? 'bg-muted text-muted-foreground cursor-not-allowed' 
+                          : 'bg-background'
+                      }`}>
+                        <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todos os status</SelectItem>
+                        <SelectItem value="all">Todos</SelectItem>
                         <SelectItem value="em_preenchimento">Em preenchimento</SelectItem>
                         <SelectItem value="em_avaliacao">Em avaliação</SelectItem>
                         <SelectItem value="aceito">Aceito</SelectItem>
@@ -1291,47 +1318,89 @@ export default function Reports() {
                     </Select>
                   </div>
                   
+                  {/* Filtro de Ano */}
+                  <div className="flex-1 min-w-[120px]">
+                    <label className="block text-xs font-medium text-foreground mb-1">
+                      Ano
+                    </label>
+                    <Select 
+                      value={yearFilter || "none"} 
+                      onValueChange={(value) => {
+                        if (value === "none") {
+                          setYearFilter(null);
+                        } else {
+                          setYearFilter(value);
+                          setDateRange({ startDate: null, endDate: null });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-sm bg-background border-border">
+                        <SelectValue placeholder="Nenhum" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhum</SelectItem>
+                        <SelectItem value="2025">2025</SelectItem>
+                        <SelectItem value="2026">2026</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
                   {/* Filtro de Data Inicial */}
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
+                  <div className="flex-1 min-w-[150px]">
+                    <label className={`block text-xs font-medium mb-1 ${yearFilter ? 'text-muted-foreground' : 'text-foreground'}`}>
                       Data Inicial
                     </label>
                     <input
                       type="date"
-                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      disabled={!!yearFilter}
+                      className={`w-full h-9 text-sm border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring ${
+                        yearFilter 
+                          ? 'bg-muted text-muted-foreground cursor-not-allowed' 
+                          : 'bg-background text-foreground'
+                      }`}
                       value={dateRange.startDate || ""}
-                      onChange={(e) => setDateRange({...dateRange, startDate: e.target.value || null})}
+                      onChange={(e) => {
+                        setDateRange({...dateRange, startDate: e.target.value || null});
+                        if (e.target.value) setYearFilter(null);
+                      }}
                     />
                   </div>
                   
                   {/* Filtro de Data Final */}
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
+                  <div className="flex-1 min-w-[150px]">
+                    <label className={`block text-xs font-medium mb-1 ${yearFilter ? 'text-muted-foreground' : 'text-foreground'}`}>
                       Data Final
                     </label>
                     <input
                       type="date"
-                      className="w-full bg-background border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      disabled={!!yearFilter}
+                      className={`w-full h-9 text-sm border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring ${
+                        yearFilter 
+                          ? 'bg-muted text-muted-foreground cursor-not-allowed' 
+                          : 'bg-background text-foreground'
+                      }`}
                       value={dateRange.endDate || ""}
-                      onChange={(e) => setDateRange({...dateRange, endDate: e.target.value || null})}
+                      onChange={(e) => {
+                        setDateRange({...dateRange, endDate: e.target.value || null});
+                        if (e.target.value) setYearFilter(null);
+                      }}
                     />
-
                   </div>
                   
                   {/* Filtro de Hospital */}
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-xs font-medium text-foreground mb-1">
                       Hospital
                     </label>
                     <Select 
                       value={hospitalFilter || "all"} 
                       onValueChange={(value) => setHospitalFilter(value === "all" ? null : value)}
                     >
-                      <SelectTrigger className="w-full bg-background border-border">
-                        <SelectValue placeholder="Todos os hospitais" />
+                      <SelectTrigger className="h-9 text-sm bg-background border-border">
+                        <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todos os hospitais</SelectItem>
+                        <SelectItem value="all">Todos</SelectItem>
                         {hospitalsData.map((hospital) => (
                           <SelectItem key={hospital.id} value={hospital.id.toString()}>
                             {hospital.name}
@@ -1343,19 +1412,19 @@ export default function Reports() {
                   
                   {/* Filtro de Médico (apenas para admin) */}
                   {isAdmin && (
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-1">
+                    <div className="flex-1 min-w-[160px]">
+                      <label className="block text-xs font-medium text-foreground mb-1">
                         Médico
                       </label>
                       <Select 
                         value={doctorFilter || "all"} 
                         onValueChange={(value) => setDoctorFilter(value === "all" ? null : value)}
                       >
-                        <SelectTrigger className="w-full bg-background border-border">
-                          <SelectValue placeholder="Todos os médicos" />
+                        <SelectTrigger className="h-9 text-sm bg-background border-border">
+                          <SelectValue placeholder="Todos" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">Todos os médicos</SelectItem>
+                          <SelectItem value="all">Todos</SelectItem>
                           {doctorsData.map((doctor) => (
                             <SelectItem key={doctor.id} value={doctor.id.toString()}>
                               {doctor.name}
@@ -1368,16 +1437,17 @@ export default function Reports() {
                 </div>
                 
                 {/* Botões de ação */}
-                <div className="flex justify-between items-center mt-4">
+                <div className="flex justify-between items-center mt-2">
                   {/* Botões de exportação */}
-                  <div className="flex space-x-2">
+                  <div className="flex gap-2">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button 
                         variant="default" 
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                        size="sm"
+                        className="h-8 text-sm bg-primary hover:bg-primary/90 text-primary-foreground"
                       >
-                        <Download className="mr-2 h-4 w-4" />
+                        <Download className="mr-1 h-3 w-3" />
                         Exportar
                       </Button>
                     </DropdownMenuTrigger>
@@ -1395,30 +1465,32 @@ export default function Reports() {
                   </div>
                   
                   {/* Botões de filtro */}
-                  <div className="flex space-x-2">
+                  <div className="flex gap-2">
                     <Button 
                       onClick={handleApplyFilters}
-                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                      size="sm"
+                      className="h-8 text-sm bg-primary hover:bg-primary/90 text-primary-foreground"
                       disabled={filtersLoading}
                     >
                       {filtersLoading ? (
                         <>
-                          <span className="animate-spin mr-2">⟳</span>
+                          <span className="animate-spin mr-1">⟳</span>
                           Aplicando...
                         </>
                       ) : (
                         <>
-                          <Filter className="mr-2 h-4 w-4" />
+                          <Filter className="mr-1 h-3 w-3" />
                           Filtrar
                         </>
                       )}
                     </Button>
                     <Button 
                       variant="outline" 
+                      size="sm"
                       onClick={handleClearFilters}
-                      className="border-border hover:bg-accent hover:text-accent-foreground"
+                      className="h-8 text-sm border-border hover:bg-accent hover:text-accent-foreground"
                     >
-                      <X className="mr-2 h-4 w-4" />
+                      <X className="mr-1 h-3 w-3" />
                       Limpar
                     </Button>
                   </div>
@@ -1427,7 +1499,7 @@ export default function Reports() {
             </>
           )}
           
-          <Tabs defaultValue="volume" className="mb-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
             <TabsList className={`grid ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'} mb-6`}>
               <TabsTrigger value="volume">Volume de Cirurgias</TabsTrigger>
               <TabsTrigger value="distribution">Distribuição</TabsTrigger>
@@ -1665,7 +1737,8 @@ export default function Reports() {
                       Distribuição por categoria de procedimento
                       {topProcedures.length > 0 && (() => {
                         const totalProcedures = topProcedures.reduce((sum, proc) => sum + proc.count, 0);
-                        return totalProcedures > 0 ? ` • ${totalProcedures} de 16 cirurgias têm procedimentos definidos` : '';
+                        const totalOrders = summaryStats.orderCount || 0;
+                        return totalProcedures > 0 ? ` • ${totalProcedures} de ${totalOrders} cirurgias têm procedimentos definidos` : '';
                       })()}
                     </CardDescription>
                   </CardHeader>
@@ -1712,6 +1785,8 @@ export default function Reports() {
                   </CardContent>
                   {topProcedures.length > 0 && (() => {
                     const totalProcedures = topProcedures.reduce((sum, proc) => sum + proc.count, 0);
+                    const totalOrders = summaryStats.orderCount || 0;
+                    const withoutProcedures = Math.max(0, totalOrders - totalProcedures);
                     return totalProcedures > 0 ? (
                       <CardFooter className="pt-4 border-t">
                         <div className="w-full">
@@ -1723,11 +1798,11 @@ export default function Reports() {
                             </div>
                             <div className="flex justify-between p-2 bg-muted rounded text-muted-foreground">
                               <span>Sem procedimentos:</span>
-                              <span>{16 - totalProcedures} cirurgias</span>
+                              <span>{withoutProcedures} cirurgias</span>
                             </div>
                             <div className="flex justify-between p-2 bg-accent rounded font-medium">
                               <span>Total geral:</span>
-                              <span>16 cirurgias</span>
+                              <span>{totalOrders} cirurgias</span>
                             </div>
                           </div>
                         </div>
@@ -1741,36 +1816,73 @@ export default function Reports() {
                     <CardTitle className="text-card-foreground">Cirurgias por Convênio</CardTitle>
                     <CardDescription className="text-muted-foreground">
                       Distribuição por operadora de saúde
+                      {insuranceDistribution.length > 0 && (() => {
+                        const totalInsurance = insuranceDistribution.reduce((sum, ins) => sum + ins.value, 0);
+                        return totalInsurance > 0 ? ` • ${totalInsurance} cirurgias com convênio definido` : '';
+                      })()}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="h-80 bg-card rounded-b-lg">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={insuranceDistribution}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={true}
-                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
+                      {insuranceDistribution.length > 0 ? (
+                        <BarChart
+                          data={insuranceDistribution.map(ins => ({
+                            name: ins.name,
+                            value: ins.value
+                          }))}
+                          layout="vertical"
+                          margin={{ top: 20, right: 30, left: 120, bottom: 20 }}
                         >
-                          {insuranceDistribution.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: "#1e3a8a", 
-                            border: "1px solid #3b82f6",
-                            color: "#fff" 
-                          }}
-                        />
-                        <Legend />
-                      </PieChart>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(59, 130, 246, 0.2)" />
+                          <XAxis type="number" stroke="#93c5fd" />
+                          <YAxis 
+                            type="category" 
+                            dataKey="name" 
+                            tick={{ fontSize: 12, fill: "#93c5fd" }}
+                            width={120}
+                            stroke="#93c5fd"
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: "#1e3a8a", 
+                              border: "1px solid #3b82f6",
+                              color: "#fff" 
+                            }}
+                            formatter={(value) => [`${value} cirurgias`, 'Quantidade']}
+                          />
+                          <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                          <AlertCircle className="w-16 h-16 mb-4 text-muted-foreground/50" />
+                          <p className="text-center">
+                            Não há dados suficientes para exibir este gráfico.<br />
+                            Crie mais solicitações de cirurgias para ver estatísticas.
+                          </p>
+                        </div>
+                      )}
                     </ResponsiveContainer>
                   </CardContent>
+                  {insuranceDistribution.length > 0 && (() => {
+                    const totalInsurance = insuranceDistribution.reduce((sum, ins) => sum + ins.value, 0);
+                    return totalInsurance > 0 ? (
+                      <CardFooter className="pt-4 border-t">
+                        <div className="w-full">
+                          <p className="text-sm font-medium text-card-foreground mb-2">Resumo detalhado:</p>
+                          <div className="space-y-2 text-xs">
+                            <div className="flex justify-between p-2 bg-primary/10 rounded font-medium">
+                              <span>Total de cirurgias:</span>
+                              <span>{totalInsurance} cirurgias</span>
+                            </div>
+                            <div className="flex justify-between p-2 bg-accent rounded font-medium">
+                              <span>Convênios cadastrados:</span>
+                              <span>{insuranceDistribution.length} operadoras</span>
+                            </div>
+                          </div>
+                        </div>
+                      </CardFooter>
+                    ) : null;
+                  })()}
                 </Card>
               </div>
               
