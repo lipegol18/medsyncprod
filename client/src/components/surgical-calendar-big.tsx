@@ -278,23 +278,6 @@ export function SurgicalCalendarBig({
         </Button>
       </div>
 
-      {/* Legenda de status */}
-      <div className="flex flex-wrap gap-2 mb-4 p-4 bg-gray-50 rounded-lg">
-        <div className="text-sm font-medium text-gray-700 mr-4">Status:</div>
-        {[
-          { status: 'agendado', label: 'Agendado', color: 'bg-blue-500' },
-          { status: 'confirmado', label: 'Confirmado', color: 'bg-green-500' },
-          { status: 'em_andamento', label: 'Em Andamento', color: 'bg-yellow-500' },
-          { status: 'realizado', label: 'Realizado', color: 'bg-gray-500' },
-          { status: 'cancelado', label: 'Cancelado', color: 'bg-red-500' }
-        ].map(({ status, label, color }) => (
-          <div key={status} className="flex items-center gap-1 text-xs">
-            <div className={`w-3 h-3 rounded ${color}`}></div>
-            <span>{label}</span>
-          </div>
-        ))}
-      </div>
-
       {/* Calendário principal */}
       <div className="flex-1 bg-white rounded-lg border overflow-hidden">
         <DragAndDropCalendar
