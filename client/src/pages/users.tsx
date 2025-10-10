@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'wouter';
-import { Pencil, Trash2, UserPlus, Check, X, Shield, XCircle, Building2 as BuildingHospital } from 'lucide-react';
+import { Pencil, Trash2, UserPlus, Check, X, Shield, XCircle, Building2 as BuildingHospital, Eye, Search, Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -45,10 +45,174 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
+import { 
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from '@/components/ui/tabs';
 import { TranslatedText } from '@/components/ui/translated-text';
 
 
-type UserWithoutPassword = Omit<UserType, 'password'>;
+type UserWithoutPassword = Omit<UserType, 'password'> & {
+  roleName?: string;
+  medicalSpecialtyName?: string;
+};
+
+// Component for User Subscription Tab
+function UserSubscriptionTab({ userId }: { userId?: number }) {
+  const { data: subscription, isLoading } = useQuery<any>({
+    queryKey: [`/api/users/${userId}/subscription`],
+    enabled: !!userId,
+  });
+
+  const { data: subscriptionPlans } = useQuery<any[]>({
+    queryKey: ['/api/subscriptions/plans'],
+  });
+
+  if (isLoading) {
+    return <div className="text-center py-4">Carregando dados da assinatura...</div>;
+  }
+
+  if (!subscription) {
+    return <div className="text-center py-4 text-gray-500">Nenhuma assinatura encontrada</div>;
+  }
+
+  const plan = subscriptionPlans?.find((p: any) => p.id === subscription.planId);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-2">
+        <Label className="font-semibold">Plano</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {plan?.name || `ID: ${subscription.planId}`}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">Status</Label>
+        <div className="flex items-center">
+          <Badge variant={subscription.status === 'active' ? 'default' : 'secondary'}>
+            {subscription.status}
+          </Badge>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">Início</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {subscription.startedAt ? new Date(subscription.startedAt).toLocaleString('pt-BR') : '-'}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">Expira em</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {subscription.expiresAt ? new Date(subscription.expiresAt).toLocaleString('pt-BR') : 'Vitalício'}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">Trial termina em</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {subscription.trialEndsAt ? new Date(subscription.trialEndsAt).toLocaleString('pt-BR') : '-'}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">Preço Original</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {subscription.originalPrice ? `R$ ${(subscription.originalPrice / 100).toFixed(2)}` : '-'}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">Desconto (%)</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {subscription.discountPercent || 0}%
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">Preço Final</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {subscription.finalPrice ? `R$ ${(subscription.finalPrice / 100).toFixed(2)}` : '-'}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">Provedor de Pagamento</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {subscription.paymentProvider || 'Nenhum'}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">ID do Cliente</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {subscription.paymentProviderCustomerId || '-'}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">ID da Assinatura</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {subscription.paymentProviderSubscriptionId || '-'}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="font-semibold">Código de Desconto</Label>
+        <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+          {subscription.discountCode || '-'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Component for User Hospitals Tab
+function UserHospitalsTab({ userId }: { userId?: number }) {
+  const { data: hospitals, isLoading } = useQuery<any[]>({
+    queryKey: [`/api/users/${userId}/hospitals`],
+    enabled: !!userId,
+  });
+
+  if (isLoading) {
+    return <div className="text-center py-4">Carregando hospitais associados...</div>;
+  }
+
+  if (!hospitals || hospitals.length === 0) {
+    return <div className="text-center py-4 text-gray-500">Nenhum hospital associado</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <h4 className="font-semibold">Hospitais Associados</h4>
+      <div className="grid grid-cols-1 gap-4">
+        {hospitals.map((hospital: any) => (
+          <div key={hospital.id} className="border rounded-lg p-4 space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="font-medium">Nome</Label>
+                <p className="text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded">{hospital.name}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-medium">CNPJ</Label>
+                <p className="text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded">{hospital.cnpj || '-'}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-medium">Cidade</Label>
+                <p className="text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded">{hospital.city || '-'}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-medium">Estado</Label>
+                <p className="text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded">{hospital.state || '-'}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-medium">Telefone</Label>
+                <p className="text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded">{hospital.phone || '-'}</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="font-medium">E-mail</Label>
+                <p className="text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded">{hospital.email || '-'}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function UsersPage() {
   const { toast } = useToast();
@@ -57,6 +221,7 @@ export default function UsersPage() {
   const [isEditUserDialogOpen, setIsEditUserDialogOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isPermissionsSheetOpen, setIsPermissionsSheetOpen] = useState(false);
+  const [isUserDetailsOpen, setIsUserDetailsOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithoutPassword | null>(null);
   
   // Form states
@@ -94,12 +259,39 @@ export default function UsersPage() {
   const [validatedDoctorName, setValidatedDoctorName] = useState('');
   const [validatedDoctorLocation, setValidatedDoctorLocation] = useState('');
   const [isValidatingCrm, setIsValidatingCrm] = useState(false);
+
+  // Estados para filtros (simplificados)
+  const [filters, setFilters] = useState({
+    id: '',
+    search: '' // Campo para busca por nome ou email
+  });
   
-  // Fetch users
+  // Estados para filtros com debounce (para evitar muitas requisições)
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+
+  // Implementar debounce nos filtros
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 500); // 500ms de delay
+
+    return () => clearTimeout(timer);
+  }, [filters]);
+  
+  // Fetch users with filters (usando debounced filters para evitar muitas requisições)
   const { data: users, isLoading } = useQuery<UserWithoutPassword[]>({
-    queryKey: ['/api/users'],
+    queryKey: ['/api/users', debouncedFilters],
     queryFn: async () => {
-      const res = await fetch('/api/users');
+      const searchParams = new URLSearchParams();
+      
+      // Adicionar apenas filtros não vazios à query string
+      if (debouncedFilters.id) searchParams.append('id', debouncedFilters.id);
+      if (debouncedFilters.search) searchParams.append('search', debouncedFilters.search);
+      
+      const queryString = searchParams.toString();
+      const url = `/api/users${queryString ? `?${queryString}` : ''}`;
+      
+      const res = await fetch(url);
       if (!res.ok) {
         throw new Error('Falha ao buscar usuários');
       }
@@ -508,6 +700,11 @@ export default function UsersPage() {
     setIsPermissionsSheetOpen(true);
   };
   
+  const handleOpenUserDetails = (user: UserWithoutPassword) => {
+    setSelectedUser(user);
+    setIsUserDetailsOpen(true);
+  };
+  
   const getRoleName = (roleId: number) => {
     if (!roles) return 'Carregando...';
     const role = roles.find((r: any) => r.id === roleId);
@@ -595,6 +792,43 @@ export default function UsersPage() {
           </Button>
         </div>
         
+        {/* Filtros Simplificados */}
+        <div className="mb-6">
+          <div className="flex gap-4 items-end">
+            <div className="w-32">
+              <Label htmlFor="filter-id" className="text-blue-200 text-sm mb-1 block">ID do Usuário</Label>
+              <Input
+                id="filter-id"
+                type="number"
+                placeholder="ID..."
+                value={filters.id}
+                onChange={(e) => setFilters({...filters, id: e.target.value})}
+                className="bg-blue-900/30 border-blue-600 text-white placeholder-blue-300"
+              />
+            </div>
+            
+            <div className="flex-1">
+              <Label htmlFor="filter-search" className="text-blue-200 text-sm mb-1 block">Nome ou Email</Label>
+              <Input
+                id="filter-search"
+                type="text"
+                placeholder="Buscar por nome ou email..."
+                value={filters.search}
+                onChange={(e) => setFilters({...filters, search: e.target.value})}
+                className="bg-blue-900/30 border-blue-600 text-white placeholder-blue-300"
+              />
+            </div>
+            
+            <Button 
+              variant="outline" 
+              onClick={() => setFilters({id: '', search: ''})}
+              className="bg-gray-700/20 border-gray-500 text-white hover:bg-gray-600/30 h-10"
+            >
+              Limpar
+            </Button>
+          </div>
+        </div>
+        
         <div className="bg-[#1a2332] rounded-lg overflow-hidden">
           <div className="overflow-x-auto" style={{ maxWidth: '100%' }}>
             <table className="min-w-full table-fixed">
@@ -675,6 +909,16 @@ export default function UsersPage() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex space-x-1 flex-nowrap">
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          onClick={() => handleOpenUserDetails(user)}
+                          title="Ver Detalhes"
+                          className="h-7 w-7 border-green-700 bg-green-900/30 text-green-200 hover:bg-green-800/50"
+                        >
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                        
                         <Button 
                           variant="outline" 
                           size="icon" 
@@ -1304,6 +1548,155 @@ export default function UsersPage() {
             </div>
           </SheetContent>
         </Sheet>
+
+        {/* User Details Modal */}
+        <Dialog open={isUserDetailsOpen} onOpenChange={setIsUserDetailsOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle>
+                Detalhes do Usuário: {selectedUser?.name}
+              </DialogTitle>
+              <DialogDescription>
+                Informações completas sobre o usuário {selectedUser?.username}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-auto">
+              <Tabs defaultValue="personal" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="personal">Pessoal</TabsTrigger>
+                  <TabsTrigger value="subscription">Assinatura</TabsTrigger>
+                  <TabsTrigger value="security">Segurança</TabsTrigger>
+                  <TabsTrigger value="hospitals">Hospitais</TabsTrigger>
+                </TabsList>
+                
+                {/* Aba de Informações Pessoais */}
+                <TabsContent value="personal" className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="font-semibold">ID</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">{selectedUser?.id}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Nome de Usuário</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">{selectedUser?.username}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Nome Completo</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">{selectedUser?.name || '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">E-mail</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">{selectedUser?.email}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Telefone</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">{selectedUser?.phone || '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">CPF</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">{selectedUser?.cpf || '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Função</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">{getRoleName(selectedUser?.roleId || 0)}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">CRM</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">{selectedUser?.crm || '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">UF do CRM</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">{selectedUser?.crmUf || '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Especialidade Médica</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">{selectedUser?.medicalSpecialtyName || '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Status</Label>
+                      <div className="flex items-center space-x-2">
+                        <Badge variant={selectedUser?.active ? "default" : "secondary"}>
+                          {selectedUser?.active ? 'Ativo' : 'Inativo'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Data de Criação</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                        {selectedUser?.createdAt ? new Date(selectedUser.createdAt).toLocaleString('pt-BR') : '-'}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Última Atualização</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                        {selectedUser?.updatedAt ? new Date(selectedUser.updatedAt).toLocaleString('pt-BR') : '-'}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Consentimento Aceito</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                        {selectedUser?.consentAccepted ? new Date(selectedUser.consentAccepted).toLocaleString('pt-BR') : '-'}
+                      </p>
+                    </div>
+                  </div>
+                </TabsContent>
+                
+                {/* Aba de Assinatura */}
+                <TabsContent value="subscription" className="space-y-4">
+                  <UserSubscriptionTab userId={selectedUser?.id} />
+                </TabsContent>
+                
+                {/* Aba de Segurança */}
+                <TabsContent value="security" className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Último Login</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                        {selectedUser?.lastLogin ? new Date(selectedUser.lastLogin).toLocaleString('pt-BR') : 'Nunca'}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Tentativas de Login Falharam</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                        {selectedUser?.failedLoginAttempts || 0}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Bloqueado até</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                        {selectedUser?.lockoutUntil ? new Date(selectedUser.lockoutUntil).toLocaleString('pt-BR') : 'Não bloqueado'}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Token de Reset</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                        {selectedUser?.passwordResetToken ? 'Ativo' : 'Nenhum'}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">Reset Expira em</Label>
+                      <p className="text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                        {selectedUser?.passwordResetExpires ? new Date(selectedUser.passwordResetExpires).toLocaleString('pt-BR') : '-'}
+                      </p>
+                    </div>
+                  </div>
+                </TabsContent>
+                
+                {/* Aba de Hospitais */}
+                <TabsContent value="hospitals" className="space-y-4">
+                  <UserHospitalsTab userId={selectedUser?.id} />
+                </TabsContent>
+              </Tabs>
+            </div>
+            
+            <DialogFooter>
+              <Button onClick={() => setIsUserDetailsOpen(false)}>
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

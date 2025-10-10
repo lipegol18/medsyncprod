@@ -1471,17 +1471,15 @@ export default function OrderDetails() {
             <CardContent>
               {order.cidCodes && order.cidCodes.length > 0 ? (
                 <div className="space-y-4">
-                  {order.cidCodes.map((code: string, index: number) => (
+                  {order.cidCodes.map((cid: any, index: number) => (
                     <div key={index} className="bg-accent p-4 rounded-md">
                       <div className="flex items-start">
                         <Badge variant="outline" className="mr-3 bg-accent">
-                          CID-10: {code}
+                          CID-10: {cid.code}
                         </Badge>
                         <div>
                           <p className="text-foreground">
-                            {order.cidDescriptions && order.cidDescriptions[index] 
-                              ? order.cidDescriptions[index] 
-                              : t('orderDetails.diagnostics.descriptionNotAvailable')}
+                            {cid.description || t('orderDetails.diagnostics.descriptionNotAvailable')}
                           </p>
                         </div>
                       </div>

@@ -24,7 +24,9 @@ interface SubscriptionPlan {
   maxUsers: number;
   features: string[];
   trialDays: number;
-  stripePriceId: string | null;
+  productId: string | null;
+  priceIdMonthly: string | null;
+  priceIdYearly: string | null;
   isPopular: boolean;
   isActive: boolean;
 }
@@ -295,7 +297,7 @@ export default function Checkout() {
   // Mutation para criar assinatura
   const createSubscriptionMutation = useMutation({
     mutationFn: async (planId: number) => {
-      const response = await apiRequest('POST', '/api/stripe/create-subscription', { planId });
+      const response = await apiRequest('POST', '/api/payments/create-subscription', { planId });
       return response.json();
     },
     onSuccess: (data) => {
@@ -312,7 +314,7 @@ export default function Checkout() {
   });
 
   useEffect(() => {
-    if (plan && plan.stripePriceId && !clientSecret) {
+    if (plan && (plan.priceIdMonthly || plan.priceIdYearly) && !clientSecret) {
       createSubscriptionMutation.mutate(plan.id);
     }
   }, [plan, clientSecret]);

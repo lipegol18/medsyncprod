@@ -3233,18 +3233,19 @@ export default function CreateOrder() {
                 Pedido Cirúrgico
               </h2>
               <p className="text-medsync-blue text-sm mt-2 font-semibold">
-                Seu pedido pronto em apenas 5 etapas.
+                Seu pedido em apenas 5 etapas.
               </p>
             </div>
 
             <div className="mb-8 overflow-x-auto pb-2">
               <div className="relative h-16" style={{ minHeight: '4rem' }}>
                 {/* Background progress line */}
-                <div className="absolute top-3 h-2 bg-white rounded-full" 
+                <div className="absolute top-3 h-2 rounded-full" 
                      style={{
                        left: '20%',
                        right: '20%',
-                       zIndex: 1
+                       zIndex: 1,
+                       backgroundColor: 'hsl(0, 0%, 83%)'
                      }}
                 />
                 
@@ -3289,7 +3290,11 @@ export default function CreateOrder() {
                       title={`Ir para ${step.label}`}
                     >
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${stepStatus}`}
+                        className={`breadcrumb-base transition-all duration-300 ${
+                          isActive ? 'breadcrumb-active' : 
+                          isCompleted ? 'breadcrumb-completed' : 
+                          'breadcrumb-inactive'
+                        }`}
                       >
                         {step.number}
                       </div>
@@ -3383,6 +3388,10 @@ export default function CreateOrder() {
                   setSelectedCidId={setSelectedCidId}
                   cidLaterality={null}
                   setCidLaterality={() => {}}
+                  selectedPatient={selectedPatient}
+                  clinicalIndication={clinicalIndication}
+                  additionalNotes={additionalNotes}
+                  attachments={currentOrderData?.attachments}
                   multipleCids={multipleCids}
                   setMultipleCids={setMultipleCids}
                   procedureLaterality={procedureLaterality}
@@ -3750,32 +3759,32 @@ export default function CreateOrder() {
               {/* Área esquerda - Botão Voltar */}
               <div className="flex items-center">
                 {currentStep > 1 && (
-                  <Button
+                  <button
                     onClick={goToPreviousStep}
-                    className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
+                    className="btn-medsync-dark h-10 flex items-center"
                   >
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Voltar
-                  </Button>
+                  </button>
                 )}
               </div>
 
               {/* Área central - Botão Salvar e Sair */}
               <div className="flex items-center justify-center">
-                <Button
+                <button
                   onClick={saveAndExit}
-                  className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
+                  className="btn-medsync-dark h-10 flex items-center"
                 >
                   <Save className="mr-2 h-4 w-4" />
                   Salvar e Sair
-                </Button>
+                </button>
               </div>
 
               {/* Área direita - Botão Próximo/Finalizar */}
               <div className="flex items-center justify-end">
-                <Button
+                <button
                   onClick={goToNextStep}
-                  className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
+                  className="btn-medsync-dark h-10 flex items-center"
                   disabled={
                     (currentStep === 1 &&
                       (!selectedPatient || !selectedHospital)) ||
@@ -3794,7 +3803,7 @@ export default function CreateOrder() {
                       <Check className="ml-2 h-4 w-4" />
                     </>
                   )}
-                </Button>
+                </button>
               </div>
             </div>
           )}
@@ -3808,60 +3817,29 @@ export default function CreateOrder() {
       >
         <DialogContent className="bg-popover border border-border text-foreground max-w-md">
           <DialogHeader className="space-y-0">
-            <DialogTitle className="flex items-center justify-center gap-2 text-xl" style={{color: 'hsl(var(--semi-foreground))'}}>
+            <DialogTitle className="flex items-center justify-center gap-2 text-xl">
               <AlertTriangle className="h-5 w-5 text-primary" />
-              Pedido em Andamento Encontrado
+              <span className="text-medsync-gray">Pedido em Andamento</span>
+              <span className="text-medsync-blue font-bold">Encontrado</span>
             </DialogTitle>
             <DialogDescription className="text-muted-foreground text-center mt-4">
-              Encontramos um pedido em preenchimento para{" "}
-              <strong>{pendingPatient?.fullName}</strong>.
-              <br />
-              <br />O que você gostaria de fazer?
+              <div>Encontramos um pedido em preenchimento para</div>
+              <div className="font-bold text-lg mt-2 text-medsync-dark-blue">{pendingPatient?.fullName}</div>
+              {existingOrderData?.updatedAt && (
+                <div className="text-xs mt-1 mb-4">
+                  Última atualização: {new Date(existingOrderData.updatedAt).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </div>
+              )}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="text-sm text-white bg-medsync-blue p-3 rounded border border-border space-y-2">
-            {/* ID do Pedido */}
-            {existingOrderData?.id && (
-              <p>
-                <strong>ID do Pedido:</strong> #{existingOrderData.id}
-              </p>
-            )}
-
-            {/* Data de Criação */}
-            {existingOrderData?.createdAt && (
-              <p>
-                <strong>Criado em:</strong>{" "}
-                {new Date(existingOrderData.createdAt).toLocaleDateString('pt-BR', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </p>
-            )}
-
-            {/* Data da Última Atualização */}
-            {existingOrderData?.updatedAt && (
-              <p>
-                <strong>Última atualização:</strong>{" "}
-                {new Date(existingOrderData.updatedAt).toLocaleDateString('pt-BR', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </p>
-            )}
-
-            {/* Separador visual */}
-            {(existingOrderData?.id || existingOrderData?.createdAt || existingOrderData?.updatedAt) && 
-             (existingOrderData?.surgicalConduct || existingOrderData?.procedureName || existingOrderData?.clinicalIndication || existingOrderData?.hospitalName) && (
-              <hr className="border-white/30 my-2" />
-            )}
-
+          <div className="text-sm text-medsync-gray p-3 rounded border border-border space-y-2">
             {existingOrderData?.surgicalConduct && (
               <p>
                 <strong>Conduta Cirúrgica:</strong>{" "}
@@ -3898,6 +3876,10 @@ export default function CreateOrder() {
                 }
               </p>
             )}
+          </div>
+
+          <div className="text-muted-foreground text-center mt-4">
+            O que você gostaria de fazer?
           </div>
 
           <DialogFooter className="flex justify-center items-center gap-4 w-full">

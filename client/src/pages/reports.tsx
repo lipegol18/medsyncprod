@@ -71,6 +71,32 @@ function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
     ...getReportsQueryConfig()
   });
 
+  const { data: hospitalStats } = useQuery({
+    queryKey: ['/api/hospital-distribution-stats', appliedFilters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (appliedFilters.statusFilter) params.append('status', appliedFilters.statusFilter);
+      if (appliedFilters.dateRange.startDate) params.append('startDate', appliedFilters.dateRange.startDate);
+      if (appliedFilters.dateRange.endDate) params.append('endDate', appliedFilters.dateRange.endDate);
+      if (appliedFilters.hospitalFilter && appliedFilters.hospitalFilter !== 'all') {
+        params.append('hospitalId', appliedFilters.hospitalFilter);
+      }
+      
+      const queryString = params.toString();
+      const url = queryString ? `/api/hospital-distribution-stats?${queryString}` : '/api/hospital-distribution-stats';
+      
+      const response = await fetch(url, {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error('Erro ao buscar estatísticas');
+      return response.json();
+    },
+    ...getReportsQueryConfig()
+  });
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -116,10 +142,30 @@ function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
         </div>
       ))}
       
-      <div className="mt-4 p-3 bg-accent rounded-lg border border-border">
-        <p className="text-accent-foreground text-sm">
-          <strong>Total:</strong> {totalSurgeries} cirurgias realizadas
-        </p>
+      <div className="mt-4 p-4 bg-gradient-to-r from-blue-50/80 to-cyan-50/80 rounded-lg border border-blue-200/50 shadow-sm">
+        <div className="space-y-2">
+          <div className="flex justify-between items-center pb-2 border-b border-blue-200/30">
+            <span className="text-sm font-semibold text-blue-900">Resumo Detalhado</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-blue-700">Cirurgias Realizadas:</span>
+              <span className="font-semibold text-blue-900">{hospitalStats?.completedCount || totalSurgeries}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-blue-700">Pedidos Incompletos:</span>
+              <span className="font-semibold text-blue-900">{hospitalStats?.incompleteCount || 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-blue-700">Canceladas/Rejeitadas:</span>
+              <span className="font-semibold text-blue-900">{hospitalStats?.cancelledCount || 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-blue-700 font-bold">Total Geral:</span>
+              <span className="font-bold text-blue-900">{hospitalStats?.totalCount || totalSurgeries}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -127,11 +173,9 @@ function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
 
 // Componente para listar fornecedores por número de cirurgias
 function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
-  const [summaryStats, setSummaryStats] = useState<{totalSuppliers: number, totalSurgeries: number}>({totalSuppliers: 0, totalSurgeries: 0});
-
-  // Usar useQuery para garantir autenticação adequada
-  const { data: supplierDistribution = [], isLoading: loading } = useQuery({
-    queryKey: ['/api/supplier-distribution-data', appliedFilters],
+  // Buscar estatísticas de fornecedores
+  const { data: supplierStats } = useQuery<{ completedCount: number, incompleteCount: number, cancelledCount: number, totalCount: number, suppliersCount: number }>({
+    queryKey: ['/api/supplier-distribution-stats', appliedFilters],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (appliedFilters.statusFilter) params.append('status', appliedFilters.statusFilter);
@@ -142,40 +186,46 @@ function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
       }
       
       const queryString = params.toString();
-      const url = queryString ? `/api/supplier-distribution-data?${queryString}` : '/api/supplier-distribution-data';
+      const url = queryString ? `/api/supplier-distribution-stats?${queryString}` : '/api/supplier-distribution-stats';
       
       const response = await fetch(url, {
-        method: 'GET',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
         },
       });
-      
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Usuário não autenticado');
-        }
-        throw new Error(`Erro ${response.status}: ${await response.text()}`);
-      }
-      
-      const data = await response.json();
-      return data;
+      if (!response.ok) throw new Error('Erro ao buscar estatísticas de fornecedores');
+      return response.json();
     },
     ...getReportsQueryConfig()
   });
 
-  // Calcular estatísticas quando os dados mudam
-  useEffect(() => {
-    if (supplierDistribution && supplierDistribution.length > 0) {
-      const totalSuppliers = supplierDistribution.length;
-      const totalSurgeries = supplierDistribution.reduce((sum: number, item: any) => sum + item.surgeryCount, 0);
-      setSummaryStats({ totalSuppliers, totalSurgeries });
-    } else {
-      setSummaryStats({ totalSuppliers: 0, totalSurgeries: 0 });
-    }
-  }, [supplierDistribution]);
+  // Usar useQuery para garantir autenticação adequada
+  const { data: supplierDistribution = [], isLoading: loading } = useQuery({
+    queryKey: ['/api/supplier-distribution-working', appliedFilters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (appliedFilters.statusFilter) params.append('status', appliedFilters.statusFilter);
+      if (appliedFilters.dateRange.startDate) params.append('startDate', appliedFilters.dateRange.startDate);
+      if (appliedFilters.dateRange.endDate) params.append('endDate', appliedFilters.dateRange.endDate);
+      if (appliedFilters.hospitalFilter && appliedFilters.hospitalFilter !== 'all') {
+        params.append('hospitalId', appliedFilters.hospitalFilter);
+      }
+      
+      const queryString = params.toString();
+      const url = queryString ? `/api/supplier-distribution-working?${queryString}` : '/api/supplier-distribution-working';
+      
+      const response = await fetch(url, {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error('Erro ao buscar fornecedores por cirurgias');
+      return response.json();
+    },
+    ...getReportsQueryConfig()
+  });
 
   if (loading) {
     return (
@@ -186,17 +236,43 @@ function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
     );
   }
 
+  const totalSurgeries = supplierDistribution.reduce((sum: number, item: any) => sum + item.surgeryCount, 0);
+
   if (supplierDistribution.length === 0) {
     return (
-      <div className="text-center py-8">
-        <Building2 className="w-16 h-16 mb-4 text-muted-foreground/50 mx-auto" />
-        <p className="text-muted-foreground">Nenhum fornecedor encontrado</p>
-        <p className="text-muted-foreground text-sm">Crie pedidos com fornecedores para ver estatísticas</p>
+      <div className="w-full">
+        <div className="text-center py-8">
+          <Building2 className="w-16 h-16 mb-4 text-muted-foreground/50 mx-auto" />
+          <p className="text-muted-foreground">Nenhum fornecedor encontrado</p>
+          <p className="text-muted-foreground text-sm">Crie pedidos com fornecedores para ver estatísticas</p>
+        </div>
+        
+        {supplierStats && supplierStats.totalCount > 0 && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="font-semibold text-blue-900 mb-3">Resumo Detalhado</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-blue-700">Cirurgias Realizadas:</span>
+                <span className="font-semibold text-blue-900">{supplierStats.completedCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-700">Pedidos Incompletos:</span>
+                <span className="font-semibold text-blue-900">{supplierStats.incompleteCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-700">Canceladas/Rejeitadas:</span>
+                <span className="font-semibold text-blue-900">{supplierStats.cancelledCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-700 font-bold">Total Geral:</span>
+                <span className="font-bold text-blue-900">{supplierStats.totalCount}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
-
-  // As estatísticas agora são calculadas dinamicamente quando os dados chegam da API
 
   return (
     <div className="space-y-3">
@@ -215,10 +291,30 @@ function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
         </div>
       ))}
       
-      <div className="mt-4 p-3 bg-accent rounded-lg border border-border">
-        <p className="text-accent-foreground text-sm">
-          <strong>Resumo:</strong> {summaryStats.totalSuppliers} fornecedores selecionados em {summaryStats.totalSurgeries} cirurgia{summaryStats.totalSurgeries !== 1 ? 's' : ''}
-        </p>
+      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h4 className="font-semibold text-blue-900 mb-3">Resumo Detalhado</h4>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-blue-700">Fornecedores Distintos:</span>
+            <span className="font-semibold text-blue-900">{supplierStats?.suppliersCount || supplierDistribution.length}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-blue-700">Cirurgias Realizadas:</span>
+            <span className="font-semibold text-blue-900">{supplierStats?.completedCount || totalSurgeries}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-blue-700">Pedidos Incompletos:</span>
+            <span className="font-semibold text-blue-900">{supplierStats?.incompleteCount || 0}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-blue-700">Canceladas/Rejeitadas:</span>
+            <span className="font-semibold text-blue-900">{supplierStats?.cancelledCount || 0}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-blue-700 font-bold">Total Geral:</span>
+            <span className="font-bold text-blue-900">{supplierStats?.totalCount || totalSurgeries}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -382,6 +478,52 @@ function ReceivedValuesTab({ appliedFilters }: { appliedFilters: any }) {
         </Card>
       </div>
 
+      {/* Gráfico de valores por mês */}
+      {statistics.monthlyData && statistics.monthlyData.length > 0 && (
+        <Card className="border-border bg-card shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-card-foreground">Valores Recebidos por Mês</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Evolução mensal dos valores recebidos
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="h-80 bg-card rounded-b-lg">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={statistics.monthlyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(59, 130, 246, 0.2)" />
+                <XAxis 
+                  dataKey="month" 
+                  stroke="#93c5fd"
+                  tick={{ fontSize: 12 }}
+                />
+                <YAxis 
+                  stroke="#93c5fd"
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`}
+                />
+                <Tooltip 
+                  formatter={(value: any) => [`R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Valor Total']}
+                  labelFormatter={(label) => `Mês: ${label}`}
+                  contentStyle={{
+                    backgroundColor: 'rgba(26, 35, 50, 0.9)',
+                    border: '1px solid #1e40af',
+                    borderRadius: '8px',
+                    color: '#93c5fd'
+                  }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke="#3b82f6" 
+                  strokeWidth={3}
+                  dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Cards dos pedidos com valores */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {receivedValues.filter((item: any) => item.totalReceivedValue > 0).map((item: any, index: number) => (
@@ -429,52 +571,6 @@ function ReceivedValuesTab({ appliedFilters }: { appliedFilters: any }) {
             <p className="text-muted-foreground">
               Nenhum pedido com valores recebidos encontrado para os filtros aplicados
             </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Gráfico de valores por mês */}
-      {statistics.monthlyData && statistics.monthlyData.length > 0 && (
-        <Card className="border-border bg-card shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-card-foreground">Valores Recebidos por Mês</CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Evolução mensal dos valores recebidos
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="h-80 bg-card rounded-b-lg">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={statistics.monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(59, 130, 246, 0.2)" />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="#93c5fd"
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis 
-                  stroke="#93c5fd"
-                  tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`}
-                />
-                <Tooltip 
-                  formatter={(value: any) => [`R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Valor Total']}
-                  labelFormatter={(label) => `Mês: ${label}`}
-                  contentStyle={{
-                    backgroundColor: 'rgba(26, 35, 50, 0.9)',
-                    border: '1px solid #1e40af',
-                    borderRadius: '8px',
-                    color: '#93c5fd'
-                  }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="#3b82f6" 
-                  strokeWidth={3}
-                  dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
           </CardContent>
         </Card>
       )}
@@ -1602,36 +1698,79 @@ export default function Reports() {
                     <CardTitle className="text-card-foreground">Cirurgias Eletivas vs Urgência</CardTitle>
                     <CardDescription className="text-muted-foreground">
                       Distribuição percentual por tipo
+                      {procedureTypeData.length > 0 && (() => {
+                        const totalCirurgias = procedureTypeData.reduce((sum, type) => sum + type.value, 0);
+                        return totalCirurgias > 0 ? ` • Total: ${totalCirurgias} cirurgias` : '';
+                      })()}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="h-80 bg-card rounded-b-lg">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
+                      {procedureTypeData.length > 0 ? (
+                        <BarChart 
                           data={procedureTypeData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                          outerRadius={120}
-                          fill="#8884d8"
-                          dataKey="value"
+                          margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
                         >
-                          {procedureTypeData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: "#1e3a8a", 
-                            border: "1px solid #3b82f6",
-                            color: "#fff" 
-                          }}
-                          formatter={(value, name) => [`${value} cirurgias`, name]}
-                        />
-                      </PieChart>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(59, 130, 246, 0.2)" />
+                          <XAxis 
+                            dataKey="name" 
+                            stroke="#93c5fd"
+                            tick={{ fontSize: 12, fill: "#93c5fd" }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis 
+                            stroke="#93c5fd"
+                            tick={{ fontSize: 12, fill: "#93c5fd" }}
+                            axisLine={false}
+                            tickLine={false}
+                            domain={[0, 'dataMax + 2']}
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: "#1e3a8a", 
+                              border: "1px solid #3b82f6",
+                              color: "#fff",
+                              borderRadius: "8px"
+                            }}
+                            formatter={(value) => [`${value} cirurgias`, "Total"]}
+                          />
+                          <Bar 
+                            dataKey="value" 
+                            fill="#3B82F6"
+                            radius={[4, 4, 0, 0]}
+                            name="Cirurgias"
+                          />
+                        </BarChart>
+                      ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                          <BarChart4 className="w-16 h-16 mb-4 text-muted-foreground/50" />
+                          <p className="text-center">
+                            Não há dados suficientes para exibir este gráfico.<br />
+                            Crie mais solicitações de cirurgias para ver estatísticas.
+                          </p>
+                        </div>
+                      )}
                     </ResponsiveContainer>
                   </CardContent>
+                  {procedureTypeData.length > 0 && (() => {
+                    const tiposComDados = procedureTypeData.filter(type => type.value > 0);
+                    return tiposComDados.length > 0 ? (
+                      <CardFooter className="pt-4 border-t">
+                        <div className="w-full">
+                          <p className="text-sm font-medium text-card-foreground mb-2">Resumo detalhado:</p>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            {tiposComDados.map(type => (
+                              <div key={type.name} className="flex justify-between p-2 bg-muted rounded">
+                                <span className="font-medium">{type.name}:</span>
+                                <span className="text-muted-foreground">{type.value} cirurgias</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </CardFooter>
+                    ) : null;
+                  })()}
                 </Card>
                 
                 {/* Novo card: Pedidos por Mês */}

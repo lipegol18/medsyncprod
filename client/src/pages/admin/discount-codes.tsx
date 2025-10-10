@@ -46,9 +46,10 @@ type DiscountCode = {
   validUntil?: string;
   applicablePlans?: number[];
   isActive: boolean;
+  isAutomatic?: boolean;
   paymentProvider: string;
-  stripeCouponId?: string;
-  stripePromotionCodeId?: string;
+  externalCouponId?: string;
+  externalPromotionCodeId?: string;
   syncStatus: 'pending' | 'synced' | 'error';
   syncErrorMessage?: string;
   lastSyncAt?: string;
@@ -66,9 +67,13 @@ type CreateDiscountCodeData = {
   validUntil?: string;
   applicablePlans?: number[];
   isActive: boolean;
+  isAutomatic?: boolean;
   paymentProvider: string;
-  stripeMinimumAmount?: number;
-  stripeFirstTimeTransaction: boolean;
+  minimumAmount?: number;
+  firstTimeTransaction: boolean;
+  duration?: 'once' | 'repeating' | 'forever';
+  durationInMonths?: number;
+  providerName?: string;
 };
 
 export default function AdminDiscountCodesPage() {
@@ -84,16 +89,21 @@ export default function AdminDiscountCodesPage() {
     validFrom: new Date().toISOString().split('T')[0],
     isActive: true,
     paymentProvider: "stripe",
-    stripeFirstTimeTransaction: false,
+    firstTimeTransaction: false,
+    duration: "once",
+    durationInMonths: undefined,
+    providerName: "",
   });
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Buscar códigos de desconto
-  const { data: codes = [], isLoading } = useQuery<DiscountCode[]>({
+  const { data, isLoading } = useQuery<{success: boolean, data: DiscountCode[]}>({
     queryKey: ["/api/admin/discount-codes"],
   });
+  
+  const codes = data?.data || [];
 
   // Buscar planos de assinatura para o select
   const { data: plans = [] } = useQuery<any[]>({
@@ -230,7 +240,7 @@ export default function AdminDiscountCodesPage() {
       validFrom: new Date().toISOString().split('T')[0],
       isActive: true,
       paymentProvider: "stripe",
-      stripeFirstTimeTransaction: false,
+      firstTimeTransaction: false,
     });
   };
 
@@ -247,7 +257,7 @@ export default function AdminDiscountCodesPage() {
       applicablePlans: code.applicablePlans,
       isActive: code.isActive,
       paymentProvider: code.paymentProvider,
-      stripeFirstTimeTransaction: false,
+      firstTimeTransaction: false,
     });
     setIsEditOpen(true);
   };
@@ -294,6 +304,8 @@ export default function AdminDiscountCodesPage() {
   const activeCodesCount = codes.filter(code => code.isActive).length;
   const stripeCodesCount = codes.filter(code => code.paymentProvider === 'stripe').length;
   const syncedCodesCount = codes.filter(code => code.syncStatus === 'synced').length;
+  const automaticCodesCount = codes.filter(code => code.isAutomatic).length;
+  const automaticCode = codes.find(code => code.isAutomatic);
 
   return (
     <div className="space-y-6">
@@ -444,17 +456,75 @@ export default function AdminDiscountCodesPage() {
                   <h4 className="font-medium">Configurações Stripe</h4>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="stripeMinimumAmount">Valor mínimo (R$) - opcional</Label>
+                    <Label htmlFor="providerName">Nome do cupom (exibido no provedor)</Label>
                     <Input
-                      id="stripeMinimumAmount"
-                      data-testid="input-stripe-minimum"
+                      id="providerName"
+                      data-testid="input-provider-name"
+                      value={formData.providerName || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, providerName: e.target.value }))}
+                      placeholder="Ex: Boas-vindas 50% 1º ano"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="duration">Duração do desconto</Label>
+                      <Select
+                        value={formData.duration}
+                        onValueChange={(value: 'once' | 'repeating' | 'forever') => 
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            duration: value,
+                            durationInMonths: value === 'repeating' ? 12 : undefined
+                          }))
+                        }
+                      >
+                        <SelectTrigger data-testid="select-duration">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="once">Uma vez (apenas na primeira fatura)</SelectItem>
+                          <SelectItem value="repeating">Recorrente (por X meses)</SelectItem>
+                          <SelectItem value="forever">Para sempre</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    {formData.duration === 'repeating' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="durationInMonths">Duração em meses</Label>
+                        <Input
+                          id="durationInMonths"
+                          data-testid="input-duration-months"
+                          type="number"
+                          min="1"
+                          max="60"
+                          value={formData.durationInMonths || 12}
+                          onChange={(e) => setFormData(prev => ({ 
+                            ...prev, 
+                            durationInMonths: parseInt(e.target.value) || 12
+                          }))}
+                          placeholder="12"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Ex: 12 meses = desconto aplicado no primeiro ano
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="minimumAmount">Valor mínimo (R$) - opcional</Label>
+                    <Input
+                      id="minimumAmount"
+                      data-testid="input-minimum-amount"
                       type="number"
                       min="0"
                       step="0.01"
-                      value={formData.stripeMinimumAmount ? formData.stripeMinimumAmount / 100 : ''}
+                      value={formData.minimumAmount ? formData.minimumAmount / 100 : ''}
                       onChange={(e) => setFormData(prev => ({ 
                         ...prev, 
-                        stripeMinimumAmount: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : undefined 
+                        minimumAmount: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : undefined 
                       }))}
                       placeholder="0.00"
                     />
@@ -462,12 +532,12 @@ export default function AdminDiscountCodesPage() {
 
                   <div className="flex items-center space-x-2">
                     <Switch
-                      id="stripeFirstTime"
-                      data-testid="switch-stripe-first-time"
-                      checked={formData.stripeFirstTimeTransaction}
-                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, stripeFirstTimeTransaction: checked }))}
+                      id="firstTime"
+                      data-testid="switch-first-time"
+                      checked={formData.firstTimeTransaction}
+                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, firstTimeTransaction: checked }))}
                     />
-                    <Label htmlFor="stripeFirstTime">Apenas primeira transação do cliente</Label>
+                    <Label htmlFor="firstTime">Apenas primeira transação do cliente</Label>
                   </div>
                 </div>
               )}
@@ -496,7 +566,7 @@ export default function AdminDiscountCodesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Códigos</CardTitle>
@@ -513,6 +583,22 @@ export default function AdminDiscountCodesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600" data-testid="stat-active-codes">{activeCodesCount}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Desconto Automático</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600" data-testid="stat-automatic-codes">
+              {automaticCode ? automaticCode.code : "Nenhum"}
+            </div>
+            {automaticCode && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {formatDiscount(automaticCode.discountType, automaticCode.discountValue)}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -562,6 +648,7 @@ export default function AdminDiscountCodesPage() {
                 <TableHead>Validade</TableHead>
                 <TableHead>Provedor</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Automático</TableHead>
                 <TableHead>Sincronização</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -569,13 +656,13 @@ export default function AdminDiscountCodesPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     Carregando códigos de desconto...
                   </TableCell>
                 </TableRow>
               ) : filteredCodes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     Nenhum código de desconto encontrado
                   </TableCell>
                 </TableRow>
@@ -607,6 +694,22 @@ export default function AdminDiscountCodesPage() {
                       <Badge variant={code.isActive ? 'default' : 'secondary'}>
                         {code.isActive ? 'Ativo' : 'Inativo'}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={code.isAutomatic || false}
+                          onCheckedChange={(checked) => {
+                            const payload = { isAutomatic: checked };
+                            updateMutation.mutate({ id: code.id, data: payload });
+                          }}
+                          disabled={updateMutation.isPending}
+                          data-testid={`switch-automatic-${code.id}`}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {code.isAutomatic ? 'Sim' : 'Não'}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       {getSyncStatusBadge(code.syncStatus, code.syncErrorMessage)}

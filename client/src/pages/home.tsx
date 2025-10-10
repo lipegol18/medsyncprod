@@ -41,9 +41,9 @@ import NovoPedidoIcon from "@/assets/icons/novo-pedido-icon.svg";
 import PedidosIcon from "@/assets/icons/pedidos-icon.svg";
 import PacienteIcon from "@/assets/icons/paciente-icon.svg";
 import AvatarCroped from "@/assets/Avatar_croped.png";
-import CentroCirurgicoImage from "@/assets/Medsync_Banner_CentroCirurgico_cropped.png";
+import CentroCirurgicoImage from "@/assets/banners/Medsync_1500x300px_v2.png";
 import { TrialExpiredModal } from "@/components/trial/trial-expired-modal";
-import { ToastFilterTest } from "@/components/toast-filter-test";
+import { UserSubscription } from "@/../../shared/schema";
 
 // Adicionar traduções para a página inicial
 const translations = {
@@ -223,18 +223,24 @@ export default function Home() {
         // Verificar se o usuário é administrador
         const isAdmin = user?.roleId === 1;
 
+        // Query para buscar informações de assinatura do usuário
+        const { data: userSubscription } = useQuery<UserSubscription>({
+                queryKey: ["/api/user/subscription"],
+                enabled: !!user,
+        });
+
         // Verificar status do trial do usuário
         useEffect(() => {
-                if (user && user.trialStatus === 'active' && user.trialEndDate) {
+                if (userSubscription && userSubscription.status === 'trial' && userSubscription.trialEndsAt) {
                         const now = new Date();
-                        const trialEndDate = new Date(user.trialEndDate);
+                        const trialEndDate = new Date(userSubscription.trialEndsAt);
                         
                         if (now > trialEndDate) {
                                 // Trial expirou - mostrar modal
                                 setShowTrialExpiredModal(true);
                         }
                 }
-        }, [user]);
+        }, [userSubscription]);
 
         // Hook para pedidos aguardando envio
         const { pendingCount } = usePendingOrders();
@@ -375,7 +381,7 @@ export default function Home() {
                         <LgpdModal />
 
                         <main className="flex-grow bg-muted/30 overflow-visible">
-                                <div className="container mx-auto px-4 py-6 max-w-8xl overflow-visible">
+                                <div className="container mx-auto px-4 py-4 max-w-8xl overflow-visible">
                                         {/* Cabeçalho do Dashboard */}
                                         <div className="mb-8 overflow-visible">
                                                 <div 
@@ -434,23 +440,25 @@ export default function Home() {
                                                         </div>
                                                 </div>
 
-                                                {/* Cards de Estatísticas */}
-                                                <div className="grid grid-cols-1 lg:grid-cols-6 gap-6 mb-8">
-                                                        {/* Coluna esquerda - 3 cards pequenos */}
-                                                        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                {/* Layout Principal: 2 colunas */}
+                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                                                        {/* Coluna Esquerda: Cards + Gráfico */}
+                                                        <div className="flex flex-col gap-6">
+                                                                {/* Cards de Estatísticas */}
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                                                 {/* Total de Pedidos - Clicável */}
                                                                 <Card 
-                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        className="dashboard-card-interactive"
                                                                         onClick={() => navigate("/orders")}
                                                                 >
-                                                                        <CardContent className="p-6">
+                                                                        <CardContent className="card-content-padding">
                                                                                 <div className="flex flex-col items-center justify-center">
-                                                                                        <p className="text-5xl font-bold text-medsync-blue">
+                                                                                        <p className="metric-value">
                                                                                                 {isLoading
                                                                                                         ? "..."
                                                                                                         : orderCount}
                                                                                         </p>
-                                                                                        <div className="text-xl font-bold text-muted-foreground mt-2 text-center">
+                                                                                        <div className="metric-label">
                                                                                                 <p>
                                                                                                         Pedidos
                                                                                                 </p>
@@ -467,19 +475,19 @@ export default function Home() {
 
                                                                 {/* Pedidos Aguardando Envio - Clicável */}
                                                                 <Card 
-                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        className="dashboard-card-interactive"
                                                                         onClick={() => navigate("/orders?statusId=8")}
                                                                         data-testid="card-pedidos-aguardando-envio"
                                                                 >
-                                                                        <CardContent className="p-6">
+                                                                        <CardContent className="card-content-padding">
                                                                                 <div className="flex flex-col items-center justify-center">
                                                                                         <p
-                                                                                                className={`text-5xl font-bold ${(pendingCount || 0) > 0 ? "text-red-600" : "text-medsync-blue"}`}
+                                                                                                className={(pendingCount || 0) > 0 ? "metric-value-alert" : "metric-value"}
                                                                                         >
                                                                                                 {pendingCount ||
                                                                                                         0}
                                                                                         </p>
-                                                                                        <div className="text-xl font-bold text-muted-foreground mt-2 text-center">
+                                                                                        <div className="metric-label">
                                                                                                 <p>
                                                                                                         Aguardando
                                                                                                 </p>
@@ -496,21 +504,21 @@ export default function Home() {
 
                                                                 {/* Aguardando Agendamento - Clicável */}
                                                                 <Card 
-                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        className="dashboard-card-interactive"
                                                                         onClick={() => navigate("/orders?needsScheduling=1")}
                                                                         data-testid="card-pedidos-aguardando-agendamento"
                                                                 >
-                                                                        <CardContent className="p-6">
+                                                                        <CardContent className="card-content-padding">
                                                                                 <div className="flex flex-col items-center justify-center">
                                                                                         <p
-                                                                                                className={`text-5xl font-bold ${(homeStats?.pendingSchedulingCount || 0) > 0 ? "text-red-600" : "text-medsync-blue"}`}
+                                                                                                className={(homeStats?.pendingSchedulingCount || 0) > 0 ? "metric-value-alert" : "metric-value"}
                                                                                         >
                                                                                                 {homeStatsLoading
                                                                                                         ? "..."
                                                                                                         : homeStats?.pendingSchedulingCount ||
                                                                                                           0}
                                                                                         </p>
-                                                                                        <div className="text-xl font-bold text-muted-foreground mt-2 text-center">
+                                                                                        <div className="metric-label">
                                                                                                 <p>
                                                                                                         Aguardando
                                                                                                 </p>
@@ -527,18 +535,18 @@ export default function Home() {
 
                                                                 {/* Pedidos Autorizados - Clicável */}
                                                                 <Card 
-                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        className="dashboard-card-interactive"
                                                                         onClick={() => navigate("/orders?authorized=1")}
                                                                         data-testid="card-pedidos-autorizados"
                                                                 >
-                                                                        <CardContent className="p-6">
+                                                                        <CardContent className="card-content-padding">
                                                                                 <div className="flex flex-col items-center justify-center">
-                                                                                        <p className="text-5xl font-bold text-medsync-blue">
+                                                                                        <p className="metric-value">
                                                                                                 {isLoading
                                                                                                         ? "..."
                                                                                                         : authorizedOrdersCount}
                                                                                         </p>
-                                                                                        <p className="text-xl font-bold text-muted-foreground mt-2">
+                                                                                        <p className="metric-label">
                                                                                                 Autorizados
                                                                                         </p>
                                                                                         <div className="text-sm text-muted-foreground mt-2 opacity-70">
@@ -550,14 +558,14 @@ export default function Home() {
 
                                                                 {/* Pedidos com Pendências - Clicável */}
                                                                 <Card 
-                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        className="dashboard-card-interactive"
                                                                         onClick={() => navigate("/orders?statusId=5")}
                                                                         data-testid="card-pedidos-pendencias"
                                                                 >
-                                                                        <CardContent className="p-6">
+                                                                        <CardContent className="card-content-padding">
                                                                                 <div className="flex flex-col items-center justify-center">
                                                                                         <p
-                                                                                                className={`text-5xl font-bold ${(orders.filter((order) => order.status === "pendencia").length || 0) > 0 ? "text-red-600" : "text-medsync-blue"}`}
+                                                                                                className={(orders.filter((order) => order.status === "pendencia").length || 0) > 0 ? "metric-value-alert" : "metric-value"}
                                                                                         >
                                                                                                 {isLoading
                                                                                                         ? "..."
@@ -570,7 +578,7 @@ export default function Home() {
                                                                                                           )
                                                                                                                   .length}
                                                                                         </p>
-                                                                                        <p className="text-xl font-bold text-muted-foreground mt-2">
+                                                                                        <p className="metric-label">
                                                                                                 Pendências
                                                                                         </p>
                                                                                         <div className="text-sm text-muted-foreground mt-2 opacity-70">
@@ -582,14 +590,14 @@ export default function Home() {
 
                                                                 {/* Aguardando Recurso - Clicável */}
                                                                 <Card 
-                                                                        className="border-gray-200 bg-card shadow-sm cursor-pointer hover:shadow-md hover:bg-accent/5 transition-all duration-200"
+                                                                        className="dashboard-card-interactive"
                                                                         onClick={() => navigate("/orders?statusId=10")}
                                                                         data-testid="card-pedidos-aguardando-recurso"
                                                                 >
-                                                                        <CardContent className="p-6">
+                                                                        <CardContent className="card-content-padding">
                                                                                 <div className="flex flex-col items-center justify-center">
                                                                                         <p
-                                                                                                className={`text-5xl font-bold ${(orders.filter((order) => order.status === "aguardando_recurso").length || 0) > 0 ? "text-red-600" : "text-medsync-blue"}`}
+                                                                                                className={(orders.filter((order) => order.status === "aguardando_recurso").length || 0) > 0 ? "metric-value-alert" : "metric-value"}
                                                                                         >
                                                                                                 {isLoading
                                                                                                         ? "..."
@@ -602,7 +610,7 @@ export default function Home() {
                                                                                                           )
                                                                                                                   .length}
                                                                                         </p>
-                                                                                        <div className="text-xl font-bold text-muted-foreground mt-2 text-center">
+                                                                                        <div className="metric-label">
                                                                                                 <p>
                                                                                                         Aguardando
                                                                                                 </p>
@@ -620,12 +628,12 @@ export default function Home() {
                                                                 {/* CARD PARA ADICIONAR MAIS ALGUMA INFORMACAO UTIL E EQUALIZAR TAMANHO DOS CARDS */}
                                                                 <div className="lg:col-span-3 py-3 px-6">
                                                                         <div className="flex flex-col sm:flex-row gap-3 w-full h-full">
-                                                                                                <Button
+                                                                                                <button
                                                                                                         onClick={() =>
                                                                                                                 (window.location.href =
                                                                                                                         "/create-order")
                                                                                                         }
-                                                                                                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 px-4 w-full bg-medsync-blue hover:bg-medsync-blue-dark text-white font-semibold py-3 h-12 text-base transition-all duration-200 flex-1 shadow-lg"
+                                                                                                        className="btn-medsync-light flex items-center justify-center gap-2 flex-1"
                                                                                                 >
                                                                                                         <PlusCircle
                                                                                                                 size={
@@ -634,13 +642,13 @@ export default function Home() {
                                                                                                         />
                                                                                                         Novo
                                                                                                         Pedido
-                                                                                                </Button>
-                                                                                                <Button
+                                                                                                </button>
+                                                                                                <button
                                                                                                         onClick={() =>
                                                                                                                 (window.location.href =
                                                                                                                         "/patients")
                                                                                                         }
-                                                                                                        className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 px-4 w-full bg-medsync-blue hover:bg-medsync-blue-dark text-white font-semibold py-3 h-12 text-base transition-all duration-200 flex-1 shadow-lg"
+                                                                                                        className="btn-medsync-light flex items-center justify-center gap-2 flex-1"
                                                                                                 >
                                                                                                         <Users
                                                                                                                 size={
@@ -649,52 +657,119 @@ export default function Home() {
                                                                                                         />
                                                                                                         Novo
                                                                                                         Paciente
-                                                                                                </Button>
+                                                                                                </button>
                                                                         </div>
                                                                 </div>
-                                                        </div>
+                                                                </div>
+                                                                
+                                                                {/* Card de Distribuição por Status - Coluna esquerda */}
+                                                                <Card className="dashboard-card-static">
+                                                        <CardHeader className="pb-3">
+                                                                <CardTitle className="flex items-center text-foreground font-semibold text-lg">
+                                                                        <TrendingUp className="h-5 w-5 text-muted-foreground mr-2" />
+                                                                        Distribuição de Pedidos por Status
+                                                                </CardTitle>
+                                                        </CardHeader>
+                                                        <CardContent>
+                                                                {statusDistributionLoading ? (
+                                                                        <div className="text-center py-8 text-muted-foreground">
+                                                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mx-auto mb-3"></div>
+                                                                                <p className="text-sm">Carregando dados...</p>
+                                                                        </div>
+                                                                ) : statusDistributionError ? (
+                                                                        <div className="text-center py-8 text-red-500">
+                                                                                <TrendingUp className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                                                                <p className="text-sm">Erro ao carregar dados do gráfico</p>
+                                                                                <p className="text-xs mt-1">{statusDistributionError.message || 'Erro desconhecido'}</p>
+                                                                        </div>
+                                                                ) : !statusDistribution || statusDistribution.length === 0 ? (
+                                                                        <div className="text-center py-8 text-muted-foreground">
+                                                                                <TrendingUp className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                                                                <p className="text-sm">Nenhum pedido encontrado</p>
+                                                                        </div>
+                                                                ) : (
+                                                                        <div className="flex items-start gap-48">
+                                                                                <div className="w-80 h-80 flex items-center justify-center">
+                                                                                        <PieChart width={320} height={320}>
+                                                                                                <Pie
+                                                                                                        data={statusDistribution.filter(item => item.count > 0)}
+                                                                                                        cx="50%"
+                                                                                                        cy="50%"
+                                                                                                        labelLine={false}
+                                                                                                        innerRadius={60}
+                                                                                                        outerRadius={120}
+                                                                                                        fill="#8884d8"
+                                                                                                        dataKey="count"
+                                                                                                        nameKey="name"
+                                                                                                >
+                                                                                                        {statusDistribution.filter(item => item.count > 0).map((entry, index) => {
+                                                                                                                const vibrantColors = [
+                                                                                                                        '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+                                                                                                                        '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
+                                                                                                                ];
+                                                                                                                const color = vibrantColors[index % vibrantColors.length];
+                                                                                                                return <Cell key={`cell-${index}`} fill={color} />;
+                                                                                                        })}
+                                                                                                </Pie>
+                                                                                                <Tooltip 
+                                                                                                        formatter={(value) => [value, 'Quantidade']}
+                                                                                                        labelFormatter={(label) => `${label}`}
+                                                                                                />
+                                                                                        </PieChart>
+                                                                                </div>
+                                                                                <div className="flex flex-col gap-3">
+                                                                                        {statusDistribution.filter(item => item.count > 0).map((item, index) => {
+                                                                                                const vibrantColors = [
+                                                                                                        '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+                                                                                                        '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
+                                                                                                ];
+                                                                                                const color = vibrantColors[index % vibrantColors.length];
+                                                                                                return (
+                                                                                                        <div key={index} className="flex items-center">
+                                                                                                                <div className="w-4 h-4 rounded mr-3" style={{ backgroundColor: color }}></div>
+                                                                                                                <span className="text-sm font-medium">{item.name}</span>
+                                                                                                        </div>
+                                                                                                );
+                                                                                        })}
+                                                                                </div>
+                                                                        </div>
+                                                                )}
+                                                        </CardContent>
+                                                        <CardFooter className="pt-4">
+                                                                <Button 
+                                                                        onClick={() => navigate('/reports')}
+                                                                        className="w-full bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200"
+                                                                >
+                                                                        <BarChart className="h-4 w-4 mr-2" />
+                                                                        {t("home.reports.button")}
+                                                                </Button>
+                                                        </CardFooter>
+                                                </Card>
+                                                </div>
 
-                                                        {/* Agenda Cirúrgica */}
-                                                        <div className="lg:col-span-3">
-                                                                <Card className="border-gray-200 bg-card shadow-sm h-full">
-                                                                        <CardHeader className="pb-3">
-                                                                                <CardTitle className="flex items-center text-foreground font-semibold text-lg">
-                                                                                        <Calendar className="h-5 w-5 text-muted-foreground mr-2" />
-                                                                                        Agenda
-                                                                                        Cirúrgica
-                                                                                </CardTitle>
-                                                                        </CardHeader>
-                                                                        <CardContent className="space-y-3">
-                                                                                {surgeriesLoading ? (
-                                                                                        <div className="text-center py-8 text-muted-foreground">
-                                                                                                <Clock className="h-8 w-8 mx-auto mb-3 animate-spin" />
-                                                                                                <p className="text-sm">
-                                                                                                        Carregando
-                                                                                                        agenda...
-                                                                                                </p>
-                                                                                        </div>
-                                                                                ) : !upcomingSurgeries ||
-                                                                                  upcomingSurgeries.length ===
-                                                                                          0 ? (
-                                                                                        <div className="text-center py-8 text-muted-foreground">
-                                                                                                <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                                                                                <p className="text-sm">
-                                                                                                        Nenhuma
-                                                                                                        cirurgia
-                                                                                                        agendada
-                                                                                                </p>
-                                                                                        </div>
-                                                                                ) : (
-                                                                                        <div className="space-y-3">
-                                                                                                {upcomingSurgeries
-                                                                                                        .slice(
-                                                                                                                0,
-                                                                                                                5,
-                                                                                                        )
-                                                                                                        .map(
-                                                                                                                (
-                                                                                                                        appointment: any,
-                                                                                                                ) => (
+                                                {/* Coluna Direita: Agenda Cirúrgica */}
+                                                <div className="flex flex-col">
+                                                <Card className="dashboard-card-static h-full flex flex-col">
+                                                        <CardHeader className="pb-3">
+                                                                <CardTitle className="section-title">
+                                                                        <Calendar className="h-5 w-5 text-muted-foreground mr-2" />
+                                                                        Agenda Cirúrgica
+                                                                </CardTitle>
+                                                        </CardHeader>
+                                                        <CardContent className="space-y-3 flex-1">
+                                                                {surgeriesLoading ? (
+                                                                        <div className="text-center py-8 text-muted-foreground">
+                                                                                <Clock className="h-8 w-8 mx-auto mb-3 animate-spin" />
+                                                                                <p className="text-sm">Carregando agenda...</p>
+                                                                        </div>
+                                                                ) : !upcomingSurgeries || upcomingSurgeries.length === 0 ? (
+                                                                        <div className="text-center py-8 text-muted-foreground">
+                                                                                <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                                                                <p className="text-sm">Nenhuma cirurgia agendada</p>
+                                                                        </div>
+                                                                ) : (
+                                                                        <div className="space-y-3">
+                                                                                {upcomingSurgeries.slice(0, 5).map((appointment: any) => (
                                                                                                                         <div
                                                                                                                                 key={
                                                                                                                                         appointment.id
@@ -817,127 +892,16 @@ export default function Home() {
                                                                                 )}
                                                                         </CardContent>
                                                                 </Card>
+                                                                </div>
                                                         </div>
                                                 </div>
                                         </div>
-
-                                        {/* Card de Distribuição por Status */}
-                                        <div className="w-full">
-                                                <Card className="border-gray-200 bg-card shadow-sm">
-                                                        <CardHeader className="pb-3">
-                                                                <CardTitle className="flex items-center text-foreground font-semibold text-lg">
-                                                                        <TrendingUp className="h-5 w-5 text-muted-foreground mr-2" />
-                                                                        Distribuição de Pedidos por Status
-                                                                </CardTitle>
-                                                        </CardHeader>
-                                                        <CardContent>
-                                                                {statusDistributionLoading ? (
-                                                                        <div className="text-center py-8 text-muted-foreground">
-                                                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600 mx-auto mb-3"></div>
-                                                                                <p className="text-sm">Carregando dados...</p>
-                                                                        </div>
-                                                                ) : statusDistributionError ? (
-                                                                        <div className="text-center py-8 text-red-500">
-                                                                                <TrendingUp className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                                                                <p className="text-sm">Erro ao carregar dados do gráfico</p>
-                                                                                <p className="text-xs mt-1">{statusDistributionError.message || 'Erro desconhecido'}</p>
-                                                                        </div>
-                                                                ) : !statusDistribution || statusDistribution.length === 0 ? (
-                                                                        <div className="text-center py-8 text-muted-foreground">
-                                                                                <TrendingUp className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                                                                                <p className="text-sm">Nenhum pedido encontrado</p>
-                                                                        </div>
-                                                                ) : (
-                                                                        <div className="h-96 flex items-center">
-                                                                                <div className="flex-1 flex justify-center items-center">
-                                                                                        <PieChart width={600} height={600}>
-                                                                                                <Pie
-                                                                                                        data={statusDistribution.filter(item => item.count > 0)}
-                                                                                                        cx={300}
-                                                                                                        cy={300}
-                                                                                                        labelLine={false}
-                                                                                                        innerRadius={80}
-                                                                                                        outerRadius={160}
-                                                                                                        fill="#8884d8"
-                                                                                                        dataKey="count"
-                                                                                                        nameKey="name"
-                                                                                                >
-                                                                                                        {statusDistribution.filter(item => item.count > 0).map((entry, index) => {
-                                                                                                                // Cores vibrantes personalizadas
-                                                                                                                const vibrantColors = [
-                                                                                                                        '#FF6B6B', // Vermelho vibrante
-                                                                                                                        '#4ECDC4', // Turquesa
-                                                                                                                        '#45B7D1', // Azul vibrante
-                                                                                                                        '#96CEB4', // Verde menta
-                                                                                                                        '#FFEAA7', // Amarelo suave
-                                                                                                                        '#DDA0DD', // Roxo suave
-                                                                                                                        '#98D8C8', // Verde água
-                                                                                                                        '#F7DC6F', // Amarelo dourado
-                                                                                                                        '#BB8FCE', // Lavanda
-                                                                                                                        '#85C1E9'  // Azul claro
-                                                                                                                ];
-                                                                                                                const color = vibrantColors[index % vibrantColors.length];
-                                                                                                                return <Cell key={`cell-${index}`} fill={color} />;
-                                                                                                        })}
-                                                                                                </Pie>
-                                                                                                <Tooltip 
-                                                                                                        formatter={(value) => [value, 'Quantidade']}
-                                                                                                        labelFormatter={(label) => `${label}`}
-                                                                                                />
-                                                                                        </PieChart>
-                                                                                </div>
-                                                                                <div className="flex-1 pl-6">
-                                                                                        <div className="space-y-3">
-                                                                                                {statusDistribution.filter(item => item.count > 0).map((item, index) => {
-                                                                                                        // Mesmas cores vibrantes da legenda
-                                                                                                        const vibrantColors = [
-                                                                                                                '#FF6B6B', // Vermelho vibrante
-                                                                                                                '#4ECDC4', // Turquesa
-                                                                                                                '#45B7D1', // Azul vibrante
-                                                                                                                '#96CEB4', // Verde menta
-                                                                                                                '#FFEAA7', // Amarelo suave
-                                                                                                                '#DDA0DD', // Roxo suave
-                                                                                                                '#98D8C8', // Verde água
-                                                                                                                '#F7DC6F', // Amarelo dourado
-                                                                                                                '#BB8FCE', // Lavanda
-                                                                                                                '#85C1E9'  // Azul claro
-                                                                                                        ];
-                                                                                                        const color = vibrantColors[index % vibrantColors.length];
-                                                                                                        
-                                                                                                        return (
-                                                                                                                <div key={index} className="flex items-center">
-                                                                                                                        <div 
-                                                                                                                                className="w-4 h-4 rounded mr-3" 
-                                                                                                                                style={{ backgroundColor: color }}
-                                                                                                                        ></div>
-                                                                                                                        <span className="text-sm font-medium">{item.name}</span>
-                                                                                                                        <span className="ml-auto text-sm text-muted-foreground">({item.count})</span>
-                                                                                                                </div>
-                                                                                                        );
-                                                                                                })}
-                                                                                        </div>
-                                                                                </div>
-                                                                        </div>
-                                                                )}
-                                                        </CardContent>
-                                                        <CardFooter className="pt-4">
-                                                                <Button 
-                                                                        onClick={() => navigate('/reports')}
-                                                                        className="w-full bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200"
-                                                                >
-                                                                        <BarChart className="h-4 w-4 mr-2" />
-                                                                        {t("home.reports.button")}
-                                                                </Button>
-                                                        </CardFooter>
-                                                </Card>
-                                        </div>
-                                </div>
                         </main>
 
                         {/* Modal de trial expirado */}
                         <TrialExpiredModal 
                                 isOpen={showTrialExpiredModal}
-                                trialEndDate={user?.trialEndDate}
+                                trialEndDate={userSubscription?.trialEndsAt}
                         />
                 </div>
         );

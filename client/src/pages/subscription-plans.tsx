@@ -14,14 +14,16 @@ interface SubscriptionPlan {
   maxUsers: number;
   features: string[];
   trialDays: number;
-  stripePriceId: string | null;
+  productId: string | null;
+  priceIdMonthly: string | null;
+  priceIdYearly: string | null;
   isPopular: boolean;
   isActive: boolean;
 }
 
 export default function SubscriptionPlans() {
   const { data: plans, isLoading } = useQuery<SubscriptionPlan[]>({
-    queryKey: ["/api/subscriptions/plans"],
+    queryKey: ["/api/subscription-plans"],
   });
 
   const formatPrice = (priceInCents: number) => {

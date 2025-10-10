@@ -26,6 +26,7 @@ import { ptBR, enUS, es } from "date-fns/locale";
 import { t } from "@/lib/i18n";
 import { addOrdersTranslations } from "@/lib/translations/orders";
 import { useToast } from "@/hooks/use-toast";
+import { openWhatsAppChat } from "@/lib/whatsapp";
 
 // Adicionar traduções
 addOrdersTranslations();
@@ -41,7 +42,9 @@ const orderStatus = {
   "aguardando_envio": { label: "Aguardando Envio", color: "bg-accent/50 text-foreground" },
   "recebido": { label: "Recebido", color: "bg-accent/50 text-foreground" },
   "pendencia": { label: "Pendência", color: "bg-amber-100/80 text-amber-700" },
-  "aguardando_recurso": { label: "Aguardando Recurso", color: "bg-rose-100/80 text-rose-700" }
+  "aguardando_recurso": { label: "Aguardando Recurso", color: "bg-rose-100/80 text-rose-700" },
+  "needs_scheduling": { label: "Aguardando Agendamento", color: "bg-orange-100/80 text-orange-700" },
+  "authorized_orders": { label: "Pedidos Autorizados", color: "bg-green-100/80 text-green-700" }
 };
 
 // Locale para formatação de datas
@@ -184,12 +187,24 @@ export default function Orders() {
     const urlParams = new URLSearchParams(window.location.search);
     const statusIdParam = urlParams.get('statusId');
     const appealParam = urlParams.get('appeal');
+    const needsSchedulingParam = urlParams.get('needsScheduling');
+    const authorizedParam = urlParams.get('authorized');
     
     if (statusIdParam) {
       const statusCode = statusIdToCode[parseInt(statusIdParam) as keyof typeof statusIdToCode];
       if (statusCode) {
         setSelectedStatus(statusCode);
       }
+    }
+    
+    // Handle special filter for orders that need scheduling
+    if (needsSchedulingParam === '1') {
+      setSelectedStatus('needs_scheduling');
+    }
+    
+    // Handle special filter for authorized orders (aceito + autorizado_parcial)
+    if (authorizedParam === '1') {
+      setSelectedStatus('authorized_orders');
     }
 
     // Se há parâmetro appeal, abrir dialog de recurso para esse pedido
@@ -202,7 +217,9 @@ export default function Orders() {
         setShowAppealDialog(true);
         
         // Limpar o parâmetro da URL para não reabrir se navegar de volta
-        const newUrl = window.location.pathname + (statusIdParam ? `?statusId=${statusIdParam}` : '');
+        const currentParams = new URLSearchParams(window.location.search);
+        currentParams.delete('appeal');
+        const newUrl = window.location.pathname + (currentParams.toString() ? `?${currentParams.toString()}` : '');
         window.history.replaceState({}, '', newUrl);
       }
     }
@@ -347,9 +364,28 @@ export default function Orders() {
 
     // Filtro por status
     if (selectedStatus) {
-      filtered = filtered.filter(order => 
-        order.status === selectedStatus
-      );
+      if (selectedStatus === 'needs_scheduling') {
+        // Filtro especial para pedidos que precisam de agendamento
+        filtered = filtered.filter(order => {
+          // Deve ser autorizado ou autorizado parcial
+          const isAuthorized = order.status === 'aceito' || order.status === 'autorizado_parcial';
+          
+          // Não deve ter agendamento
+          const appointment = appointmentsByOrder[order.id];
+          const hasAppointment = appointment && appointment.scheduledDate && appointment.scheduledTime;
+          
+          return isAuthorized && !hasAppointment;
+        });
+      } else if (selectedStatus === 'authorized_orders') {
+        // Filtro especial para todos os pedidos autorizados (aceito + autorizado_parcial)
+        filtered = filtered.filter(order => 
+          order.status === 'aceito' || order.status === 'autorizado_parcial'
+        );
+      } else {
+        filtered = filtered.filter(order => 
+          order.status === selectedStatus
+        );
+      }
     }
 
     // Manter ordenação por data de criação mais recente primeiro
@@ -365,7 +401,7 @@ export default function Orders() {
   // Aplicar filtros quando os critérios mudarem
   useEffect(() => {
     applyFilters();
-  }, [searchTerm, selectedHospital, selectedStatus, ordersData]);
+  }, [searchTerm, selectedHospital, selectedStatus, ordersData, appointmentsByOrder]);
 
   // Função para formatação de moeda (memoizada)
   const formatCurrency = useMemo(() => (valueInCents: number | null) => {
@@ -983,18 +1019,14 @@ export default function Orders() {
   
   // Função para abrir WhatsApp com o número do paciente
   const handleWhatsAppClick = (phone: string | null) => {
-    if (!phone) return;
-    
-    // Formatar o número removendo caracteres não numéricos
-    const formattedPhone = phone.replace(/\D/g, '');
-    
-    // Verificar se o número já tem o código do país
-    const phoneWithCountryCode = formattedPhone.startsWith('55') 
-      ? formattedPhone 
-      : `55${formattedPhone}`;
-    
-    // Abrir o WhatsApp com o número formatado
-    window.open(`https://wa.me/${phoneWithCountryCode}`, '_blank');
+    const success = openWhatsAppChat(phone);
+    if (!success) {
+      toast({
+        title: "Telefone inválido",
+        description: "Não foi possível abrir o WhatsApp com este número.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Função para confirmar exclusão de pedido
@@ -1276,10 +1308,12 @@ export default function Orders() {
                                   </div>
                                   <p className="text-sm text-medsync-blue font-bold mb-1">
                                     {order.procedureName || 'Procedimento não informado'}
-                                    {order.clinicalJustification && (
+                                    {order.surgicalApproaches && order.surgicalApproaches.length > 0 && (
                                       <>
                                         <br />
-                                        <span className="text-sm text-medsync-blue font-bold mb-1">{order.clinicalJustification}</span>
+                                        <span className="text-sm text-medsync-blue font-bold mb-1">
+                                          {order.surgicalApproaches.map((approach: any) => approach.name).join(', ')}
+                                        </span>
                                       </>
                                     )}
                                   </p>

@@ -14,7 +14,7 @@ import {
   Edit,
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
-import { openWhatsAppChat } from "@/lib/whatsapp";
+import { useSupportContact } from "@/lib/support-contact";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -52,6 +52,8 @@ import {
   type ResetPasswordForm,
 } from "@/schemas/auth-schemas";
 import MedSyncLogo from "@/assets/medsync-logo-new.svg";
+import MedSyncLogoGray from "@/assets/logos/Medsync_Logo_Gray.svg";
+import MedSyncLogoWhite from "@/assets/logos/Medsync_Logo_White.svg";
 import blueSectionImage from "@assets/image_1753726436254.png";
 import sectionDoctorImage from "@/assets/section_doctor_image.png";
 import sectionYStylized from "@/assets/section_y_stylized.svg";
@@ -60,11 +62,12 @@ import iconHome2 from "@/assets/icons/icon_home_2.svg";
 import iconHome3 from "@/assets/icons/icon_home_3.svg";
 import iconHome4 from "@/assets/icons/icon_home_4.svg";
 import iconDoctor from "@/assets/icons/icon-doctor.svg";
-import medsyncBanner from "@/assets/Medsync_BannerConsultorio.png";
+import medsyncBanner from "@/assets/banners/Medsync_Consultorio_3288x1102.png";
 import { onlyNumbers } from "@/lib/utils";
 import { useValidation } from "@/hooks/use-validation";
 
 export default function AuthPage() {
+  const { openSupport } = useSupportContact();
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<
     "login" | "register" | "forgot-password"
@@ -406,34 +409,22 @@ export default function AuthPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center min-h-[9rem] py-0.5">
             {/* Logo */}
-            <div className="flex items-center justify-center cursor-pointer">
-              <img src={MedSyncLogo} alt="MedSync Logo" className="h-32" />
+            <div className="flex items-center justify-center cursor-pointer pt-6">
+              <img src={MedSyncLogoGray} alt="MedSync Logo" className="h-32 scale-90" />
             </div>
 
             {/* Login/Register buttons */}
-            <div
-              className="flex border px-1 py-1 rounded-2xl"
-              style={{ borderColor: "hsl(var(--medsync-blue))" }}
-            >
-              <Button
+            <div className="flex border px-1 py-1 rounded-2xl border-medsync-blue">
+              <button
                 onClick={handleLoginClick}
-                variant="default"
-                className="text-white px-8 py-2 rounded-xl font-medium text-base h-9 transition-all duration-200"
-                style={{ backgroundColor: "hsl(var(--medsync-blue))" }}
-                onMouseEnter={(e) =>
-                  (e.target.style.backgroundColor = "hsl(var(--accent))")
-                }
-                onMouseLeave={(e) =>
-                  (e.target.style.backgroundColor = "hsl(var(--medsync-blue))")
-                }
+                className="btn-medsync-auth"
               >
                 <strong>Login</strong>
-              </Button>
+              </button>
               <Button
                 onClick={handleRegisterClick}
                 variant="ghost"
-                className="bg-transparent px-8 py-2 rounded-xl font-medium text-base border-0 h-9 hover:bg-accent/10"
-                style={{ color: "hsl(var(--medsync-blue))" }}
+                className="bg-transparent px-8 py-2 rounded-xl font-medium text-base border-0 h-9 hover:bg-accent/10 text-medsync-blue"
               >
                 <strong>Registrar</strong>
               </Button>
@@ -444,23 +435,22 @@ export default function AuthPage() {
 
       {/* Hero Section */}
       <section
-        className="py-24 bg-cover bg-no-repeat md:bg-center"
+        className="py-24 auth-hero-section"
         style={{
           backgroundImage: `url(${medsyncBanner})`,
-          backgroundPosition: "65% center", // Mobile: médico posicionado à direita em 65%
         }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-start">
             {/* Left side - Text content aligned left */}
             <div className="text-white z-10 max-w-md lg:max-w-2xl -mt-8">
-              <div className="mb-6 text-left relative">
+              <div className="mb-4 text-left relative">
                 <img
-                  src={MedSyncLogo}
+                  src={MedSyncLogoWhite}
                   alt="MedSync Logo"
-                  className="h-24 sm:h-32 lg:h-40 mb-6 ml-8 relative z-10"
+                  className="h-20 sm:h-28 lg:h-36 mt-6 ml-11 relative z-10"
                 />
-                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight -mt-8 sm:-mt-12 ml-4 sm:ml-16 font-lato">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight -mt-8 sm:-mt-12 ml-4 sm:ml-16 font-lato relative z-20">
                   <span className="text-white">Inteligência</span>
                   <br />
                   <span className="text-white whitespace-nowrap">
@@ -474,21 +464,12 @@ export default function AuthPage() {
                 Menos espera. Mais cuidado."
               </p>
               <div className="text-left ml-16">
-                <Button
+                <button
                   onClick={handleRegisterClick}
-                  variant="default"
-                  className="text-white px-8 py-2 rounded-xl font-medium text-base h-9 transition-all duration-200"
-                  style={{ backgroundColor: "hsl(var(--medsync-blue))" }}
-                  onMouseEnter={(e) =>
-                    (e.target.style.backgroundColor = "hsl(var(--accent))")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.target.style.backgroundColor =
-                      "hsl(var(--medsync-blue))")
-                  }
+                  className="btn-medsync-auth"
                 >
                   <strong>Teste grátis</strong>
-                </Button>
+                </button>
               </div>
             </div>
           </div>
@@ -499,7 +480,7 @@ export default function AuthPage() {
       <section className="py-16 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-6xl font-bold mb-4">
-            <span style={{ color: "hsl(var(--medsync-blue))" }}>
+            <span className="text-medsync-blue">
               Organização
             </span>
             <br />
@@ -520,10 +501,7 @@ export default function AuthPage() {
                     className="w-16 h-16"
                   />
                 </div>
-                <h3
-                  className="text-lg font-semibold mb-3"
-                  style={{ color: "hsl(var(--medsync-blue))" }}
-                >
+                <h3 className="text-lg font-semibold mb-3 text-medsync-blue">
                   Economia
                   <br />
                   de tempo
@@ -543,10 +521,7 @@ export default function AuthPage() {
                     className="w-16 h-16"
                   />
                 </div>
-                <h3
-                  className="text-lg font-semibold mb-3"
-                  style={{ color: "hsl(var(--medsync-blue))" }}
-                >
+                <h3 className="text-lg font-semibold mb-3 text-medsync-blue">
                   Redução
                   <br />
                   de glosas
@@ -554,10 +529,7 @@ export default function AuthPage() {
                 <p className="text-sm text-gray-600">
                   Preenchimento técnico, testado previamente e baseado em normas
                   da tabela{" "}
-                  <span
-                    className="font-medium"
-                    style={{ color: "hsl(var(--medsync-blue))" }}
-                  >
+                  <span className="font-medium text-medsync-blue">
                     CBHPM
                   </span>
                   .
@@ -574,10 +546,7 @@ export default function AuthPage() {
                     className="w-16 h-16"
                   />
                 </div>
-                <h3
-                  className="text-lg font-semibold mb-3"
-                  style={{ color: "hsl(var(--medsync-blue))" }}
-                >
+                <h3 className="text-lg font-semibold mb-3 text-medsync-blue">
                   Produção
                   <br />
                   otimizada
@@ -598,10 +567,7 @@ export default function AuthPage() {
                     className="w-16 h-16"
                   />
                 </div>
-                <h3
-                  className="text-lg font-semibold mb-3"
-                  style={{ color: "hsl(var(--medsync-blue))" }}
-                >
+                <h3 className="text-lg font-semibold mb-3 text-medsync-blue">
                   Segurança
                   <br />e Rastreio
                 </h3>
@@ -616,23 +582,17 @@ export default function AuthPage() {
 
       {/* Blue Section with Background Image */}
       <section
-        className="mb-16 relative overflow-hidden py-12 pb-28"
-        style={{
-          backgroundColor: "hsl(var(--medsync-blue))",
-          width: "100%",
-          borderBottomLeftRadius: "60px",
-          borderBottomRightRadius: "60px",
-        }}
+        className="mb-16 relative overflow-hidden py-12 pb-28 blue-section-rounded"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-4 sm:gap-8">
           {/* Container da imagem do médico */}
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 sm:p-8 mx-4 sm:mx-8 flex-1 flex items-center justify-center sm:justify-end">
+          {/* <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 sm:p-8 mx-4 sm:mx-8 flex-1 flex items-center justify-center sm:justify-end">
             <img
               src={sectionDoctorImage}
               alt="Doctor"
               className="h-64 sm:h-80 lg:h-96 w-auto object-contain"
             />
-          </div>
+          </div> */}
 
           {/* Container das caixas de texto com Y sobreposto */}
           <div className="relative mx-4 sm:mx-8">
@@ -689,11 +649,11 @@ export default function AuthPage() {
       </section>
 
       {/* Benefits Section */}
-      <section className="py-16 bg-white">
+      <section className="py-8 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-5xl font-bold text-gray-900 mb-12">
             O{" "}
-            <span style={{ color: "hsl(var(--medsync-blue))" }}>
+            <span className="text-medsync-blue">
               sistema inteligente
             </span>
             <br />
@@ -705,10 +665,7 @@ export default function AuthPage() {
           {/* Three feature cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
             <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 flex flex-col items-center">
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center mb-4"
-                style={{ backgroundColor: "hsl(var(--medsync-blue))" }}
-              >
+              <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4 bg-medsync-blue">
                 <FileText className="w-6 h-6 text-white" />
               </div>
               <div className="text-center">
@@ -720,10 +677,7 @@ export default function AuthPage() {
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 flex flex-col items-center">
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center mb-4"
-                style={{ backgroundColor: "hsl(var(--medsync-blue))" }}
-              >
+              <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4 bg-medsync-blue">
                 <Shield className="w-6 h-6 text-white" />
               </div>
               <div className="text-center">
@@ -735,10 +689,7 @@ export default function AuthPage() {
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 flex flex-col items-center">
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center mb-4"
-                style={{ backgroundColor: "hsl(var(--medsync-blue))" }}
-              >
+              <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4 bg-medsync-blue">
                 <TrendingUp className="w-6 h-6 text-white" />
               </div>
               <div className="text-center">
@@ -755,27 +706,21 @@ export default function AuthPage() {
 
       {/* Login/Register Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-4xl w-[calc(100vw-16px)] sm:w-full mx-auto bg-gray-50 rounded-2xl border-2 border-gray-100 shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto">
+        <DialogContent 
+          className="max-w-4xl w-[calc(100vw-16px)] sm:w-full mx-auto bg-gray-50 rounded-2xl border-2 border-gray-100 shadow-2xl overflow-hidden max-h-[95vh] overflow-y-auto"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           {/* Cabeçalho completo */}
           <DialogHeader className="flex flex-col px-4 lg:px-6">
             {/* Logo no modal */}
             <div className="flex justify-center">
               <img
-                src={MedSyncLogo}
+                src={MedSyncLogoGray}
                 alt="MedSync Logo"
-                className="h-16 w-auto lg:h-24"
+                className="h-16 w-auto lg:h-24 py-2"
               />
             </div>
-            {modalType === "forgot-password" && (
-              <>
-                <DialogTitle className="text-2xl font-bold text-gray-900 text-center">
-                  Recuperar senha
-                </DialogTitle>
-                <DialogDescription className="text-gray-600 leading-relaxed text-center">
-                  Digite seu email para receber instruções de recuperação
-                </DialogDescription>
-              </>
-            )}
             {modalType === "login" && (
               <>
                 <DialogTitle className="sr-only">Login MedSync</DialogTitle>
@@ -792,19 +737,9 @@ export default function AuthPage() {
                 </DialogDescription>
               </>
             )}
-            {modalType === "reset-password" && (
-              <>
-                <DialogTitle className="text-2xl font-bold text-gray-900 text-center">
-                  Redefinir senha
-                </DialogTitle>
-                <DialogDescription className="text-gray-600 leading-relaxed text-center">
-                  Digite sua nova senha
-                </DialogDescription>
-              </>
-            )}
           </DialogHeader>
 
-          <div className="p-4 sm:p-6 lg:p-12 bg-white">
+          <div className="p-4 sm:p-6 lg:px-12 lg:pb-12 lg:pt-4 bg-white">
             {modalType === "login" ? (
               <LoginModal
                 onSubmit={handleLoginSubmit}
@@ -840,7 +775,7 @@ export default function AuthPage() {
       <div
         className="fixed bottom-6 right-6 z-50 transform transition-all duration-300 hover:scale-110"
         onClick={() => {
-          openWhatsAppChat("+351935695650", "Olá! Gostaria de saber mais sobre o MedSync.");
+          openSupport("Olá! Gostaria de saber mais sobre o MedSync.");
         }}
       >
         <div className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg cursor-pointer transition-colors duration-200 group">

@@ -19,6 +19,7 @@ import { PatientFormDialog } from "@/components/patients/patient-form-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { FaWhatsapp } from "react-icons/fa";
+import { openWhatsAppChat } from "@/lib/whatsapp";
 
 export default function Patients() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -259,25 +260,14 @@ export default function Patients() {
   
   // Função para enviar mensagem de WhatsApp
   const handleWhatsAppMessage = (phone: string) => {
-    // Remover caracteres não numéricos do telefone
-    const formattedPhone = phone?.replace(/\D/g, "");
-    
-    if (!formattedPhone) {
+    const success = openWhatsAppChat(phone);
+    if (!success) {
       toast({
         title: "Telefone não disponível",
-        description: "Este paciente não possui um número de telefone registrado.",
+        description: "Este paciente não possui um número de telefone válido registrado.",
         variant: "destructive",
       });
-      return;
     }
-    
-    // Se o telefone não começar com o código do país, adicionar o código do Brasil
-    const phoneWithCountryCode = formattedPhone.startsWith("55") 
-      ? formattedPhone 
-      : `55${formattedPhone}`;
-    
-    // Abrir o WhatsApp Web ou App com o número do paciente
-    window.open(`https://wa.me/${phoneWithCountryCode}`, '_blank');
   };
 
   return (
