@@ -139,10 +139,10 @@ export function HealthInsuranceSearch({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            variant="outline"
+            variant={null}
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between text-left font-normal bg-slate-700 border-slate-600 text-white hover:bg-slate-600 h-8 text-sm"
+            className="combobox-medsync text-sm h-8"
             disabled={isLoadingRecent}
           >
             {isLoadingRecent ? (
@@ -153,12 +153,12 @@ export function HealthInsuranceSearch({
             ) : (
               <span className={cn(
                 "truncate",
-                !selectedProvider && "text-muted-foreground"
+                !selectedProvider ? "combobox-placeholder" : "combobox-value"
               )}>
                 {displayValue}
               </span>
             )}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-70" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-full p-0" align="start">

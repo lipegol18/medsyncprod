@@ -105,15 +105,15 @@ export function HospitalSearch({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
+          variant={null}
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between bg-card text-foreground border border-border hover:bg-accent-light hover:text-muted-foreground rounded-md h-10 px-4 py-2", className)}
+          className={cn("combobox-medsync", className)}
         >
           {selectedHospital ? (
             <div className="flex flex-col items-start text-left">
-              <div className="font-semibold">{selectedHospital.name}</div>
-              <div className="text-xs text-muted-foreground">
+              <div className="combobox-value">{selectedHospital.name}</div>
+              <div className="text-xs opacity-80">
                 {selectedHospital.uf && selectedHospital.city 
                   ? `${selectedHospital.city} - ${selectedHospital.uf}`
                   : selectedHospital.uf || selectedHospital.city || ''
@@ -121,9 +121,9 @@ export function HospitalSearch({
               </div>
             </div>
           ) : (
-            <span className="text-muted-foreground">Escolha o hospital para o pedido cirúrgico</span>
+            <span className="combobox-placeholder">Escolha o hospital para o pedido cirúrgico</span>
           )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-70" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0 bg-card border border-border" align="start">
