@@ -1,9 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, CheckCircle2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { 
   forgotPasswordSchema, 
   resetPasswordSchema,
@@ -58,61 +55,62 @@ export function ForgotPasswordModal({
 
   if (showResetForm) {
     return (
-      <div className="space-y-4">
-        <div className="text-center space-y-2">
-          <h2 className="text-xl font-semibold">Redefinir senha</h2>
-          <p className="text-gray-600">Digite sua nova senha abaixo</p>
+      <div>
+        <div className="text-center mb-6">
+          <h2 className="modal-title">
+            Redefinir senha
+          </h2>
+          <p className="modal-subtitle">
+            Digite sua nova senha
+          </p>
         </div>
         
-        <form onSubmit={resetPasswordForm.handleSubmit(handleResetPasswordSubmit)} className="space-y-5">
-          <div className="space-y-3">
-            <Label htmlFor="reset-password" className="text-gray-700 font-medium">Nova senha</Label>
-            <Input
+        <form onSubmit={resetPasswordForm.handleSubmit(handleResetPasswordSubmit)}>
+          <div>
+            <label htmlFor="reset-password" className="label-medsync">Nova senha</label>
+            <input
               {...resetPasswordForm.register('password')}
               id="reset-password"
               type="password"
               placeholder="Digite sua nova senha"
-              className="w-full h-12 rounded-xl border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors text-base px-4"
+              className="input-medsync"
             />
             {resetPasswordForm.formState.errors.password && (
-              <p className="text-red-500 text-sm">{resetPasswordForm.formState.errors.password.message}</p>
+              <p className="text-error mt-1">{resetPasswordForm.formState.errors.password.message}</p>
             )}
           </div>
 
-          <div className="space-y-3">
-            <Label htmlFor="reset-confirmPassword" className="text-gray-700 font-medium">Confirmar nova senha</Label>
-            <Input
+          <div className="mt-5">
+            <label htmlFor="reset-confirmPassword" className="label-medsync">Confirmar nova senha</label>
+            <input
               {...resetPasswordForm.register('confirmPassword')}
               id="reset-confirmPassword"
               type="password"
               placeholder="Confirme sua nova senha"
-              className="w-full h-12 rounded-xl border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors text-base px-4"
+              className="input-medsync"
             />
             {resetPasswordForm.formState.errors.confirmPassword && (
-              <p className="text-red-500 text-sm">{resetPasswordForm.formState.errors.confirmPassword.message}</p>
+              <p className="text-error mt-1">{resetPasswordForm.formState.errors.confirmPassword.message}</p>
             )}
           </div>
 
-          <Button
+          <button
             type="submit"
-            className="w-full h-9 text-white font-semibold rounded-lg text-sm shadow-md transition-all duration-200 hover:shadow-lg"
-            style={{backgroundColor: 'hsl(var(--medsync-blue))'}}
-            onMouseEnter={(e) => !isLoadingReset && (e.currentTarget.style.backgroundColor = 'hsl(var(--accent))')}
-            onMouseLeave={(e) => !isLoadingReset && (e.currentTarget.style.backgroundColor = 'hsl(var(--medsync-blue))')}
+            className="btn-medsync-light w-full mt-5"
             disabled={isLoadingReset}
           >
             {isLoadingReset ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : null}
             {isLoadingReset ? "Atualizando..." : "Atualizar senha"}
-          </Button>
+          </button>
         </form>
         
-        <div className="text-center">
+        <div className="text-center mt-4">
           <button
             type="button"
             onClick={onBackToLogin}
-            className="text-sm text-primary hover:text-primary/80 underline"
+            className="text-sm text-accent hover:text-accent/80 font-bold transition-colors"
           >
             Voltar ao login
           </button>
@@ -122,58 +120,64 @@ export function ForgotPasswordModal({
   }
 
   return (
-    <div className="space-y-4">
+    <div>
+      <div className="text-center mb-6">
+        <h2 className="modal-title">
+          Recuperar senha
+        </h2>
+        <p className="modal-subtitle">
+          Digite seu email para receber instruções de recuperação
+        </p>
+      </div>
+      
       {!resetEmailSent ? (
-        <form onSubmit={forgotPasswordForm.handleSubmit(handleForgotPasswordSubmit)} className="space-y-4">
-          <div className="space-y-3">
-            <Label htmlFor="forgot-email" className="text-gray-700 font-medium">Email</Label>
-            <Input
+        <form onSubmit={forgotPasswordForm.handleSubmit(handleForgotPasswordSubmit)}>
+          <div>
+            <label htmlFor="forgot-email" className="label-medsync">Email</label>
+            <input
               {...forgotPasswordForm.register('email')}
               id="forgot-email"
               type="email"
               placeholder="Digite seu email cadastrado"
-              className="w-full h-12 rounded-xl border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors text-base px-4"
+              className="input-medsync"
             />
             {forgotPasswordForm.formState.errors.email && (
-              <p className="text-red-500 text-sm">{forgotPasswordForm.formState.errors.email.message}</p>
+              <p className="text-error mt-1">{forgotPasswordForm.formState.errors.email.message}</p>
             )}
           </div>
 
-          <Button
+          <button
             type="submit"
-            className="w-full h-9 text-white font-semibold rounded-lg text-sm shadow-md transition-all duration-200 hover:shadow-lg"
-            style={{backgroundColor: 'hsl(var(--medsync-blue))'}}
-            onMouseEnter={(e) => !isLoadingForgot && (e.currentTarget.style.backgroundColor = 'hsl(var(--accent))')}
-            onMouseLeave={(e) => !isLoadingForgot && (e.currentTarget.style.backgroundColor = 'hsl(var(--medsync-blue))')}
+            className="btn-medsync-light w-full mt-5"
             disabled={isLoadingForgot}
           >
             {isLoadingForgot ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : null}
             {isLoadingForgot ? "Enviando..." : "Enviar instruções"}
-          </Button>
+          </button>
 
-          <div className="text-center">
+          <div className="text-center mt-4">
             <button
               type="button"
               onClick={onBackToLogin}
-              className="text-sm text-primary hover:text-primary/80 underline"
+              className="text-sm text-accent hover:text-accent/80 font-bold transition-colors"
             >
               Voltar ao login
             </button>
           </div>
         </form>
       ) : (
-        <div className="text-center space-y-4">
-          <CheckCircle2 className="mx-auto h-16 w-16 text-green-500" />
+        <div className="text-center">
+          <CheckCircle2 className="mx-auto h-16 w-16 text-success mb-4" />
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Email enviado!</h3>
-            <p className="text-gray-600 text-sm mb-4">
+            <h3 className="text-lg font-semibold text-medsync-gray mb-2">Email enviado!</h3>
+            <p className="text-medsync-gray text-sm mb-4">
               Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.
             </p>
             <button
               onClick={handleBackToLoginWithReset}
-              className="text-sm text-primary hover:text-primary/80 underline"
+              className="text-sm text-accent hover:text-accent/80 font-bold transition-colors"
             >
               Voltar ao login
             </button>

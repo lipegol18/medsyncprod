@@ -3,8 +3,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { registerSchema, type RegisterForm } from '@/schemas/auth-schemas';
 import { applyCPFMask, applyPhoneMask, onlyNumbers } from '@/lib/utils';
@@ -17,6 +15,7 @@ interface RegisterFormProps {
   isLoading: boolean;
   validationErrors: Record<string, string>;
   onFieldValidation: (field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string, additionalData?: any) => void;
+  defaultValues?: Partial<RegisterForm>;
 }
 
 export function RegisterForm({
@@ -24,7 +23,8 @@ export function RegisterForm({
   onSwitchToLogin,
   isLoading,
   validationErrors,
-  onFieldValidation
+  onFieldValidation,
+  defaultValues
 }: RegisterFormProps) {
   const [isLoadingCEP, setIsLoadingCEP] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -32,10 +32,24 @@ export function RegisterForm({
   const registerForm = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      firstName: '', lastName: '', email: '', phone: '', username: '',
-      password: '', confirmPassword: '', address: '', number: '', cep: '',
-      complement: '', neighborhood: '', city: '', state: '',
-      roleId: 2, medicalSpecialtyId: undefined, crm: '', crmUf: ''
+      firstName: defaultValues?.firstName || '', 
+      lastName: defaultValues?.lastName || '', 
+      email: defaultValues?.email || '', 
+      phone: defaultValues?.phone || '', 
+      username: defaultValues?.username || '',
+      password: '', confirmPassword: '', 
+      address: defaultValues?.address || '', 
+      number: defaultValues?.number || '', 
+      cep: defaultValues?.cep || '',
+      complement: defaultValues?.complement || '', 
+      neighborhood: defaultValues?.neighborhood || '', 
+      city: defaultValues?.city || '', 
+      state: defaultValues?.state || '',
+      roleId: defaultValues?.roleId || 2, 
+      medicalSpecialtyId: defaultValues?.medicalSpecialtyId || undefined, 
+      crm: defaultValues?.crm || '', 
+      crmUf: defaultValues?.crmUf || '',
+      cpf: defaultValues?.cpf || ''
     }
   });
 
@@ -56,6 +70,13 @@ export function RegisterForm({
           registerForm.setValue('city', addressData.localidade);
           registerForm.setValue('state', addressData.uf);
           registerForm.setValue('complement', addressData.complemento || '');
+          
+          // Revalidar campos preenchidos para limpar erros
+          registerForm.trigger('address');
+          registerForm.trigger('neighborhood');
+          registerForm.trigger('city');
+          registerForm.trigger('state');
+          registerForm.trigger('complement');
           
           // Focar no campo número após preenchimento
           const numberField = document.getElementById('reg-number');
@@ -134,8 +155,8 @@ export function RegisterForm({
   return (
     <div>
       <div className="text-left mb-6">
-        <h2 className="text-2xl font-black text-gray-900">Bem-vindo!</h2>
-        <p className="text-gray-600 leading-relaxed font-bold text-sm">Crie sua conta para começar a usar</p>
+        <h2 className="modal-title">Bem-vindo!</h2>
+        <p className="modal-subtitle text-sm">Crie sua conta para começar a usar</p>
       </div>
       
       <form 
@@ -146,35 +167,35 @@ export function RegisterForm({
       >
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-0.5">
-            <Label htmlFor="reg-firstName" className="text-sm text-gray-700 font-bold">Nome</Label>
-            <Input
+            <label htmlFor="reg-firstName" className="label-medsync">Nome</label>
+            <input
               {...registerForm.register('firstName')}
               id="reg-firstName"
               placeholder="Nome"
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.firstName && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.firstName.message}</p>
+              <p className="text-error">{registerForm.formState.errors.firstName.message}</p>
             )}
           </div>
           <div className="space-y-0.5">
-            <Label htmlFor="reg-lastName" className="text-sm text-gray-700 font-bold">Sobrenome</Label>
-            <Input
+            <label htmlFor="reg-lastName" className="label-medsync">Sobrenome</label>
+            <input
               {...registerForm.register('lastName')}
               id="reg-lastName"
               placeholder="Sobrenome"
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.lastName && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.lastName.message}</p>
+              <p className="text-error">{registerForm.formState.errors.lastName.message}</p>
             )}
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-3 -mt-1">
           <div className="space-y-0.5">
-            <Label htmlFor="reg-cpf" className="text-sm text-gray-700 font-bold">CPF</Label>
-            <Input
+            <label htmlFor="reg-cpf" className="label-medsync">CPF</label>
+            <input
               {...registerForm.register('cpf')}
               id="reg-cpf"
               placeholder="000.000.000-00"
@@ -192,22 +213,25 @@ export function RegisterForm({
                   onFieldValidation('cpf', e.target.value);
                 }, 100);
               }}
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.cpf && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.cpf.message}</p>
+              <p className="text-error">{registerForm.formState.errors.cpf.message}</p>
             )}
             {validationErrors.cpf && (
-              <p className="text-red-500 text-xs">{validationErrors.cpf}</p>
+              <p className="text-error">{validationErrors.cpf}</p>
             )}
           </div>
           <div className="space-y-0.5">
-            <Label htmlFor="reg-crm-uf" className="text-sm text-gray-700 font-bold">UF do CRM</Label>
+            <label htmlFor="reg-crm-uf" className="label-medsync">UF do CRM</label>
             <Select
               value={registerForm.watch('crmUf') || ""}
-              onValueChange={(value) => registerForm.setValue('crmUf', value)}
+              onValueChange={(value) => {
+                registerForm.setValue('crmUf', value);
+                registerForm.trigger('crmUf'); // Força revalidação para limpar erro
+              }}
             >
-              <SelectTrigger className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent">
+              <SelectTrigger className="select-medsync">
                 <SelectValue placeholder="UF" />
               </SelectTrigger>
               <SelectContent>
@@ -219,12 +243,12 @@ export function RegisterForm({
               </SelectContent>
             </Select>
             {registerForm.formState.errors.crmUf && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.crmUf.message}</p>
+              <p className="text-error">{registerForm.formState.errors.crmUf.message}</p>
             )}
           </div>
           <div className="space-y-0.5">
-            <Label htmlFor="reg-crm-top" className="text-sm text-gray-700 font-bold">Nº do CRM</Label>
-            <Input
+            <label htmlFor="reg-crm-top" className="label-medsync">Nº do CRM</label>
+            <input
               {...registerForm.register('crm')}
               id="reg-crm-top"
               type="text"
@@ -235,22 +259,22 @@ export function RegisterForm({
                   onFieldValidation('crm', e.target.value, { crmUf });
                 }, 100);
               }}
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.crm && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.crm.message}</p>
+              <p className="text-error">{registerForm.formState.errors.crm.message}</p>
             )}
             {validationErrors.crm && (
-              <p className="text-red-500 text-xs">{validationErrors.crm}</p>
+              <p className="text-error">{validationErrors.crm}</p>
             )}
           </div>
         </div>
 
         <div className="space-y-0.5 -mt-1">
-          <Label htmlFor="reg-cep" className="text-sm text-gray-700 font-bold">
+          <label htmlFor="reg-cep" className="label-medsync">
             CEP {isLoadingCEP && <span className="text-xs text-blue-600">(buscando...)</span>}
-          </Label>
-          <Input
+          </label>
+          <input
             {...registerForm.register('cep')}
             id="reg-cep"
             placeholder="00000-000"
@@ -258,6 +282,7 @@ export function RegisterForm({
             onChange={(e) => {
               const maskedValue = applyCEPMask(e.target.value);
               registerForm.setValue('cep', maskedValue);
+              registerForm.trigger('cep'); // Força revalidação para limpar erro
             }}
             onBlur={(e) => {
               // Usar setTimeout para não interferir na navegação TAB
@@ -265,96 +290,97 @@ export function RegisterForm({
                 handleCEPChange(e.target.value);
               }, 100);
             }}
-            className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+            className="input-medsync"
             disabled={isLoadingCEP}
           />
           {registerForm.formState.errors.cep && (
-            <p className="text-red-500 text-xs">{registerForm.formState.errors.cep.message}</p>
+            <p className="text-error">{registerForm.formState.errors.cep.message}</p>
           )}
         </div>
 
         {/* Campos de Endereço - movidos para baixo do CEP */}
         <div className="grid grid-cols-4 gap-3 -mt-1">
           <div className="col-span-3 space-y-0.5">
-            <Label htmlFor="reg-address" className="text-sm text-gray-700 font-bold">Endereço</Label>
-            <Input
+            <label htmlFor="reg-address" className="label-medsync">Endereço</label>
+            <input
               {...registerForm.register('address')}
               id="reg-address"
               placeholder="Rua, Avenida..."
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.address && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.address.message}</p>
+              <p className="text-error">{registerForm.formState.errors.address.message}</p>
             )}
           </div>
           <div className="col-span-1 space-y-0.5">
-            <Label htmlFor="reg-number" className="text-sm text-gray-700 font-bold">Nº</Label>
-            <Input
+            <label htmlFor="reg-number" className="label-medsync">Nº</label>
+            <input
               {...registerForm.register('number')}
               id="reg-number"
               placeholder="123"
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.number && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.number.message}</p>
+              <p className="text-error">{registerForm.formState.errors.number.message}</p>
             )}
           </div>
         </div>
 
         <div className="space-y-0.5 -mt-1">
-          <Label htmlFor="reg-complement" className="text-sm text-gray-700 font-bold">Complemento</Label>
-          <Input
+          <label htmlFor="reg-complement" className="label-medsync">Complemento</label>
+          <input
             {...registerForm.register('complement')}
             id="reg-complement"
             placeholder="Apto 101, Bloco A, Sala 2..."
-            className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+            className="input-medsync"
           />
           {registerForm.formState.errors.complement && (
-            <p className="text-red-500 text-xs">{registerForm.formState.errors.complement.message}</p>
+            <p className="text-error">{registerForm.formState.errors.complement.message}</p>
           )}
         </div>
 
         {/* Bairro, Cidade e Estado na mesma linha */}
         <div className="grid grid-cols-3 gap-3 -mt-1">
           <div className="space-y-0.5">
-            <Label htmlFor="reg-neighborhood" className="text-sm text-gray-700 font-bold">Bairro</Label>
-            <Input
+            <label htmlFor="reg-neighborhood" className="label-medsync">Bairro</label>
+            <input
               {...registerForm.register('neighborhood')}
               id="reg-neighborhood"
               placeholder="Centro"
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.neighborhood && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.neighborhood.message}</p>
+              <p className="text-error">{registerForm.formState.errors.neighborhood.message}</p>
             )}
           </div>
           <div className="space-y-0.5">
-            <Label htmlFor="reg-city" className="text-sm text-gray-700 font-bold">Cidade</Label>
-            <Input
+            <label htmlFor="reg-city" className="label-medsync">Cidade</label>
+            <input
               {...registerForm.register('city')}
               id="reg-city"
               placeholder="São Paulo"
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.city && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.city.message}</p>
+              <p className="text-error">{registerForm.formState.errors.city.message}</p>
             )}
           </div>
           <div className="space-y-0.5">
-            <Label htmlFor="reg-state" className="text-sm text-gray-700 font-bold">Estado</Label>
-            <Input
+            <label htmlFor="reg-state" className="label-medsync">Estado</label>
+            <input
               {...registerForm.register('state')}
               id="reg-state"
               placeholder="SP"
               maxLength={2}
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3 uppercase"
+              className="input-medsync uppercase"
               onChange={(e) => {
                 const value = e.target.value.toUpperCase();
                 registerForm.setValue('state', value);
+                registerForm.trigger('state'); // Força revalidação para limpar erro
               }}
             />
             {registerForm.formState.errors.state && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.state.message}</p>
+              <p className="text-error">{registerForm.formState.errors.state.message}</p>
             )}
           </div>
         </div>
@@ -362,8 +388,8 @@ export function RegisterForm({
         {/* Usuário e Telefone na mesma linha após o CEP */}
         <div className="grid grid-cols-2 gap-3 -mt-1">
           <div className="space-y-0.5">
-            <Label htmlFor="reg-username" className="text-sm text-gray-700 font-bold">Nome do Perfil</Label>
-            <Input
+            <label htmlFor="reg-username" className="label-medsync">Nome do Perfil</label>
+            <input
               {...registerForm.register('username')}
               id="reg-username"
               placeholder="usuario"
@@ -372,18 +398,18 @@ export function RegisterForm({
                   onFieldValidation('username', e.target.value);
                 }, 100);
               }}
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.username && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.username.message}</p>
+              <p className="text-error">{registerForm.formState.errors.username.message}</p>
             )}
             {validationErrors.username && (
-              <p className="text-red-500 text-xs">{validationErrors.username}</p>
+              <p className="text-error">{validationErrors.username}</p>
             )}
           </div>
           <div className="space-y-0.5">
-            <Label htmlFor="reg-phone" className="text-sm text-gray-700 font-bold">Telefone</Label>
-            <Input
+            <label htmlFor="reg-phone" className="label-medsync">Telefone</label>
+            <input
               {...registerForm.register('phone')}
               id="reg-phone"
               type="tel"
@@ -391,26 +417,27 @@ export function RegisterForm({
               onChange={(e) => {
                 const maskedValue = applyPhoneMask(e.target.value);
                 registerForm.setValue('phone', maskedValue);
+                registerForm.trigger('phone'); // Força revalidação para limpar erro
               }}
               onBlur={(e) => {
                 setTimeout(() => {
                   onFieldValidation('phone', e.target.value);
                 }, 100);
               }}
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.phone && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.phone.message}</p>
+              <p className="text-error">{registerForm.formState.errors.phone.message}</p>
             )}
             {validationErrors.phone && (
-              <p className="text-red-500 text-xs">{validationErrors.phone}</p>
+              <p className="text-error">{validationErrors.phone}</p>
             )}
           </div>
         </div>
 
         <div className="space-y-0.5 -mt-1">
-          <Label htmlFor="reg-email" className="text-sm text-gray-700 font-bold">Email</Label>
-          <Input
+          <label htmlFor="reg-email" className="label-medsync">Email</label>
+          <input
             {...registerForm.register('email')}
             id="reg-email"
             type="email"
@@ -420,52 +447,55 @@ export function RegisterForm({
                 onFieldValidation('email', e.target.value);
               }, 100);
             }}
-            className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+            className="input-medsync"
           />
           {registerForm.formState.errors.email && (
-            <p className="text-red-500 text-xs">{registerForm.formState.errors.email.message}</p>
+            <p className="text-error">{registerForm.formState.errors.email.message}</p>
           )}
           {validationErrors.email && (
-            <p className="text-red-500 text-xs">{validationErrors.email}</p>
+            <p className="text-error">{validationErrors.email}</p>
           )}
         </div>
 
         <div className="grid grid-cols-2 gap-3 -mt-1">
           <div className="space-y-0.5">
-            <Label htmlFor="reg-password" className="text-sm text-gray-700 font-bold">Senha</Label>
-            <Input
+            <label htmlFor="reg-password" className="label-medsync">Senha</label>
+            <input
               {...registerForm.register('password')}
               id="reg-password"
               type="password"
               placeholder="Mínimo 6 caracteres"
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.password && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.password.message}</p>
+              <p className="text-error">{registerForm.formState.errors.password.message}</p>
             )}
           </div>
           <div className="space-y-0.5">
-            <Label htmlFor="reg-confirmPassword" className="text-sm text-gray-700 font-bold">Confirmar Senha</Label>
-            <Input
+            <label htmlFor="reg-confirmPassword" className="label-medsync">Confirmar Senha</label>
+            <input
               {...registerForm.register('confirmPassword')}
               id="reg-confirmPassword"
               type="password"
               placeholder="Confirme sua senha"
-              className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent focus:ring-0 transition-colors px-3"
+              className="input-medsync"
             />
             {registerForm.formState.errors.confirmPassword && (
-              <p className="text-red-500 text-xs">{registerForm.formState.errors.confirmPassword.message}</p>
+              <p className="text-error">{registerForm.formState.errors.confirmPassword.message}</p>
             )}
           </div>
         </div>
 
         <div className="space-y-0.5 -mt-1">
-          <Label htmlFor="reg-medicalSpecialtyId" className="text-sm text-gray-700 font-bold">Especialidade Médica</Label>
+          <label htmlFor="reg-medicalSpecialtyId" className="label-medsync">Especialidade Médica</label>
           <Select
             value={registerForm.watch('medicalSpecialtyId')?.toString() || ""} 
-            onValueChange={(value) => registerForm.setValue('medicalSpecialtyId', parseInt(value))}
+            onValueChange={(value) => {
+              registerForm.setValue('medicalSpecialtyId', parseInt(value));
+              registerForm.trigger('medicalSpecialtyId'); // Força revalidação para limpar erro
+            }}
           >
-            <SelectTrigger className="h-9 rounded-lg border-2 border-gray-200 focus:border-accent">
+            <SelectTrigger className="select-medsync">
               <SelectValue placeholder="Selecione sua especialidade" />
             </SelectTrigger>
             <SelectContent>
@@ -477,13 +507,13 @@ export function RegisterForm({
             </SelectContent>
           </Select>
           {registerForm.formState.errors.medicalSpecialtyId && (
-            <p className="text-red-500 text-xs">{registerForm.formState.errors.medicalSpecialtyId.message}</p>
+            <p className="text-error">{registerForm.formState.errors.medicalSpecialtyId.message}</p>
           )}
         </div>
       </form>
 
       {/* Botão fora do formulário para melhor espaçamento */}
-      <div className="mb-6">
+      <div className="mb-1">
         <Button
           type="submit"
           form="register-form"

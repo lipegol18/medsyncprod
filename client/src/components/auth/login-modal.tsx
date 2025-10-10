@@ -2,9 +2,6 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { loginSchema, type LoginForm } from '@/schemas/auth-schemas';
 
@@ -33,49 +30,49 @@ export function LoginModal({
   };
 
   return (
-    <div className="space-y-6">
+    <div>
       <div className="text-center mb-6">
-        <h2 className="text-2xl font-black text-gray-900">Bem-vindo de volta!</h2>
-        <p className="text-gray-600 leading-relaxed font-bold">Faça login para acessar sua conta</p>
+        <h2 className="modal-title">Bem-vindo de volta!</h2>
+        <p className="modal-subtitle">Faça login para acessar sua conta</p>
       </div>
 
-      <form onSubmit={loginForm.handleSubmit(handleSubmit)} className="space-y-5">
-        <div className="space-y-3">
-          <Label htmlFor="username" className="text-gray-700 font-bold text-base">E-mail ou Nome de Usuário</Label>
-          <Input
+      <form onSubmit={loginForm.handleSubmit(handleSubmit)}>
+        <div>
+          <label htmlFor="username" className="label-medsync">E-mail ou Nome de Usuário</label>
+          <input
             {...loginForm.register('username')}
             id="username"
             placeholder="Digite seu e-mail ou nome de usuário"
-            className="w-full h-12 rounded-xl border border-gray-300 focus:border-accent focus:outline-none transition-all text-base px-4"
+            className="input-medsync"
           />
           {loginForm.formState.errors.username && (
-            <p className="text-red-500 text-sm">{loginForm.formState.errors.username.message}</p>
+            <p className="text-error mt-1">{loginForm.formState.errors.username.message}</p>
           )}
         </div>
 
-        <div className="space-y-3">
+        <div className="mt-5">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password" className="text-gray-700 font-bold text-base">Senha</Label>
+            <label htmlFor="password" className="label-medsync">Senha</label>
             <button
               type="button"
               onClick={onSwitchToForgotPassword}
-              className="text-sm text-gray-700 hover:text-gray-500 font-bold transition-colors"
+              className="text-sm text-medsync-gray hover:text-medsync-gray/80 font-bold transition-colors"
             >
               Esqueceu a sua senha?
             </button>
           </div>
           <div className="relative">
-            <Input
+            <input
               {...loginForm.register('password')}
               id="password"
               type={showPassword ? "text" : "password"}
               placeholder="Digite sua senha"
-              className="w-full h-12 rounded-xl border border-gray-300 focus:border-accent focus:outline-none transition-all text-base px-4 pr-12"
+              className="input-medsync pr-12"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-medsync-gray hover:text-medsync-gray/80 transition-colors"
             >
               {showPassword ? (
                 <EyeOff className="h-5 w-5" />
@@ -85,40 +82,35 @@ export function LoginModal({
             </button>
           </div>
           {loginForm.formState.errors.password && (
-            <p className="text-red-500 text-sm">{loginForm.formState.errors.password.message}</p>
+            <p className="text-error mt-1">{loginForm.formState.errors.password.message}</p>
           )}
         </div>
 
-        <div className="flex items-center justify-start pt-2">
-          <div className="flex items-center space-x-3">
-            <Checkbox
-              {...loginForm.register('remember')}
-              id="remember"
-              className="rounded-md border-2 border-gray-300 data-[state=checked]:bg-accent data-[state=checked]:border-accent"
-            />
-            <Label htmlFor="remember" className="text-sm text-gray-600 font-medium">
-              Lembrar de mim
-            </Label>
-          </div>
+        <div className="flex items-center justify-start pt-2 space-x-3">
+          <Checkbox
+            {...loginForm.register('remember')}
+            id="remember"
+            className="rounded-md border-2 border-medsync-light-gray data-[state=checked]:bg-accent data-[state=checked]:border-accent"
+          />
+          <label htmlFor="remember" className="label-medsync-sm">
+            Lembrar de mim
+          </label>
         </div>
 
-        <Button
+        <button
           type="submit"
-          className="w-full h-9 text-white font-semibold rounded-lg text-sm shadow-md transition-all duration-200 hover:shadow-lg"
-          style={{backgroundColor: 'hsl(var(--medsync-blue))'}}
-          onMouseEnter={(e) => !isLoading && (e.currentTarget.style.backgroundColor = 'hsl(var(--accent))')}
-          onMouseLeave={(e) => !isLoading && (e.currentTarget.style.backgroundColor = 'hsl(var(--medsync-blue))')}
+          className="btn-medsync-light w-full mt-5"
           disabled={isLoading}
         >
           {isLoading ? (
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
           ) : null}
           {isLoading ? "Entrando..." : "Login"}
-        </Button>
+        </button>
       </form>
       
-      <div className="text-center mt-6">
-        <span className="text-sm text-gray-600 font-bold">Ainda não tem uma conta? </span>
+      <div className="text-center mt-1">
+        <span className="text-sm text-medsync-gray font-bold">Ainda não tem uma conta? </span>
         <button
           type="button"
           onClick={onSwitchToRegister}

@@ -1,20 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+// Stripe imports removidos - agora usamos redirecionamento para Checkout Session
 import { RegisterForm } from './register-form';
 import { PricingSection } from './pricing-section';
 import { type RegisterForm as RegisterFormType } from '@/schemas/auth-schemas';
 import { type SubscriptionPlan } from '@/types/subscription';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
+import { useSupportContact } from '@/lib/support-contact';
 import { ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
 
-// Configurar Stripe - usar chave pública de teste
-const STRIPE_PUBLIC_KEY = 'pk_test_51S43b8BDo1YVjn0iA29tn753TDK4YTsWFc8QfYJV90EpdltYqJ0xoZbp8akaT9IHEyQwtsPyPF2YhbDfW7PcNfvH00hBlxfmCd';
-const stripePromise = loadStripe(STRIPE_PUBLIC_KEY);
+// Stripe configuração removida - agora usamos redirecionamento para Checkout Session
 
 interface RegisterModalProps {
   onSubmit: (data: RegisterFormType) => void;
@@ -31,40 +28,77 @@ export function RegisterModal({
   validationErrors,
   onFieldValidation
 }: RegisterModalProps) {
-  const [currentStep, setCurrentStep] = useState<'form' | 'pricing' | 'payment' | 'trial-welcome' | 'error'>('form');
+  // Sempre iniciar no formulário de dados (passo 1)
+  const [currentStep, setCurrentStep] = useState<'form' | 'pricing' | 'confirmation' | 'trial-welcome' | 'clinica-contact' | 'error'>('form');
+  // Dados do formulário começam vazios para o usuário preencher
   const [formData, setFormData] = useState<RegisterFormType | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
-  const [clientSecret, setClientSecret] = useState<string>("");
+  // clientSecret removido - agora usamos redirecionamento para Checkout Session
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('yearly');
+  // Estado para dados pré-carregados quando voltar ao formulário
+  const [preloadedFormData, setPreloadedFormData] = useState<Partial<RegisterFormType> | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { openSupport } = useSupportContact();
   const queryClient = useQueryClient();
   const [crmValidationStatus, setCrmValidationStatus] = useState<{ [key: string]: 'validating' | 'valid' | 'invalid' }>({});
+
+  // Scroll para o topo sempre que o modal for aberto/montado
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   // Buscar planos de assinatura
   const { data: plans } = useQuery<SubscriptionPlan[]>({
     queryKey: ["/api/subscriptions/plans"],
   });
 
+  // Buscar desconto automático ativo
+  const { data: automaticDiscountResponse } = useQuery({
+    queryKey: ['/api/discount-codes/automatic'],
+  });
+
+  const automaticDiscount = automaticDiscountResponse?.data;
   const selectedPlan = plans?.find(p => p.id === selectedPlanId);
 
-  // Inicializar Stripe quando necessário
-  useEffect(() => {
-    if (currentStep === 'payment' && selectedPlanId && !clientSecret && selectedPlan?.stripePriceId) {
-      createSubscriptionMutation.mutate(selectedPlanId);
+  // Funções auxiliares para cálculo de desconto
+  const getDiscountPercentage = () => {
+    if (!automaticDiscount || automaticDiscount.discountType !== 'percentage') {
+      return 50; // fallback para 50% se não houver desconto automático
     }
-  }, [currentStep, selectedPlanId, clientSecret, selectedPlan?.stripePriceId]);
+    return automaticDiscount.discountValue;
+  };
+
+  const getDiscountMultiplier = () => {
+    const percentage = getDiscountPercentage();
+    return (100 - percentage) / 100; // Ex: 50% = 0.5 multiplier
+  };
+
+  const calculateDiscountedPrice = (originalPrice: number) => {
+    if (!automaticDiscount || automaticDiscount.discountType !== 'percentage') {
+      return originalPrice * 0.5; // fallback para 50% de desconto
+    }
+    return originalPrice * getDiscountMultiplier();
+  };
+
+  // useEffect para pagamento removido - agora redirecionamos diretamente para Checkout Session
 
   // Mutation para registro com plano (novo sistema)
   const registerWithPlanMutation = useMutation({
     mutationFn: async (planId: number) => {
       if (!formData) throw new Error("Dados do formulário não encontrados");
       
-      console.log('🚀 Enviando dados para registro com plano:', { planId, userData: formData });
-      
-      const data = await apiRequest('/api/register-with-plan', 'POST', { 
+      const payload = { 
         planId,
-        ...formData
-      });
+        billingInterval, // Incluir billingInterval selecionado pelo usuário
+        ...formData,
+        // Incluir ID do desconto automático se disponível
+        ...(automaticDiscount && { discountCodeId: automaticDiscount.id })
+      };
+      
+      console.log('🚀 Enviando dados para registro com plano:', payload);
+      
+      const data = await apiRequest('/api/register-with-plan', 'POST', payload);
       
       return data;
     },
@@ -75,66 +109,55 @@ export function RegisterModal({
         // Para plano START - mostrar tela de boas-vindas primeiro
         console.log('🎯 Trial ativo - indo para tela de boas-vindas');
         setCurrentStep('trial-welcome');
-      } else if (data.requiresPayment) {
-        // Para outros planos - continuar para pagamento
+      } else if (data.checkoutUrl) {
+        // Se já tem URL de checkout (com desconto automático aplicado), redirecionar diretamente
+        console.log('🔗 Redirecionando para checkout com desconto:', data.checkoutUrl);
+        toast({
+          title: "Dados salvos!",
+          description: data.discountApplied ? "Redirecionando para pagamento com desconto..." : "Redirecionando para pagamento...",
+        });
+        window.location.href = data.checkoutUrl;
+      } else {
+        // Para planos pagos sem checkout direto - usar método antigo
         toast({
           title: "Dados salvos!",
           description: "Complete o pagamento para ativar sua conta.",
         });
-        createSubscriptionMutation.mutate(data.planId);
+        createCheckoutSessionMutation.mutate(data.planId);
       }
     },
     onError: (error: any) => {
       console.error('❌ Erro no registro com plano:', error);
       
-      // Ir para tela de erro ao invés de apenas mostrar toast
-      setCurrentStep('error');
-    }
+      // Se for erro de usuário já existente, mostrar tela de erro específica
+      if (error.message?.includes('já existe') || error.message?.includes('already exists')) {
+        setCurrentStep('error');
+      } else {
+        toast({
+          title: "Erro no Registro",
+          description: error.message || "Erro ao criar conta. Tente novamente.",
+          variant: "destructive",
+        });
+      }
+    },
   });
 
-  // Mutation para validar CRM via webhook externo
+  // Mutation para validação de CRM
   const validateCrmMutation = useMutation({
     mutationFn: async ({ crm, crmUf }: { crm: string; crmUf: string }) => {
-      const response = await fetch('https://lipegol18.app.n8n.cloud/webhook/validar-crm', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ crm, crmUf }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Falha na validação do CRM');
-      }
-      
-      return response.json();
+      const response = await apiRequest('/api/validate-crm', 'POST', { crm, crmUf });
+      return response;
     },
     onMutate: ({ crm, crmUf }) => {
-      // Definir status como validando
       const crmKey = `${crm}-${crmUf}`;
       setCrmValidationStatus(prev => ({ ...prev, [crmKey]: 'validating' }));
     },
-    onSuccess: (data, { crm, crmUf }) => {
-      const crmKey = `${crm}-${crmUf}`;
-      // Assumir que o webhook retorna { valid: boolean }
-      setCrmValidationStatus(prev => ({ ...prev, [crmKey]: data.valid ? 'valid' : 'invalid' }));
-      
-      if (!data.valid) {
-        toast({
-          title: "CRM Inválido",
-          description: "O número de CRM informado não foi encontrado no sistema do CFM.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "CRM Validado",
-          description: "CRM confirmado no sistema do CFM.",
-          variant: "default",
-        });
-      }
+    onSuccess: (data, variables) => {
+      const crmKey = `${variables.crm}-${variables.crmUf}`;
+      setCrmValidationStatus(prev => ({ ...prev, [crmKey]: data.isValid ? 'valid' : 'invalid' }));
     },
-    onError: (error: any, { crm, crmUf }) => {
-      const crmKey = `${crm}-${crmUf}`;
+    onError: (error, variables) => {
+      const crmKey = `${variables.crm}-${variables.crmUf}`;
       setCrmValidationStatus(prev => ({ ...prev, [crmKey]: 'invalid' }));
       
       toast({
@@ -145,30 +168,38 @@ export function RegisterModal({
     },
   });
 
-  // Mutation para criar assinatura no Stripe (planos pagos)
-  const createSubscriptionMutation = useMutation({
+  // Mutation para criar Checkout Session e redirecionar
+  const createCheckoutSessionMutation = useMutation({
     mutationFn: async (planId: number) => {
       if (!formData) throw new Error("Dados do formulário não encontrados");
       
-      console.log('🚀 Enviando dados para criar assinatura Stripe:', { planId, userData: formData });
+      console.log('🛒 Criando Checkout Session:', { planId, userData: formData });
       
-      const data = await apiRequest('/api/stripe/create-subscription-for-registration', 'POST', { 
+      const data = await apiRequest('/api/payments/checkout-session-for-registration', 'POST', { 
         planId, 
-        userData: formData 
+        userData: formData,
+        billingInterval: billingInterval // Usar seleção real do usuário
       });
       
-      console.log('✅ Dados recebidos:', data);
+      console.log('✅ Checkout Session criado:', data);
       return data;
     },
     onSuccess: (data) => {
-      console.log('🎉 Sucesso! clientSecret:', data.clientSecret);
-      setClientSecret(data.clientSecret);
+      console.log('🎉 Sucesso! Redirecionando para Stripe Checkout...');
+      
+      if (data.url) {
+        console.log('🔄 URL do checkout:', data.url);
+        // Redirecionar para a URL do Checkout Session
+        window.location.href = data.url;
+      } else {
+        throw new Error('URL do checkout não recebida');
+      }
     },
     onError: (error: any) => {
       console.error('💥 Erro na mutation:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao criar assinatura",
+        description: error.message || "Erro ao criar checkout",
         variant: "destructive",
       });
     },
@@ -184,12 +215,26 @@ export function RegisterModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // Dados básicos
           email: data.email,
           firstName: data.firstName,
           lastName: data.lastName,
           cpf: data.cpf,
           phone: data.phone,
           username: data.username,
+          // Dados CRM
+          medicalSpecialtyId: data.medicalSpecialtyId,
+          crmNumber: data.crmNumber,
+          crmState: data.crmState,
+          // Dados de endereço
+          zipCode: data.zipCode,
+          address: data.address,
+          addressNumber: data.addressNumber,
+          complement: data.complement,
+          neighborhood: data.neighborhood,
+          city: data.city,
+          state: data.state,
+          // Tracking
           currentStep: 'form_completed',
           userAgent: navigator.userAgent,
           source: 'direct'
@@ -200,10 +245,47 @@ export function RegisterModal({
       // Não bloquear o fluxo por erro de tracking
     }
     
+    // Fazer scroll para o topo do modal quando transita para escolha de planos
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
     setCurrentStep('pricing');
   };
 
-  const handleBackToForm = () => {
+  const handleBackToForm = async () => {
+    // Carregar dados salvos se existir email
+    if (formData?.email) {
+      try {
+        console.log('🔍 Carregando dados salvos para email:', formData.email);
+        
+        const response = await fetch(`/api/incomplete-registration/${encodeURIComponent(formData.email)}`);
+        
+        if (response.ok) {
+          const result = await response.json();
+          
+          if (result.success && result.data) {
+            console.log('✅ Dados carregados:', result.data);
+            setPreloadedFormData(result.data);
+            
+            // Se houver plano selecionado salvo, restaurar também
+            if (result.selectedPlanId) {
+              setSelectedPlanId(result.selectedPlanId);
+            }
+          }
+        } else {
+          console.log('ℹ️ Nenhum dado salvo encontrado, mantendo dados atuais');
+          // Se não encontrar dados salvos, usar os dados atuais do formData
+          setPreloadedFormData(formData);
+        }
+      } catch (error) {
+        console.error('❌ Erro ao carregar dados salvos:', error);
+        // Em caso de erro, usar os dados atuais do formData
+        setPreloadedFormData(formData);
+      }
+    } else {
+      // Se não houver email, limpar dados pré-carregados
+      setPreloadedFormData(null);
+    }
+    
     setCurrentStep('form');
   };
 
@@ -231,331 +313,444 @@ export function RegisterModal({
     }
     
     // NÃO executar ação aqui - apenas marcar plano como selecionado
-    console.log(`📋 Plano ${planId} selecionado (apenas visual)`);
+    console.log(`Plano ${planId} selecionado (apenas visual)`);
   };
 
-  // Função para executar a ação do plano selecionado
-  const handlePlanAction = (planId: number) => {
-    console.log(`🚀 handlePlanAction chamado com planId: ${planId}`);
-    
-    // NOVO FLUXO: Para plano START (ID 1), criar usuário imediatamente e depois mostrar boas-vindas
-    if (planId === 1) {
-      console.log('🎯 Plano START detectado - criando usuário primeiro');
-      registerWithPlanMutation.mutate(planId);
-    } else {
-      // Para outros planos, ir para pagamento
-      console.log(`💳 Plano ${planId} - indo para pagamento`);
-      if (formData && selectedPlan?.stripePriceId) {
-        const completeData = { ...formData, selectedPlanId: planId };
-        
-        sessionStorage.setItem('registrationData', JSON.stringify(completeData));
-        sessionStorage.setItem('selectedPlanId', planId.toString());
-        
-        setCurrentStep('payment');
-        createSubscriptionMutation.mutate(planId);
-      } else {
-        console.log('❌ Dados insuficientes para pagamento:', { formData: !!formData, stripePriceId: selectedPlan?.stripePriceId });
-      }
-    }
-  };
-
-  const handleAdvanceToPayment = () => {
-    // Executar a ação do plano selecionado
-    if (selectedPlanId) {
-      handlePlanAction(selectedPlanId);
-    }
-  };
-
-  // Função para validar campos incluindo validação de CRM via webhook
-  const handleFieldValidation = (field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string, additionalData?: any) => {
-    // Chamar a validação original
-    onFieldValidation(field, value);
-    
-    // Se for campo CRM e tivermos dados suficientes, validar via webhook
-    if (field === 'crm' && value && additionalData?.crmUf) {
-      validateCrmMutation.mutate({ 
-        crm: value, 
-        crmUf: additionalData.crmUf 
+  // Função para avançar da seleção de planos para confirmação ou contato
+  const handleAdvanceToConfirmation = async () => {
+    if (!selectedPlanId) {
+      toast({
+        title: "Plano não selecionado",
+        description: "Por favor, selecione um plano para continuar.",
+        variant: "destructive",
       });
+      return;
     }
+
+    // Fazer scroll para o topo do modal
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    // Se for plano CLÍNICA (id 3), ir para tela de contato
+    if (selectedPlanId === 3) {
+      setCurrentStep('clinica-contact');
+    } else {
+      // Para outros planos, ir para confirmação normal
+      setCurrentStep('confirmation');
+    }
+  };
+
+  // Função para processar o pagamento final (da confirmação)
+  const handleFinalizePayment = async () => {
+    if (!selectedPlanId) return;
+    
+    // Executar ação baseada no plano
+    registerWithPlanMutation.mutate(selectedPlanId);
   };
 
   // Indicador de progresso
-  const ProgressIndicator = () => (
-    <div className="flex items-center justify-center mb-4 sm:mb-6 px-2">
-      <div className="flex items-center space-x-2 sm:space-x-4">
-        {/* Etapa 1 - Dados */}
-        <div className="flex items-center">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-            currentStep === 'form' ? 'bg-accent text-white' : 
-            (currentStep === 'pricing' || currentStep === 'payment') ? 'bg-green-500 text-white' : 
-            'bg-gray-300 text-gray-600'
-          }`}>
-            {(currentStep === 'pricing' || currentStep === 'payment') ? '✓' : '1'}
+  const ProgressIndicator = () => {
+    const isCompleted = (step: string) => {
+      if (currentStep === 'form') return false;
+      if (currentStep === 'pricing') return step === 'form';
+      if (currentStep === 'confirmation') return step === 'form' || step === 'pricing';
+      return step === 'form' || step === 'pricing' || step === 'confirmation';
+    };
+
+    const isCurrent = (step: string) => currentStep === step;
+
+    return (
+      <div className="flex items-center justify-center mb-4 sm:mb-4 px-4">
+        <div className="flex items-center space-x-2 sm:space-x-4">
+          {/* Etapa 1: Formulário */}
+          <div className="flex items-center">
+            <div className={`breadcrumb-base ${
+              isCurrent('form') ? 'breadcrumb-active' : 
+                isCompleted('form') ? 'breadcrumb-completed' : 
+                'breadcrumb-inactive'
+            }`}>
+              {isCompleted('form') ? '✓' : '1'}
+            </div>
+            <span className={`
+              ml-2 text-xs sm:text-sm font-medium hidden sm:inline
+              ${isCurrent('form') ? 'text-accent' : 
+                isCompleted('form') ? 'text-green-600' : 
+                'text-gray-500'}
+            `}>
+              Dados
+            </span>
           </div>
-          <span className={`ml-1 sm:ml-2 text-xs sm:text-sm font-medium ${
-            currentStep === 'form' ? 'text-accent' : 
-            (currentStep === 'pricing' || currentStep === 'payment') ? 'text-green-600' : 
-            'text-gray-500'
-          }`}>
-            <span className="hidden sm:inline">Seus dados</span>
-            <span className="sm:hidden">Dados</span>
-          </span>
-        </div>
-        
-        {/* Linha conectora 1 */}
-        <div className={`w-6 sm:w-12 h-0.5 ${
-          (currentStep === 'pricing' || currentStep === 'payment') ? 'bg-green-500' : 'bg-gray-300'
-        }`} />
-        
-        {/* Etapa 2 - Planos */}
-        <div className="flex items-center">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-            currentStep === 'pricing' ? 'bg-accent text-white' : 
-            currentStep === 'payment' ? 'bg-green-500 text-white' : 
-            'bg-gray-300 text-gray-600'
-          }`}>
-            {currentStep === 'payment' ? '✓' : '2'}
+
+          {/* Linha conectora 1 */}
+          <div className={`
+            w-4 sm:w-8 h-1 rounded-full
+            ${isCompleted('form') ? 'bg-green-500' : 'bg-gray-300'}
+          `} />
+
+          {/* Etapa 2: Planos */}
+          <div className="flex items-center">
+            <div className={`breadcrumb-base ${
+              isCurrent('pricing') ? 'breadcrumb-active' : 
+                isCompleted('pricing') ? 'breadcrumb-completed' : 
+                'breadcrumb-inactive'
+            }`}>
+              {isCompleted('pricing') ? '✓' : '2'}
+            </div>
+            <span className={`
+              ml-2 text-xs sm:text-sm font-medium hidden sm:inline
+              ${isCurrent('pricing') ? 'text-accent' : 
+                isCompleted('pricing') ? 'text-green-600' : 
+                'text-gray-500'}
+            `}>
+              Planos
+            </span>
           </div>
-          <span className={`ml-1 sm:ml-2 text-xs sm:text-sm font-medium ${
-            currentStep === 'pricing' ? 'text-accent' : 
-            currentStep === 'payment' ? 'text-green-600' : 
-            'text-gray-500'
-          }`}>
-            <span className="hidden sm:inline">Escolha seu plano</span>
-            <span className="sm:hidden">Plano</span>
-          </span>
-        </div>
-        
-        {/* Linha conectora 2 */}
-        <div className={`w-6 sm:w-12 h-0.5 ${
-          currentStep === 'payment' ? 'bg-accent' : 'bg-gray-300'
-        }`} />
-        
-        {/* Etapa 3 - Pagamento */}
-        <div className="flex items-center">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-            currentStep === 'payment' ? 'bg-accent text-white' : 'bg-gray-300 text-gray-600'
-          }`}>
-            3
+
+          {/* Linha conectora 2 */}
+          <div className={`
+            w-4 sm:w-8 h-1 rounded-full
+            ${isCompleted('pricing') ? 'bg-green-500' : 'bg-gray-300'}
+          `} />
+
+          {/* Etapa 3: Confirmação */}
+          <div className="flex items-center">
+            <div className={`breadcrumb-base ${
+              isCurrent('confirmation') ? 'breadcrumb-active' : 
+                isCompleted('confirmation') ? 'breadcrumb-completed' : 
+                'breadcrumb-inactive'
+            }`}>
+              {isCompleted('confirmation') ? '✓' : '3'}
+            </div>
+            <span className={`
+              ml-2 text-xs sm:text-sm font-medium hidden sm:inline
+              ${isCurrent('confirmation') ? 'text-accent' : 
+                isCompleted('confirmation') ? 'text-green-600' : 
+                'text-gray-500'}
+            `}>
+              Confirmação
+            </span>
           </div>
-          <span className={`ml-1 sm:ml-2 text-xs sm:text-sm font-medium ${
-            currentStep === 'payment' ? 'text-accent' : 'text-gray-500'
-          }`}>
-            <span className="hidden sm:inline">Efetue o Pagamento</span>
-            <span className="sm:hidden">Pagamento</span>
-          </span>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
+  // Etapa 1: Formulário de registro
+  if (currentStep === 'form') {
+    return (
+      <div>
+        <ProgressIndicator />
+        <RegisterForm 
+          onSubmit={handleFormSubmit}
+          onSwitchToLogin={onSwitchToLogin}
+          isLoading={isLoading}
+          validationErrors={validationErrors}
+          onFieldValidation={onFieldValidation}
+          defaultValues={preloadedFormData || formData || undefined}
+        />
+      </div>
+    );
+  }
+
+  // Etapa 2: Seleção de planos
   if (currentStep === 'pricing') {
     return (
       <div>
         <ProgressIndicator />
         
-        {/* Header da seção de preços com botão */}
-        <div className="relative mb-6">
-          <button
-            onClick={handleBackToForm}
-            className="absolute left-0 top-0 flex items-center text-accent hover:text-accent/80 text-sm font-bold transition-colors"
-          >
-            ← Voltar aos dados
-          </button>
-          
-          <div className="text-center">
-            <h2 className="text-2xl font-black text-gray-900">Quase lá!</h2>
-            <p className="text-gray-600 leading-relaxed font-bold text-sm">
-              Agora escolha o plano ideal para você
-            </p>
+        {/* Header da seção de planos - Melhorado */}
+        <div className="text-center mb-6 sm:mb-8 px-2">
+          <h2 className="text-2xl sm:text-3xl font-black text-gray-900 mb-3">
+            Escolha seu <span className="text-blue-600">Plano Ideal</span>
+          </h2>
+        </div>
+
+        {/* Toggle para período de cobrança - Melhorado */}
+        <div className="flex justify-center mb-6 sm:mb-8">
+          <div className="relative">
+            {/* Badge de economia */}
+            <div className="absolute -top-3 -right-2 z-20">
+              <span className="inline-block px-2 py-1 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 transform rotate-12 shadow-sm" style={{fontFamily: 'Nunito, sans-serif'}}>
+                2 meses grátis
+              </span>
+            </div>
+            
+            <div className="flex items-center bg-gradient-to-r from-blue-50 to-sky-50 border border-blue-200 rounded-xl p-1.5 shadow-sm">
+              <div className="relative flex bg-white rounded-lg shadow-sm">
+                {/* Indicador deslizante melhorado */}
+                <div 
+                  className={`absolute top-0 bottom-0 bg-gradient-to-r from-blue-600 to-sky-600 rounded-lg transition-all duration-300 ease-in-out shadow-sm ${
+                    billingInterval === 'monthly' 
+                      ? 'left-0 w-1/2' 
+                      : 'left-1/2 w-1/2'
+                  }`}
+                />
+                
+                <button
+                  type="button"
+                  className={`relative z-10 text-sm font-semibold px-6 py-2.5 rounded-lg transition-all duration-300 hover:bg-transparent hover:text-current ${
+                    billingInterval === 'monthly' 
+                      ? 'text-white' 
+                      : 'text-gray-700 hover:text-gray-900'
+                  }`}
+                  onClick={() => setBillingInterval('monthly')}
+                >
+                  Mensal
+                </button>
+                <button
+                  type="button"
+                  className={`relative z-10 text-sm font-semibold px-6 py-2.5 rounded-lg transition-all duration-300 hover:bg-transparent hover:text-current ${
+                    billingInterval === 'yearly' 
+                      ? 'text-white' 
+                      : 'text-gray-700 hover:text-gray-900'
+                  }`}
+                  onClick={() => setBillingInterval('yearly')}
+                >
+                  Anual
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
         <PricingSection 
           onPlanSelection={handlePlanSelection}
           selectedPlanId={selectedPlanId || undefined}
-          onAdvanceToPayment={handleAdvanceToPayment}
+          onAdvanceToPayment={handleAdvanceToConfirmation}
+          billingInterval={billingInterval}
+          onBackToForm={handleBackToForm}
         />
       </div>
     );
   }
 
-  // Etapa de pagamento
-  if (currentStep === 'payment') {
-    // Componente interno de checkout
-    const CheckoutFormComponent = () => {
-      const stripe = useStripe();
-      const elements = useElements();
-      const [isProcessing, setIsProcessing] = useState(false);
+  // Debug: mostrar estado atual
+  console.log('🔍 Renderização - currentStep:', currentStep);
 
-      const handlePaymentSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        
-        if (!stripe || !elements || !formData) return;
-        
-        setIsProcessing(true);
-
-        try {
-          // Confirmar pagamento com Stripe
-          const { error } = await stripe.confirmPayment({
-            elements,
-            confirmParams: {
-              return_url: `${window.location.origin}/payment-success`,
-            },
-            redirect: 'if_required'
-          });
-
-          if (error) {
-            toast({
-              title: "Erro no Pagamento",
-              description: error.message,
-              variant: "destructive",
-            });
-            setIsProcessing(false);
-            return;
-          }
-
-          // Se chegou aqui, pagamento foi bem-sucedido
-          try {
-            // Criar usuário via API
-            const userData = { ...formData, selectedPlanId };
-            const response = await apiRequest('POST', '/api/register', userData);
-            
-            if (response.ok) {
-              // Tracking: marcar registro como completado
-              fetch('/api/track-lead', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  email: formData.email,
-                  currentStep: 'completed',
-                  userAgent: navigator.userAgent,
-                })
-              }).catch(() => {}); // Ignorar erro de tracking
-              
-              // Limpar sessionStorage
-              sessionStorage.removeItem('registrationData');
-              sessionStorage.removeItem('selectedPlanId');
-              
-              toast({
-                title: "Conta Criada com Sucesso!",
-                description: "Sua assinatura foi ativada e conta criada.",
-              });
-              
-              setLocation('/welcome');
-            } else {
-              throw new Error('Erro ao criar conta');
-            }
-          } catch (userError) {
-            console.error('Erro ao criar usuário:', userError);
-            toast({
-              title: "Pagamento Aprovado",
-              description: "Pagamento processado, mas houve erro ao criar conta. Contate o suporte.",
-              variant: "destructive",
-            });
-          }
-        } catch (error) {
-          console.error('Erro no pagamento:', error);
-          toast({
-            title: "Erro no Pagamento",
-            description: "Ocorreu um erro inesperado. Tente novamente.",
-            variant: "destructive",
-          });
-        } finally {
-          setIsProcessing(false);
-        }
-      };
-
-      return (
-        <form onSubmit={handlePaymentSubmit} className="space-y-6">
-          <PaymentElement />
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setCurrentStep('pricing')}
-              className="flex-1 text-sm sm:text-base py-2 sm:py-3"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              <span className="hidden sm:inline">Voltar aos Planos</span>
-              <span className="sm:hidden">Voltar</span>
-            </Button>
-            <Button
-              type="submit"
-              disabled={!stripe || !elements || isProcessing}
-              className="flex-1 text-sm sm:text-base py-2 sm:py-3"
-            >
-              {isProcessing ? 'Processando...' : (
-                <>
-                  <span className="hidden sm:inline">Finalizar Pagamento</span>
-                  <span className="sm:hidden">Finalizar</span>
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
-      );
-    };
-
+  // Etapa 3: Confirmação dos dados e plano
+  if (currentStep === 'confirmation') {
     return (
       <div>
         <ProgressIndicator />
         
-        {/* Header da seção de pagamento */}
-        <div className="text-center mb-4 sm:mb-6 px-2">
-          <h2 className="text-xl sm:text-2xl font-black text-gray-900">Finalizar Assinatura</h2>
+        {/* Header da seção de confirmação */}
+        <div className="text-center mb-6 px-2">
+          <h2 className="text-xl sm:text-2xl font-black text-gray-900">Confirme seus Dados</h2>
           <p className="text-gray-600 leading-relaxed font-bold text-xs sm:text-sm">
-            Complete seu pagamento para começar a usar o MedSync
+            Revise as informações antes de finalizar o pagamento
           </p>
         </div>
 
-        {/* Resumo do plano selecionado */}
-        {selectedPlan && (
-          <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
-            <h3 className="font-bold text-gray-900 mb-2 text-sm sm:text-base">Plano Selecionado: {selectedPlan.name}</h3>
-            <p className="text-gray-600 text-xs sm:text-sm mb-2">{selectedPlan.description}</p>
-            <div className="flex justify-between items-center">
-              <span className="text-lg font-bold text-accent">
-                R$ {(selectedPlan.price / 100).toFixed(2).replace('.', ',')}
-              </span>
-              <span className="text-sm text-gray-500">por mês</span>
+        <div className="px-4 space-y-6">
+          {/* Dados Pessoais */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-bold text-gray-900 mb-3">Dados Pessoais</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div><span className="text-gray-600">Nome:</span> <span className="font-medium">{formData?.firstName} {formData?.lastName}</span></div>
+              <div><span className="text-gray-600">CPF:</span> <span className="font-medium">{formData?.cpf}</span></div>
+              <div><span className="text-gray-600">E-mail:</span> <span className="font-medium">{formData?.email}</span></div>
+              <div><span className="text-gray-600">Telefone:</span> <span className="font-medium">{formData?.phone}</span></div>
+              <div><span className="text-gray-600">CRM:</span> <span className="font-medium">{formData?.crm} / {formData?.crmUf}</span></div>
+              <div><span className="text-gray-600">Username:</span> <span className="font-medium">{formData?.username}</span></div>
             </div>
           </div>
-        )}
 
-        {/* Checkout Form */}
-        <div className="px-1 sm:px-0">
-        {clientSecret ? (
-          <Elements 
-            stripe={stripePromise} 
-            options={{ 
-              clientSecret,
-              appearance: {
-                theme: 'stripe',
-                variables: {
-                  colorPrimary: '#2ca8e0',
-                  colorBackground: '#ffffff',
-                  colorText: '#1f2937',
-                  colorDanger: '#ef4444',
-                  fontFamily: 'Inter, system-ui, sans-serif',
-                  borderRadius: '8px',
-                },
-              },
-            }}
-          >
-            <CheckoutFormComponent />
-          </Elements>
-        ) : (
-          <div className="text-center py-8">
-            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-            <p className="text-gray-600">Inicializando pagamento...</p>
+          {/* Endereço */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-bold text-gray-900 mb-3">Endereço</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div><span className="text-gray-600">CEP:</span> <span className="font-medium">{formData?.cep}</span></div>
+              <div><span className="text-gray-600">Endereço:</span> <span className="font-medium">{formData?.address}, {formData?.number}</span></div>
+              <div><span className="text-gray-600">Complemento:</span> <span className="font-medium">{formData?.complement || '—'}</span></div>
+              <div><span className="text-gray-600">Bairro:</span> <span className="font-medium">{formData?.neighborhood}</span></div>
+              <div><span className="text-gray-600">Cidade:</span> <span className="font-medium">{formData?.city}</span></div>
+              <div><span className="text-gray-600">Estado:</span> <span className="font-medium">{formData?.state}</span></div>
+            </div>
           </div>
-        )}
+
+          {/* Plano Selecionado */}
+          {selectedPlan && (
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <h3 className="font-bold text-gray-900 mb-3">Plano Selecionado</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-lg">{selectedPlan.name}</span>
+                  <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                    {billingInterval === 'monthly' ? 'Mensal' : 'Anual'}
+                  </span>
+                </div>
+                <p className="text-gray-600 text-sm">{selectedPlan.description}</p>
+                <div className="flex justify-between items-center pt-2 border-t border-blue-200">
+                  <span className="text-gray-600">Total a pagar:</span>
+                  <div className="text-right">
+                    {automaticDiscount && (
+                      <div className="text-sm text-red-500 font-medium">
+                        {getDiscountPercentage()}% de desconto no primeiro ano
+                      </div>
+                    )}
+                    <span className="text-2xl font-bold text-blue-600">
+                      R$ {billingInterval === 'monthly' 
+                        ? calculateDiscountedPrice(selectedPlan.priceMonthly / 100).toFixed(2)
+                        : calculateDiscountedPrice(selectedPlan.priceYearly / 100).toFixed(2)
+                      }
+                      <span className="text-sm text-gray-500">/{billingInterval === 'monthly' ? 'mês' : 'ano'}</span>
+                    </span>
+                    {automaticDiscount && (
+                      <div className="text-xs text-gray-500 line-through">
+                        De: R$ {billingInterval === 'monthly' ? (selectedPlan.priceMonthly / 100).toFixed(2) : (selectedPlan.priceYearly / 100).toFixed(2)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Botões de Ação */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <button 
+              type="button"
+              onClick={() => setCurrentStep('pricing')}
+              className="flex-1 font-semibold py-3 px-8 rounded-lg transition-colors duration-200 bg-accent hover:bg-gray-300 text-white flex items-center justify-center"
+              data-testid="button-back-to-pricing"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Alterar Plano
+            </button>
+            
+            <button 
+              type="button"
+              onClick={() => setCurrentStep('form')}
+              className="flex-1 font-semibold py-3 px-8 rounded-lg transition-colors duration-200 bg-accent hover:bg-gray-300 text-white"
+              data-testid="button-back-to-form"
+            >
+              Editar Dados
+            </button>
+            
+            <button 
+              type="button"
+              onClick={handleFinalizePayment}
+              disabled={registerWithPlanMutation.isPending}
+              className="flex-1 font-semibold py-3 px-8 rounded-lg transition-colors duration-200 bg-accent hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="button-finalize-payment"
+            >
+              {registerWithPlanMutation.isPending ? 'Processando...' : 'Finalizar Pagamento'}
+            </button>
+          </div>
         </div>
       </div>
     );
   }
+
+  // Etapa de contato para plano CLÍNICA
+  if (currentStep === 'clinica-contact') {
+    return (
+      <div className="px-4 py-6">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+              <span className="text-2xl">🏥</span>
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Plano CLÍNICA - Consultoria Personalizada
+          </h2>
+          <p className="text-gray-600 text-sm leading-relaxed">
+            Este plano é customizado para cada empresa.<br/>
+            Nossa equipe comercial entrará em contato em até 24h.
+          </p>
+        </div>
+
+        {/* Benefícios do plano */}
+        <div className="bg-blue-50 rounded-lg p-4 mb-6">
+          <h3 className="font-bold text-blue-900 mb-3">✨ Benefícios Exclusivos</h3>
+          <ul className="space-y-2 text-sm text-blue-800">
+            <li className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+              Médicos ilimitados na clínica
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+              Integração com sistemas existentes
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+              Suporte técnico dedicado 24/7
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+              Treinamento da equipe incluso
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full"></span>
+              Relatórios avançados e analytics
+            </li>
+          </ul>
+        </div>
+
+        {/* Processo */}
+        <div className="bg-gray-50 rounded-lg p-4 mb-6">
+          <h3 className="font-bold text-gray-900 mb-3">Como funciona?</h3>
+          <div className="space-y-3 text-sm text-gray-700">
+            <div className="flex items-start gap-3">
+              <span className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">1</span>
+              <span>Entre em contato conosco pelo WhatsApp ou formulário</span>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">2</span>
+              <span>Nossa equipe agenda uma reunião para entender suas necessidades</span>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">3</span>
+              <span>Criamos uma proposta personalizada com preço e cronograma</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Opções de contato */}
+        <div className="space-y-4 mb-6">
+          <h3 className="font-bold text-gray-900 text-center">💬 Entre em contato agora:</h3>
+          
+          {/* WhatsApp */}
+          <button
+            onClick={() => openSupport("Olá! Tenho interesse no Plano CLÍNICA do MedSync e gostaria de saber mais informações.", "sales")}
+            className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+          >
+            <span className="text-xl">📱</span>
+            Falar via WhatsApp
+          </button>
+
+          {/* Formulário de contato */}
+          <button
+            onClick={() => {
+              toast({
+                title: "Formulário em breve!",
+                description: "Use o WhatsApp para contato imediato ou envie email para contato@medsync.com.br",
+              });
+            }}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+          >
+            <span className="text-xl">📧</span>
+            Formulário de Contato
+          </button>
+        </div>
+
+        {/* Botões de ação */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button 
+            type="button"
+            onClick={() => setCurrentStep('pricing')}
+            className="flex-1 font-semibold py-3 px-8 rounded-lg transition-colors duration-200 bg-accent hover:bg-gray-300 text-white flex items-center justify-center"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Voltar aos Planos
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Etapa de pagamento removida - agora redirecionamos diretamente para Checkout Session
 
   // Tela de boas-vindas para trial do plano START
   if (currentStep === 'trial-welcome') {
@@ -607,7 +802,8 @@ export function RegisterModal({
         </div>
 
         {/* Botão para acessar o dashboard */}
-        <Button 
+        <button 
+          type="button"
           onClick={() => {
             console.log('🎯 Redirecionando para dashboard');
             toast({
@@ -619,22 +815,21 @@ export function RegisterModal({
             queryClient.invalidateQueries({ queryKey: ['/api/user'] });
             setLocation('/welcome');
           }}
-          size="lg"
-          className="w-full bg-accent hover:bg-accent/90 text-white font-semibold py-3"
+          className="w-full bg-accent hover:bg-accent/90 text-white font-semibold py-3 rounded-lg"
         >
           Começar a Usar o MedSync
-        </Button>
+        </button>
 
         {/* Botão para voltar */}
-        <Button 
-          variant="ghost" 
+        <button 
+          type="button"
           onClick={() => setCurrentStep('pricing')}
-          className="mt-4 w-full"
+          className="mt-4 w-full py-2 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center"
           disabled={registerWithPlanMutation.isPending}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Voltar aos Planos
-        </Button>
+        </button>
       </div>
     );
   }
@@ -654,83 +849,57 @@ export function RegisterModal({
 
         {/* Título */}
         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          Ops! Algo deu errado
+          Ops! Usuário já existe
         </h2>
 
-        {/* Mensagem de erro */}
+        {/* Mensagem */}
         <div className="space-y-4 mb-6">
-          <p className="text-lg text-gray-700 dark:text-gray-300">
-            Ocorreu um problema técnico durante a criação da sua conta.
+          <p className="text-gray-700 dark:text-gray-300">
+            Já existe uma conta cadastrada com esses dados.
           </p>
           
-          <div className="bg-red-50 dark:bg-red-900 rounded-lg p-4">
-            <p className="text-sm text-red-800 dark:text-red-200">
-              Isso pode ter acontecido porque:
-            </p>
-            <ul className="text-sm text-red-700 dark:text-red-300 mt-2 space-y-1 text-left">
-              <li>• O email ou CPF já estão cadastrados no sistema</li>
-              <li>• Houve uma instabilidade temporária no servidor</li>
-              <li>• Alguns dados podem estar em formato incorreto</li>
-            </ul>
-          </div>
-
           <div className="bg-blue-50 dark:bg-blue-900 rounded-lg p-4">
-            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-              O que você pode fazer:
-            </h3>
-            <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1 text-left">
-              <li>✓ Tente novamente em alguns minutos</li>
-              <li>✓ Verifique se seus dados estão corretos</li>
-              <li>✓ Entre em contato com nosso suporte se o problema persistir</li>
-            </ul>
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              Se você já tem uma conta, faça login para acessar o sistema.
+              Se esqueceu sua senha, use a opção "Esqueci minha senha".
+            </p>
           </div>
         </div>
 
         {/* Botões */}
         <div className="space-y-3">
-          <Button 
-            onClick={() => {
-              // Voltar para seleção de planos para tentar novamente
-              setCurrentStep('pricing');
-            }}
-            size="lg"
-            className="w-full bg-accent hover:bg-accent/90 text-white font-semibold py-3"
+          <button 
+            type="button"
+            onClick={onSwitchToLogin}
+            className="w-full bg-accent hover:bg-accent/90 text-white font-semibold py-3 rounded-lg"
           >
+            Fazer Login
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setCurrentStep('form')}
+            className="w-full border border-gray-300 hover:bg-gray-100 py-2 rounded-lg transition-colors flex items-center justify-center"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
             Tentar Novamente
-          </Button>
-
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              // Voltar para o formulário de dados
-              setCurrentStep('form');
-            }}
-            className="w-full"
-          >
-            Verificar Meus Dados
-          </Button>
-
-          <div className="text-sm text-gray-500 mt-4">
-            Precisa de ajuda? Entre em contato com nosso suporte: 
-            <br />
-            <a href="mailto:suporte@medsync.com.br" className="text-accent hover:underline">
-              suporte@medsync.com.br
-            </a>
-          </div>
+          </button>
         </div>
       </div>
     );
   }
 
+  // Fallback: retornar ao formulário se currentStep não for reconhecido
   return (
     <div>
       <ProgressIndicator />
-      <RegisterForm
+      <RegisterForm 
         onSubmit={handleFormSubmit}
         onSwitchToLogin={onSwitchToLogin}
         isLoading={isLoading}
         validationErrors={validationErrors}
-        onFieldValidation={handleFieldValidation}
+        onFieldValidation={onFieldValidation}
+        defaultValues={preloadedFormData || formData || undefined}
       />
     </div>
   );
