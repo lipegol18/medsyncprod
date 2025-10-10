@@ -219,11 +219,42 @@
   --sky-primary: 200 98% 39%;       /* sky-500 para botões */
   --sky-primary-foreground: 0 0% 100%;
   
-  /* Cores específicas do MedSync usando cor personalizada */
-  --medsync-blue: 198 67% 48%;      /* #2ca8e0 mais escuro */
-  --medsync-dark-blue: 198 67% 43%; /* #2ca8e0 ainda mais escuro */
+  /* Cores específicas do MedSync - Paleta oficial */
+  --medsync-blue: 199 67% 53%;      /* #2ca8e0 - MedSync Blue */
+  --medsync-light-blue: 199 73% 55%; /* #36a9e1 - MedSync Light Blue */
+  --medsync-dark-blue: 202 71% 25%; /* #124a6b - MedSync Dark Blue */
+  --medsync-gray: 210 1% 44%;       /* #6e6f70 - MedSync Gray */
   --medsync-navy-blue: 213 49% 35%; /* #224968 clareado - azul navy médio */
   --medsync-green: 102 38% 59%;     /* #6fad45 - verde médico */
+  
+  /* Cores semânticas para status */
+  --success: 142 76% 36%;           /* green-600 */
+  --success-foreground: 0 0% 100%;
+  --warning: 32 95% 44%;            /* orange-600 */
+  --warning-foreground: 0 0% 100%;
+  --error: 0 84.2% 60.2%;           /* red-500 */
+  --error-foreground: 0 0% 100%;
+  --info: 198 67% 53%;              /* MedSync blue */
+  --info-foreground: 0 0% 100%;
+  
+  /* Variáveis para calendário cirúrgico */
+  --calendar-bg: 0 0% 100%;
+  --calendar-border: 214.3 31.8% 91.4%;
+  --calendar-header-bg: 210 40% 98%;
+  --calendar-header-text: 215.4 16.3% 46.9%;
+  --calendar-today-bg: 204 100% 97%;
+  --calendar-time-gutter-bg: 210 40% 98%;
+  --calendar-slot-border: 214.3 31.8% 94.7%;
+  --calendar-button-bg: 0 0% 100%;
+  --calendar-button-border: 217.2 32.6% 82%;
+  --calendar-button-text: 215.4 16.3% 46.9%;
+  --calendar-button-hover-bg: 210 40% 98%;
+  --calendar-button-active-bg: 217.2 91.2% 59.8%;
+  --calendar-off-range-bg: 210 40% 98%;
+  --calendar-show-more-bg: 220 14.3% 95.9%;
+  
+  /* Labels de gráficos */
+  --chart-label-text: 0 0% 100%;    /* Branco para labels em gráficos */
 }
 
 .dark {
@@ -245,18 +276,49 @@
   --secondary-foreground: 210 40% 98%;
   --accent: 198 89% 69%;
   --accent-foreground: 0 0% 100%;
-  --accent-light: 192 100% 93%;  /* #dcf6ff - azul muito claro para hover states (mesmo no tema escuro) */
-  --input-field: 210 100% 95%;  /* azul muito claro para campos de seleção */
+  --accent-light: 198 67% 25%;   /* Azul escuro para hover em tema dark */
+  --input-field: 214 40% 25%;    /* Azul escuro para campos de seleção */
   --destructive: 0 62.8% 50.6%;
   --destructive-foreground: 210 40% 98%;
   --ring: 210 100% 50%;
   --radius: 0.5rem;
   
-  /* Cores específicas para o MedSync que não mudam com o tema */
-  --medsync-blue: 198 67% 48%;      /* #2ca8e0 mais escuro */
-  --medsync-dark-blue: 198 67% 43%; /* #2ca8e0 ainda mais escuro */
+  /* Cores específicas do MedSync - Paleta oficial (mesmos valores para dark) */
+  --medsync-blue: 199 67% 53%;      /* #2ca8e0 - MedSync Blue */
+  --medsync-light-blue: 199 73% 55%; /* #36a9e1 - MedSync Light Blue */
+  --medsync-dark-blue: 202 71% 25%; /* #124a6b - MedSync Dark Blue */
+  --medsync-gray: 210 1% 44%;       /* #6e6f70 - MedSync Gray */
   --medsync-navy-blue: 213 49% 32%; /* #224968 clareado para tema dark */
   --medsync-green: 102 38% 59%;     /* #6fad45 - verde médico */
+  
+  /* Cores semânticas para status */
+  --success: 142 76% 36%;           /* green-600 */
+  --success-foreground: 0 0% 100%;
+  --warning: 32 95% 44%;            /* orange-600 */
+  --warning-foreground: 0 0% 100%;
+  --error: 0 72.2% 50.6%;           /* red-600 */
+  --error-foreground: 0 0% 100%;
+  --info: 198 67% 53%;              /* MedSync blue */
+  --info-foreground: 0 0% 100%;
+  
+  /* Variáveis para calendário cirúrgico */
+  --calendar-bg: 214 50% 20%;
+  --calendar-border: 220 14.3% 25%;
+  --calendar-header-bg: 214 60% 15%;
+  --calendar-header-text: 210 40% 85%;
+  --calendar-today-bg: 214 60% 25%;
+  --calendar-time-gutter-bg: 214 60% 15%;
+  --calendar-slot-border: 220 14.3% 22%;
+  --calendar-button-bg: 214 50% 20%;
+  --calendar-button-border: 220 14.3% 35%;
+  --calendar-button-text: 210 40% 85%;
+  --calendar-button-hover-bg: 214 60% 25%;
+  --calendar-button-active-bg: 217.2 91.2% 59.8%;
+  --calendar-off-range-bg: 214 60% 15%;
+  --calendar-show-more-bg: 220 14.3% 25%;
+  
+  /* Labels de gráficos - mesmo branco em dark mode */
+  --chart-label-text: 0 0% 100%;
 }
 
 @layer base {
@@ -275,7 +337,7 @@
   }
   
   .auth-card {
-    @apply bg-card border-blue-800;
+    @apply bg-card border-primary-foreground;
   }
   
   /* Estilos para formulários de autenticação que respondem ao tema */
@@ -348,15 +410,15 @@
     font-weight: 700 !important; /* bold */
   }
   
-  /* Estilo ativo do header - bloco sky-500 */
+  /* Estilo ativo do header - usa variáveis do tema */
   .header-active {
-    background-color: hsl(200 98% 39%) !important; /* sky-500 */
-    color: white !important;
+    background-color: hsl(var(--sky-primary));
+    color: hsl(var(--sky-primary-foreground));
     border-radius: 0.25rem;
   }
   
   .header-active:hover {
-    background-color: hsl(201 96% 32%) !important; /* sky-600 - mais escuro no hover */
+    background-color: hsl(var(--medsync-dark-blue));
   }
   
   /* Mensagens de erro */
@@ -388,6 +450,180 @@
     @apply bg-secondary hover:bg-secondary/90 text-secondary-foreground font-medium px-4 py-2 rounded-md;
   }
   
+  .btn-medsync-dark {
+    background-color: hsl(var(--medsync-dark-blue)) !important;
+    color: white !important;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s;
+  }
+  
+  .btn-medsync-dark:hover {
+    background-color: hsl(var(--medsync-dark-blue) / 0.9) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(18, 74, 107, 0.3);
+  }
+  
+  .btn-medsync-light {
+    background-color: hsl(var(--medsync-light-blue));
+    color: white;
+    font-weight: 700;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s;
+  }
+  
+  .btn-medsync-light:hover {
+    background-color: hsl(var(--medsync-light-blue) / 0.9);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(54, 169, 225, 0.3);
+  }
+
+  .btn-medsync-auth {
+    background-color: hsl(var(--medsync-blue));
+    color: white;
+    font-weight: 500;
+    padding: 0.5rem 2rem;
+    border-radius: 0.75rem;
+    height: 2.25rem;
+    font-size: 1rem;
+    line-height: 1.25rem;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .btn-medsync-auth:hover {
+    background-color: hsl(var(--accent));
+  }
+
+  .btn-medsync-green {
+    background-color: #16a34a;
+    color: white;
+    font-weight: 700;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s;
+  }
+
+  .btn-medsync-green:hover {
+    background-color: #15803d;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+  }
+
+  /* Estilo padrão para inputs do MedSync */
+  .input-medsync {
+    width: 100%;
+    height: 2.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid;
+    border-color: hsl(214, 14%, 84%);
+    background-color: white;
+    color: hsl(0, 0%, 45%);
+    font-size: 1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    transition: all 0.2s;
+  }
+
+  .input-medsync:focus {
+    border-color: hsl(var(--accent));
+    outline: none;
+  }
+
+  .input-medsync::placeholder {
+    color: hsl(0, 0%, 70%);
+  }
+
+  /* Estilo padrão para selects/combobox do MedSync */
+  .select-medsync {
+    height: 2.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid;
+    border-color: hsl(214, 14%, 84%);
+    background-color: white;
+    color: hsl(0, 0%, 45%);
+    font-size: 1rem;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .select-medsync:focus {
+    border-color: hsl(var(--accent));
+    outline: none;
+  }
+
+  .select-medsync:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .select-medsync[data-placeholder] {
+    color: hsl(0, 0%, 70%);
+  }
+
+  /* Combobox MedSync - Select com busca (reutilizável para PatientSearch, HospitalSearch, etc) */
+  .combobox-medsync {
+    width: 100%;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    text-align: left;
+    background-color: white;
+    color: hsl(var(--medsync-gray));
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    border: 1px solid hsl(214, 14%, 84%);
+    transition: all 0.2s;
+    height: auto;
+    min-height: 2.5rem;
+  }
+
+  .combobox-medsync:hover {
+    background-color: hsl(var(--medsync-gray) / 0.05);
+    border-color: hsl(214, 14%, 75%);
+  }
+
+  .combobox-medsync .combobox-placeholder {
+    color: hsl(var(--medsync-gray) / 0.6);
+    font-size: 1rem;
+    font-weight: 500;
+    text-align: left;
+  }
+
+  .combobox-medsync .combobox-value {
+    color: hsl(var(--medsync-gray));
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  /* Botão de fechar modal - reutilizável em todo o sistema */
+  .btn-close-modal {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    border-radius: 0.125rem;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+
+  .btn-close-modal:hover {
+    opacity: 1;
+  }
+
+  .btn-close-modal:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--ring));
+  }
+
+  .btn-close-modal:disabled {
+    pointer-events: none;
+  }
+  
   /* Estilo para cards de conteúdo que respondem ao tema */
   .card-content {
     @apply bg-card rounded-md shadow-md text-card-foreground;
@@ -403,10 +639,11 @@
   }
   
   .step-indicator.completed {
-    @apply bg-green-600 text-white;
+    background-color: hsl(var(--success));
+    color: hsl(var(--success-foreground));
   }
   
-  /* Classes personalizadas para a cor accent-light (accent com 60% opacidade) */
+  /* Classes personalizadas para a cor accent-light */
   .bg-accent-light {
     background-color: hsl(var(--accent-light));
   }
@@ -420,26 +657,324 @@
     background-color: hsl(var(--input-field));
   }
   
-  /* Classe removida - usando border-gray-200 diretamente */
-  
-  /* Classe para texto com cor accent */
+  /* Classes para texto com cores do tema */
   .text-accent {
     color: hsl(var(--accent));
   }
   
-  /* Classe para texto com cor MedSync blue */
+  /* Classes MedSync - cores da paleta oficial */
   .text-medsync-blue {
     color: hsl(var(--medsync-blue));
   }
   
-  /* Classe para borda com cor MedSync blue */
+  .bg-medsync-blue {
+    background-color: hsl(var(--medsync-blue));
+  }
+  
   .border-medsync-blue {
     border-color: hsl(var(--medsync-blue));
   }
   
-  /* Classe para background com cor MedSync blue */
-  .bg-medsync-blue {
+  .text-medsync-light-blue {
+    color: hsl(var(--medsync-light-blue));
+  }
+  
+  .bg-medsync-light-blue {
+    background-color: hsl(var(--medsync-light-blue));
+  }
+  
+  .border-medsync-light-blue {
+    border-color: hsl(var(--medsync-light-blue));
+  }
+  
+  .text-medsync-dark-blue {
+    color: hsl(var(--medsync-dark-blue));
+  }
+  
+  .bg-medsync-dark-blue {
+    background-color: hsl(var(--medsync-dark-blue));
+  }
+  
+  .border-medsync-dark-blue {
+    border-color: hsl(var(--medsync-dark-blue));
+  }
+  
+  .text-medsync-gray {
+    color: hsl(var(--medsync-gray));
+  }
+  
+  .bg-medsync-gray {
+    background-color: hsl(var(--medsync-gray));
+  }
+  
+  .border-medsync-gray {
+    border-color: hsl(var(--medsync-gray));
+  }
+
+  .border-medsync-light-gray {
+    border-color: hsl(214, 14%, 84%);
+  }
+  
+  /* Classes para status semânticos */
+  .bg-success {
+    background-color: hsl(var(--success));
+  }
+  
+  .text-success {
+    color: hsl(var(--success));
+  }
+  
+  .bg-warning {
+    background-color: hsl(var(--warning));
+  }
+  
+  .text-warning {
+    color: hsl(var(--warning));
+  }
+  
+  .bg-error {
+    background-color: hsl(var(--error));
+  }
+  
+  .text-error {
+    color: hsl(var(--error));
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+  }
+
+  /* Labels MedSync - estilos reutilizáveis */
+  .label-medsync {
+    color: hsl(var(--medsync-gray));
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+
+  .label-medsync-sm {
+    color: hsl(var(--medsync-gray));
+    font-weight: 500;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  /* Títulos e Subtítulos de Modais/Forms - reutilizáveis */
+  .modal-title {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: hsl(var(--medsync-gray));
+  }
+
+  .modal-subtitle {
+    color: hsl(var(--medsync-gray));
+    line-height: 1.625;
+    font-weight: 700;
+  }
+
+  /* Breadcrumbs (Indicadores de Progresso) - reutilizáveis */
+  .breadcrumb-base {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .breadcrumb-active {
     background-color: hsl(var(--medsync-blue));
+    color: white;
+  }
+
+  .breadcrumb-completed {
+    background-color: hsl(142, 76%, 36%);
+    color: white;
+  }
+
+  .breadcrumb-inactive {
+    background-color: hsl(0, 0%, 83%);
+    color: hsl(0, 0%, 40%);
+  }
+
+  /* Header - Classes reutilizáveis */
+  .header-icon-trigger {
+    padding: 0.5rem;
+    color: hsl(var(--primary-foreground));
+    position: relative;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+  }
+
+  .header-icon-trigger:hover {
+    color: hsl(var(--primary-foreground) / 0.8);
+    background-color: hsl(var(--primary) / 0.8);
+  }
+
+  .badge-notification {
+    position: absolute;
+    top: -0.25rem;
+    right: -0.25rem;
+    background-color: hsl(0, 84%, 60%);
+    color: white;
+    font-size: 0.75rem;
+    min-width: 1rem;
+    height: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    padding: 0 0.25rem;
+  }
+
+  .badge-notification-orange {
+    background-color: hsl(32, 95%, 44%);
+  }
+
+  .header-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .menu-panel {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .menu-item-interactive {
+    padding: 0.75rem;
+    cursor: pointer;
+  }
+
+  .menu-item-interactive:hover {
+    background-color: hsl(var(--muted));
+  }
+
+  /* Dashboard - Classes reutilizáveis */
+  .dashboard-card-interactive {
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--card));
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .dashboard-card-interactive:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    background-color: hsl(var(--accent) / 0.05);
+  }
+
+  .dashboard-card-static {
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--card));
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+
+  .metric-value {
+    font-size: 3rem;
+    font-weight: 700;
+    color: hsl(var(--medsync-blue));
+  }
+
+  .metric-value-alert {
+    font-size: 3rem;
+    font-weight: 700;
+    color: hsl(0, 84%, 60%);
+  }
+
+  .metric-label {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: hsl(var(--muted-foreground));
+    margin-top: 0.5rem;
+    text-align: center;
+  }
+
+  .btn-dashboard-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    border-radius: 0.375rem;
+    padding: 0.75rem 1rem;
+    width: 100%;
+    background-color: hsl(var(--medsync-blue));
+    color: white;
+    font-weight: 600;
+    height: 3rem;
+    font-size: 1rem;
+    transition: all 0.2s;
+    flex: 1;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  }
+
+  .btn-dashboard-primary:hover {
+    background-color: hsl(var(--medsync-dark-blue));
+  }
+
+  .btn-dashboard-primary:focus-visible {
+    outline: none;
+    ring: 2px solid hsl(var(--ring));
+    ring-offset: 2px;
+  }
+
+  .btn-dashboard-primary:disabled {
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    font-size: 1.125rem;
+  }
+
+  .card-content-padding {
+    padding: 1.5rem;
+  }
+  
+  .bg-info {
+    background-color: hsl(var(--info));
+  }
+  
+  .text-info {
+    color: hsl(var(--info));
+  }
+  
+  /* Hero section da página de autenticação - ajuste responsivo da imagem de fundo */
+  .auth-hero-section {
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 65% center;
+  }
+  
+  /* Em telas grandes, ajusta a posição vertical para mostrar mais o topo */
+  @media (min-width: 1880px) {
+    .auth-hero-section {
+      background-position: 65% 30%;
+    }
+  }
+  
+  /* Em telas muito grandes, prioriza ainda mais o topo */
+  @media (min-width: 2200px) {
+    .auth-hero-section {
+      background-position: 65% 20%;
+    }
+  }
+  
+  /* Seção azul com bordas arredondadas na base */
+  .blue-section-rounded {
+    background-color: hsl(var(--medsync-blue));
+    width: 100%;
+    border-bottom-left-radius: 60px;
+    border-bottom-right-radius: 60px;
   }
   
   /* Remove ring de foco dos inputs completamente */
@@ -449,37 +984,37 @@
   }
 }
 
-/* Estilos customizados para react-big-calendar */
+/* Estilos customizados para react-big-calendar com suporte a temas */
 .surgical-calendar {
   font-family: 'Proxima Nova', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .rbc-calendar {
-  background: white;
+  background: hsl(var(--calendar-bg));
   border-radius: 8px;
   overflow: hidden;
 }
 
 .rbc-header {
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: hsl(var(--calendar-header-bg));
+  border-bottom: 1px solid hsl(var(--calendar-border));
   padding: 12px 8px;
   font-weight: 600;
-  color: #374151;
+  color: hsl(var(--calendar-header-text));
   text-align: center;
 }
 
 .rbc-time-view .rbc-time-gutter {
-  background: #f8fafc;
-  border-right: 1px solid #e2e8f0;
+  background: hsl(var(--calendar-time-gutter-bg));
+  border-right: 1px solid hsl(var(--calendar-border));
 }
 
 .rbc-time-slot {
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid hsl(var(--calendar-slot-border));
 }
 
 .rbc-current-time-indicator {
-  background-color: #ef4444;
+  background-color: hsl(var(--error));
   height: 2px;
   z-index: 10;
 }
@@ -491,6 +1026,7 @@
   font-size: 12px;
   line-height: 1.2;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  color: white !important;
 }
 
 .rbc-event:hover {
@@ -500,61 +1036,105 @@
 }
 
 .rbc-event.rbc-selected {
-  box-shadow: 0 0 0 2px #3b82f6;
+  box-shadow: 0 0 0 2px hsl(var(--calendar-button-active-bg));
+}
+
+/* Garantir que eventos apareçam na visualização de mês */
+.rbc-month-view .rbc-event {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: white !important;
+  font-weight: 500 !important;
+  min-height: 18px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Container de eventos do mês */
+.rbc-month-view .rbc-row-content {
+  position: relative !important;
+  z-index: 1 !important;
+  min-height: 20px !important;
+}
+
+.rbc-month-view .rbc-row {
+  min-height: 40px !important;
+}
+
+.rbc-month-view .rbc-date-cell {
+  min-height: 80px !important;
 }
 
 .rbc-day-bg.rbc-today {
-  background-color: #f0f9ff;
+  background-color: hsl(var(--calendar-today-bg));
 }
 
 .rbc-time-header-gutter {
-  background: #f8fafc;
+  background: hsl(var(--calendar-time-gutter-bg));
 }
 
 .rbc-toolbar {
   padding: 16px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
+  background: hsl(var(--calendar-bg));
+  border-bottom: 1px solid hsl(var(--calendar-border));
 }
 
 .rbc-toolbar button {
-  background: white;
-  border: 1px solid #d1d5db;
+  background: hsl(var(--calendar-button-bg));
+  border: 1px solid hsl(var(--calendar-button-border));
   border-radius: 6px;
   padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: hsl(var(--calendar-button-text));
   margin: 0 2px;
   transition: all 0.2s ease;
 }
 
 .rbc-toolbar button:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
+  background: hsl(var(--calendar-button-hover-bg));
+  border-color: hsl(var(--calendar-button-border));
 }
 
 .rbc-toolbar button.rbc-active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
+  background: hsl(var(--calendar-button-active-bg));
+  border-color: hsl(var(--calendar-button-active-bg));
+  color: hsl(var(--accent-foreground));
 }
 
 .rbc-show-more {
-  background: #f3f4f6;
-  border: 1px solid #d1d5db;
+  background: hsl(var(--calendar-show-more-bg));
+  border: 1px solid hsl(var(--calendar-button-border));
   border-radius: 4px;
   padding: 2px 6px;
   font-size: 11px;
-  color: #6b7280;
+  color: hsl(var(--calendar-button-text));
 }
 
 .rbc-off-range-bg {
-  background: #f9fafb;
+  background: hsl(var(--calendar-off-range-bg));
 }
 
 .rbc-slot-selection {
-  background-color: rgba(59, 130, 246, 0.1);
-  border: 2px solid #3b82f6;
+  background-color: hsl(var(--calendar-button-active-bg) / 0.1);
+  border: 2px solid hsl(var(--calendar-button-active-bg));
+}
+
+/* Labels de gráficos - usa variável do tema para melhor contraste */
+.recharts-pie-label-text {
+  fill: hsl(var(--chart-label-text)) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+/* Garantir que todos os textos dos labels usem a variável do tema */
+.recharts-label text {
+  fill: hsl(var(--chart-label-text)) !important;
+}
+
+/* Backup para todos os textos de labels em gráficos de pizza */
+.recharts-pie text {
+  fill: hsl(var(--chart-label-text)) !important;
 }
 
