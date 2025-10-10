@@ -93,10 +93,10 @@ export function ContactForm() {
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
-        <CardTitle className="text-2xl font-bold">
+        <h2 className="modal-title">
           {t("contact.title")}
-        </CardTitle>
-        <CardDescription>{t("contact.subtitle")}</CardDescription>
+        </h2>
+        <p className="modal-subtitle">{t("contact.subtitle")}</p>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -106,9 +106,9 @@ export function ContactForm() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("contact.name")}</FormLabel>
+                  <label className="label-medsync">{t("contact.name")}</label>
                   <FormControl>
-                    <Input placeholder={t("contact.name")} {...field} />
+                    <input className="input-medsync" placeholder={t("contact.name")} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -119,9 +119,9 @@ export function ContactForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("contact.email")}</FormLabel>
+                  <label className="label-medsync">{t("contact.email")}</label>
                   <FormControl>
-                    <Input placeholder="email@example.com" {...field} />
+                    <input className="input-medsync" placeholder="email@example.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -132,9 +132,9 @@ export function ContactForm() {
               name="subject"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("contact.subject")}</FormLabel>
+                  <label className="label-medsync">{t("contact.subject")}</label>
                   <FormControl>
-                    <Input placeholder={t("contact.subject")} {...field} />
+                    <input className="input-medsync" placeholder={t("contact.subject")} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -145,11 +145,11 @@ export function ContactForm() {
               name="message"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("contact.message")}</FormLabel>
+                  <label className="label-medsync">{t("contact.message")}</label>
                   <FormControl>
-                    <Textarea
+                    <textarea
                       placeholder={t("contact.message")}
-                      className="min-h-[120px]"
+                      className="input-medsync min-h-[120px] resize-none"
                       {...field}
                     />
                   </FormControl>
@@ -157,9 +157,9 @@ export function ContactForm() {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
+            <button type="submit" className="btn-medsync-light w-full" disabled={isSubmitting}>
               {isSubmitting ? t("common.sending") : t("contact.send")}
-            </Button>
+            </button>
           </form>
         </Form>
       </CardContent>
