@@ -19,7 +19,7 @@ import {
 import { LogOut, User, Settings, Sun, Moon, Laptop, CheckCircle, Info, AlertCircle, Send, Menu, X } from "lucide-react";
 import { Bell, BellRing } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
-import { Badge } from "@/components/ui/badge";
+import { BadgeNative } from "@/components/ui/badge-native";
 import { Button } from "@/components/ui/button";
 import { useNotifications } from "@/hooks/use-notifications";
 import { usePendingOrders } from "@/hooks/use-pending-orders";
@@ -27,7 +27,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AdminMenu } from "@/components/admin-menu";
 // Importar o logo
-import MedSyncLogo from "../../assets/medsync-logo-new.svg";
+import MedSyncLogo from "../../assets/logos/Medsync_Logo_Gray.svg";
 
 interface NavItem {
   name: string;
@@ -176,11 +176,11 @@ export function Header() {
         <div className="hidden lg:flex w-full justify-between items-center">
           {/* Logo Desktop */}
           <Link href="/welcome">
-            <div className="flex items-center justify-center cursor-pointer">
+            <div className="header-logo">
               <img 
                 src={MedSyncLogo} 
                 alt="MedSync Logo" 
-                className="h-32" 
+                className="h-32 translate-x-6 translate-y-4 scale-90" 
               />
             </div>
           </Link>
@@ -227,7 +227,7 @@ export function Header() {
           {/* Logo centralizado */}
           <div className="flex-1 flex justify-center">
             <Link href="/welcome">
-              <div className="flex items-center justify-center cursor-pointer">
+              <div className="header-logo">
                 <img 
                   src={MedSyncLogo} 
                   alt="MedSync Logo" 
@@ -247,9 +247,9 @@ export function Header() {
                     {unreadCount > 0 ? (
                       <>
                         <BellRing className="h-5 w-5 text-primary-foreground" />
-                        <Badge className="absolute -top-1 -right-1 bg-red-500 text-white text-xs h-3 min-w-[12px] flex items-center justify-center">
+                        <BadgeNative className="badge-notification">
                           {unreadCount > 9 ? "9+" : unreadCount}
-                        </Badge>
+                        </BadgeNative>
                       </>
                     ) : (
                       <Bell className="h-5 w-5 text-primary-foreground opacity-50" />
@@ -257,7 +257,7 @@ export function Header() {
                   </div>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 bg-card border border-border">
+              <DropdownMenuContent align="end" className="w-80 menu-panel">
                 <DropdownMenuLabel className="flex items-center justify-between font-semibold border-b border-border py-2 px-4">
                   <span className="header-text">Notificações</span>
                   {unreadCount > 0 && (
@@ -278,7 +278,7 @@ export function Header() {
                   notifications.slice(0, 5).map((notification) => (
                     <DropdownMenuItem 
                       key={notification.id}
-                      className="p-3 hover:bg-muted cursor-pointer" 
+                      className="menu-item-interactive" 
                       onClick={() => {
                         if (notification.id) {
                           markAsRead(notification.id);
@@ -343,7 +343,7 @@ export function Header() {
                   <AccountCircle className="h-5 w-5 text-primary-foreground" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 bg-card border-border shadow-lg">
+              <DropdownMenuContent align="end" className="w-56 menu-panel">
                 {user ? (
                   <>
                     <DropdownMenuLabel className="font-normal text-foreground">
@@ -387,20 +387,20 @@ export function Header() {
           {/* Componente de notificações */}
           <DropdownMenu open={notificationsOpen} onOpenChange={() => toggleNotifications()}>
             <DropdownMenuTrigger asChild>
-              <div className="p-2 text-primary-foreground hover:text-primary-foreground/80 transition-colors relative cursor-pointer hover:bg-primary/80 rounded">
+              <div className="header-icon-trigger">
                 {unreadCount > 0 ? (
                   <>
                     <BellRing className="h-5 w-5" />
-                    <Badge className="absolute -top-1 -right-1 bg-red-500 text-white text-xs h-4 min-w-[16px] flex items-center justify-center">
+                    <BadgeNative className="badge-notification">
                       {unreadCount > 99 ? "99+" : unreadCount}
-                    </Badge>
+                    </BadgeNative>
                   </>
                 ) : (
                   <Bell className="h-5 w-5" />
                 )}
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 bg-card border border-border">
+            <DropdownMenuContent align="end" className="w-80 menu-panel">
               <DropdownMenuLabel className="flex items-center justify-between font-semibold border-b border-border py-2 px-4">
                 <span className="header-text">Notificações</span>
                 {unreadCount > 0 && (
@@ -421,7 +421,7 @@ export function Header() {
                 notifications.slice(0, 5).map((notification) => (
                   <DropdownMenuItem 
                     key={notification.id}
-                    className="p-3 hover:bg-muted cursor-pointer" 
+                    className="menu-item-interactive" 
                     onClick={() => {
                       if (notification.id) {
                         markAsRead(notification.id);
@@ -482,20 +482,20 @@ export function Header() {
           {/* Badge de pedidos aguardando envio */}
           <DropdownMenu open={pendingOrdersOpen} onOpenChange={() => togglePendingOrders()}>
             <DropdownMenuTrigger asChild>
-              <div className="p-2 text-primary-foreground hover:text-primary-foreground/80 transition-colors relative cursor-pointer hover:bg-primary/80 rounded">
+              <div className="header-icon-trigger">
                 {pendingCount > 0 ? (
                   <>
                     <Send className="h-5 w-5" />
-                    <Badge className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs h-4 min-w-[16px] flex items-center justify-center">
+                    <BadgeNative className="badge-notification badge-notification-orange">
                       {pendingCount > 99 ? "99+" : pendingCount}
-                    </Badge>
+                    </BadgeNative>
                   </>
                 ) : (
                   <Send className="h-5 w-5 opacity-50" />
                 )}
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 bg-card border border-border">
+            <DropdownMenuContent align="end" className="w-80 menu-panel">
               <DropdownMenuLabel className="flex items-center justify-between font-semibold border-b border-border py-2 px-4">
                 <span className="header-text">Aguardando Envio</span>
                 <span className="text-orange-400 text-xs">
@@ -511,7 +511,7 @@ export function Header() {
                 pendingOrders.slice(0, 5).map((order) => (
                   <DropdownMenuItem 
                     key={order.id}
-                    className="p-3 hover:bg-muted cursor-pointer" 
+                    className="menu-item-interactive" 
                     onClick={() => {
                       window.location.href = `/order/${order.id}`;
                       closePendingOrders();
