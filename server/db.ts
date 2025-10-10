@@ -10,7 +10,7 @@ if (!process.env.DATABASE_URL) {
     "DATABASE_URL must be set. Did you forget to provision a database?",
   );
 }
-console.log('Url conexão Banco de dados:', process.env.DATABASE_URL);
+
 // Configuração de pool com retry e timeout aumentados
 export const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,

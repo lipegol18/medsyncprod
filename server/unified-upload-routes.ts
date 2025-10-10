@@ -110,6 +110,9 @@ router.post('/upload-attachment/:orderId', uploadForOrder.single('file'), async 
       const { medicalOrders } = await import('../shared/schema');
       const { eq } = await import('drizzle-orm');
       
+      // **DEBUG**: Verificar se os imports funcionaram
+      console.log(`🔧 IMPORTS OK - db: ${!!db}, medicalOrders: ${!!medicalOrders}, eq: ${!!eq}`);
+      
       console.log(`🔍 Buscando attachments atuais do pedido ${orderId}`);
       // Buscar attachments atuais do pedido
       const currentOrder = await db.select({ attachments: medicalOrders.attachments })
@@ -118,11 +121,12 @@ router.post('/upload-attachment/:orderId', uploadForOrder.single('file'), async 
         .limit(1);
         
       const currentAttachments = currentOrder[0]?.attachments || [];
-      console.log(`📊 Attachments atuais: ${currentAttachments.length} itens`);
+      console.log(`📊 Attachments atuais: ${JSON.stringify(currentAttachments)}`);
       
       // Adicionar o novo anexo aos attachments existentes
       const updatedAttachments = [...currentAttachments, attachment];
-      console.log(`📊 Após adição: ${updatedAttachments.length} itens`);
+      console.log(`📊 Novo attachment: ${JSON.stringify(attachment)}`);
+      console.log(`📊 Attachments após adição: ${JSON.stringify(updatedAttachments)}`);
       
       // Atualizar o pedido no banco com os novos attachments
       const updateResult = await db.update(medicalOrders)
@@ -133,11 +137,17 @@ router.post('/upload-attachment/:orderId', uploadForOrder.single('file'), async 
         .where(eq(medicalOrders.id, parseInt(orderId)))
         .returning();
         
+      console.log(`✅ UPDATE DATABASE RESULT: ${JSON.stringify(updateResult[0]?.attachments)}`);
       console.log(`✅ Anexo salvo no banco de dados para pedido ${orderId}. Registros atualizados: ${updateResult.length}`);
     } catch (dbError) {
-      console.error('❌ Erro ao salvar anexo no banco de dados:', dbError);
-      console.error('❌ Stack trace:', dbError.stack);
-      // Mesmo com erro no banco, retornamos sucesso pois o arquivo foi salvo
+      console.error('❌ ERRO CRÍTICO NO UPLOAD - Detalhes completos:', {
+        error: dbError.message,
+        stack: dbError.stack,
+        orderId: orderId,
+        attachment: attachment
+      });
+      // **CORREÇÃO**: Não retornar erro, continuar execução como no upload de PDF
+      console.error('❌ Falha no banco, mas arquivo foi salvo fisicamente. Continuando...');
     }
 
     res.json(attachment);
@@ -229,8 +239,14 @@ router.post('/upload-attachments/:orderId', uploadForOrder.array('files', 10), a
         
       console.log(`✅ ${attachments.length} anexos salvos no banco de dados para pedido ${orderId}`);
     } catch (dbError) {
-      console.error('❌ Erro ao salvar anexos no banco de dados:', dbError);
-      // Mesmo com erro no banco, retornamos sucesso pois os arquivos foram salvos
+      console.error('❌ ERRO CRÍTICO NO UPLOAD MÚLTIPLO - Detalhes completos:', {
+        error: dbError.message,
+        stack: dbError.stack,
+        orderId: orderId,
+        attachmentCount: attachments.length
+      });
+      // **CORREÇÃO**: Não retornar erro, continuar execução como no upload de PDF
+      console.error('❌ Falha no banco, mas arquivos foram salvos fisicamente. Continuando...');
     }
 
     res.json({ attachments });
