@@ -199,7 +199,7 @@ export function UnifiedFileUpload({
     <div className="mb-6 text-foreground">
       <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
         {/* Título com fundo azul */}
-        <div className="bg-accent-light px-4 py-3">
+        <div className="bg-medsync-blue-light px-4 py-3">
           <div className="flex items-center">
             <Upload className="mr-2 h-5 w-5 text-muted-foreground" />
             <div>

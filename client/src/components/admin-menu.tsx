@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, ChevronDown, ScanLine, Hospital, Building, UserCog, Shield, MessageSquare, Heart, Link2, Package, FileText, Activity, Target } from "lucide-react";
+import { Settings, ChevronDown, ScanLine, Hospital, Building, UserCog, Shield, MessageSquare, Heart, Link2, Package, FileText, Activity, Target, CreditCard, Ticket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { t } from "@/lib/i18n";
@@ -120,6 +120,24 @@ export function AdminMenu() {
               <div className="flex items-center w-full">
                 <FileText className="mr-2 h-4 w-4" />
                 <span className="header-text">Cadastro CID-10</span>
+              </div>
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem asChild>
+            <Link href="/admin/subscription-plans">
+              <div className="flex items-center w-full">
+                <CreditCard className="mr-2 h-4 w-4" />
+                <span className="header-text">Planos de Assinatura</span>
+              </div>
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem asChild>
+            <Link href="/admin/discount-codes">
+              <div className="flex items-center w-full">
+                <Ticket className="mr-2 h-4 w-4" />
+                <span className="header-text">Códigos de Desconto</span>
               </div>
             </Link>
           </DropdownMenuItem>
