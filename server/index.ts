@@ -124,6 +124,17 @@ app.use((req, res, next) => {
     throw err;
   });
 
+  // Servir arquivos especiais ANTES do Vite para evitar interceptação
+  // Add favicon to prevent 503 errors
+  app.get('/favicon.ico', (req, res) => {
+    res.status(204).end();
+  });
+  
+  // Servir o style-guide.html diretamente
+  app.get('/style-guide', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'style-guide.html'));
+  });
+
   // Middleware de fallback para API - capturar rotas /api/* não encontradas
   // DEVE vir ANTES do setupVite para evitar que Vite sirva HTML para APIs
   app.use("/api", (req, res) => {
@@ -144,11 +155,6 @@ app.use((req, res, next) => {
   } else {
     serveStatic(app);
   }
-  
-  // Add favicon to prevent 503 errors
-  app.get('/favicon.ico', (req, res) => {
-    res.status(204).end();
-  });
   
   // Force fresh assets with robust headers
   app.use('/assets/*', (req, res, next) => {
