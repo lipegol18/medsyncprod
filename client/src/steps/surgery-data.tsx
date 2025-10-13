@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import RoboMedSyncIcon from "@/assets/icons/MedSync_Icones_Robo Medsync_Sem_Borda.svg";
 import {
   Card,
   CardContent,
@@ -62,6 +63,7 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import type { AnatomicalRegion, SurgicalProcedure } from "@shared/schema";
 import { ManufacturerManager } from "@/components/ManufacturerManager";
+import { LoadingLogo } from "@/components/loading-logo";
 
 interface CidCode {
   id: number;
@@ -564,6 +566,11 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
       onModalClose();
     }
 
+    // 🔄 SISTEMA DE ASSOCIAÇÃO LIVRE
+    // O médico pode associar/desassociar procedimentos livremente em qualquer modo
+    // O sistema sempre faz MERGE inteligente (soma quantidades, evita duplicatas)
+    console.log(`🔄 [ASSOCIACAO-LIVRE] Merge inteligente para: ${conduct.approachName}`);
+
     // AUTO-PREENCHIMENTO: Buscar CIDs associados ao procedimento + conduta
     if (procedureId && conduct.surgicalApproachId) {
       try {
@@ -580,75 +587,47 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
           console.log('📋 [DEBUG-SELECAO] CIDs encontrados para a conduta:', associatedCids);
           console.log('📋 [DEBUG-SELECAO] Total de CIDs encontrados:', associatedCids?.length || 0);
           
-          if (associatedCids.length > 0) {
-            if (isEditMode) {
-              // MODO EDIÇÃO: Apenas sugerir CIDs que não existem
-              console.log(`🛡️ MODO EDIÇÃO: Verificando CIDs para sugestão opcional`);
+          if (associatedCids.length > 0 && setMultipleCids) {
+            // 🔄 MERGE INTELIGENTE: Sempre combinar CIDs (evita duplicatas)
+            setMultipleCids((prevCids: any) => {
+              const updatedList = [...(prevCids || [])];
+              let addedCount = 0;
               
-              if (setMultipleCids) {
-                setMultipleCids((prevCids: any) => {
-                  const currentCids = [...(prevCids || [])];
-                  const suggestableCids = associatedCids.filter((cidData: any) => 
-                    !currentCids.some((existing: any) => 
-                      (existing.cid?.id || existing.id) === cidData.cidId
-                    )
-                  );
+              associatedCids.forEach((cidData: any) => {
+                const exists = updatedList.some((existing: any) => 
+                  (existing.cid?.id || existing.id) === cidData.cidId
+                );
+                
+                if (!exists) {
+                  const newCidItem = {
+                    cid: {
+                      id: cidData.cidId,
+                      code: cidData.cidCode,
+                      description: cidData.cidDescription,
+                      category: cidData.cidCategory || 'Geral'
+                    },
+                    isAutoAdded: true,
+                    isPrimary: cidData.isPrimaryCid,
+                    notes: cidData.notes,
+                    addedByConductSelect: true
+                  };
                   
-                  if (suggestableCids.length > 0) {
-                    console.log(`💡 ${suggestableCids.length} CIDs sugeridos (não adicionados automaticamente):`, suggestableCids);
-                    toast({
-                      title: "CIDs sugeridos disponíveis",
-                      description: `${suggestableCids.length} CID(s) relacionados estão disponíveis para adição manual`,
-                      duration: 4000,
-                    });
-                  } else {
-                    console.log(`✅ Todos os CIDs da conduta já existem no pedido`);
-                  }
-                  
-                  return currentCids; // Retorna sem modificações no modo edição
-                });
-              }
-            } else {
-              // MODO CRIAÇÃO: Auto-adicionar CIDs como antes
-              if (setMultipleCids) {
-                setMultipleCids((prevCids: any) => {
-                  const updatedList = [...(prevCids || [])];
-                  
-                  associatedCids.forEach((cidData: any) => {
-                    const exists = updatedList.some((existing: any) => 
-                      (existing.cid?.id || existing.id) === cidData.cidId
-                    );
-                    
-                    if (!exists) {
-                      // Formatar CID no padrão esperado pelo sistema
-                      const newCidItem = {
-                        cid: {
-                          id: cidData.cidId,
-                          code: cidData.cidCode,
-                          description: cidData.cidDescription,
-                          category: cidData.cidCategory || 'Geral'
-                        },
-                        isAutoAdded: true,
-                        isPrimary: cidData.isPrimaryCid,
-                        notes: cidData.notes,
-                        addedByConductSelect: true
-                      };
-                      
-                      updatedList.push(newCidItem);
-                      console.log(`✅ CID auto-adicionado: ${cidData.cidCode} - ${cidData.cidDescription}`);
-                    }
-                  });
-                  
-                  return updatedList;
-                });
-              }
-              
-              toast({
-                title: "CIDs combinados",
-                description: `${associatedCids.length} CID(s) da conduta ${conduct.approachName} foram combinados (sem duplicatas)`,
-                duration: 4000,
+                  updatedList.push(newCidItem);
+                  addedCount++;
+                  console.log(`✅ CID merged: ${cidData.cidCode} - ${cidData.cidDescription}`);
+                }
               });
-            }
+              
+              if (addedCount > 0) {
+                toast({
+                  title: "CIDs combinados",
+                  description: `${addedCount} novo(s) CID(s) adicionado(s)`,
+                  duration: 3000,
+                });
+              }
+              
+              return updatedList;
+            });
           }
         }
       } catch (error) {
@@ -669,106 +648,75 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
           const cbhpmProcedures = await cbhpmResponse.json();
           console.log('🏥 Procedimentos CBHPM encontrados:', cbhpmProcedures);
           
-          if (cbhpmProcedures.length > 0) {
-            if (isEditMode) {
-              // MODO EDIÇÃO: Apenas sugerir procedimentos CBHPM que não existem
-              console.log(`🛡️ MODO EDIÇÃO: ${cbhpmProcedures.length} procedimentos CBHPM disponíveis para sugestão opcional`);
-              
-              const hasExistingProcedures = selectedProcedure || (setSecondaryProcedures && true);
-              
-              if (hasExistingProcedures) {
-                console.log(`💡 Procedimentos CBHPM sugeridos (não adicionados automaticamente):`, cbhpmProcedures);
-                toast({
-                  title: "Procedimentos CBHPM sugeridos",
-                  description: `${cbhpmProcedures.length} procedimento(s) CBHPM relacionados estão disponíveis para adição manual`,
-                  duration: 4000,
-                });
-              }
-              
-              // NO MODO EDIÇÃO: Não executar auto-preenchimento de procedimentos
-            } else {
-              // MODO CRIAÇÃO: Auto-preenchimento dos procedimentos CBHPM
-              console.log(`✅ ${cbhpmProcedures.length} procedimentos CBHPM disponíveis para auto-preenchimento`);
-              
-              // 🔄 MERGE INTELIGENTE: Adicionar procedimentos CBHPM com soma de quantidades
-              if (setSelectedProcedure && setSecondaryProcedures && cbhpmProcedures.length > 0) {
-              // Formatar todos os procedimentos para o padrão da interface
-              const formattedProcedures = cbhpmProcedures.map((proc: any) => ({
-                procedure: {
-                  id: proc.procedureId,
-                  code: proc.procedureCode,
-                  name: proc.procedureName,
-                  description: proc.notes,
-                  active: true,
-                  porte: proc.porte,
-                  custoOperacional: null,
-                  porteAnestesista: proc.porteAnestesista,
-                  numeroAuxiliares: proc.numeroAuxiliares,
-                  addedByConductSelect: true // Flag para identificar preenchimento automático
-                },
-                quantity: proc.quantity || 1
-              }));
-              
-              // 🔄 MERGE INTELIGENTE: Adicionar procedimentos sem sobrescrever
-              formattedProcedures.forEach((newProc: any) => {
-                // Verificar se o procedimento já existe nos secundários
-                setSecondaryProcedures((prevSecondaryProcedures: any) => {
-                  const currentSecondaryList = [...(prevSecondaryProcedures || [])];
-                  const existingSecondaryIndex = currentSecondaryList.findIndex((existing: any) => 
-                    existing.procedure.id === newProc.procedure.id
-                  );
+          if (cbhpmProcedures.length > 0 && setSelectedProcedure && setSecondaryProcedures) {
+            // 🔄 MERGE INTELIGENTE: Sempre combinar procedimentos CBHPM (soma quantidades)
+            const formattedProcedures = cbhpmProcedures.map((proc: any) => ({
+              procedure: {
+                id: proc.procedureId,
+                code: proc.procedureCode,
+                name: proc.procedureName,
+                description: proc.notes,
+                active: true,
+                porte: proc.porte,
+                custoOperacional: null,
+                porteAnestesista: proc.porteAnestesista,
+                numeroAuxiliares: proc.numeroAuxiliares,
+                addedByConductSelect: true
+              },
+              quantity: proc.quantity || 1
+            }));
+            
+            // Adicionar/merge procedimentos
+            formattedProcedures.forEach((newProc: any) => {
+              setSecondaryProcedures((prevSecondaryProcedures: any) => {
+                const currentSecondaryList = [...(prevSecondaryProcedures || [])];
+                const existingSecondaryIndex = currentSecondaryList.findIndex((existing: any) => 
+                  existing.procedure.id === newProc.procedure.id
+                );
+                
+                if (existingSecondaryIndex !== -1) {
+                  currentSecondaryList[existingSecondaryIndex].quantity += newProc.quantity;
+                  console.log(`🏥 MERGE: ${newProc.procedure.code} - qtd: ${currentSecondaryList[existingSecondaryIndex].quantity}`);
+                } else {
+                  const isMainProcedure = selectedProcedure?.id === newProc.procedure.id;
                   
-                  if (existingSecondaryIndex !== -1) {
-                    // Somar quantidades se já existe
-                    currentSecondaryList[existingSecondaryIndex].quantity += newProc.quantity;
-                    console.log(`🏥 MERGE SECUNDÁRIO: ${newProc.procedure.code} - quantidade somada: ${currentSecondaryList[existingSecondaryIndex].quantity}`);
+                  if (isMainProcedure && setProcedureQuantity) {
+                    setProcedureQuantity((prev: number) => prev + newProc.quantity);
+                    console.log(`🏥 MERGE PRINCIPAL: ${newProc.procedure.code}`);
                   } else {
-                    // Verificar se é o procedimento principal atual
-                    const isMainProcedure = setSelectedProcedure && selectedProcedure?.id === newProc.procedure.id;
-                    
-                    if (isMainProcedure && setProcedureQuantity) {
-                      // Somar quantidade do procedimento principal
-                      setProcedureQuantity((prev: number) => prev + newProc.quantity);
-                      console.log(`🏥 MERGE PRINCIPAL: ${newProc.procedure.code} - quantidade somada`);
-                    } else {
-                      // Adicionar como novo procedimento secundário
-                      currentSecondaryList.push(newProc);
-                      console.log(`🏥 NOVO SECUNDÁRIO: ${newProc.procedure.code}`);
-                    }
+                    currentSecondaryList.push(newProc);
+                    console.log(`🏥 NOVO: ${newProc.procedure.code}`);
                   }
-                  
-                  return currentSecondaryList;
-                });
-              });
-              
-              // Se não há procedimento principal, definir o primeiro de maior porte
-              if (setSelectedProcedure && !selectedProcedure && formattedProcedures.length > 0) {
-                const sortedByPorte = formattedProcedures.sort((a: any, b: any) => (b.procedure.porte || 0) - (a.procedure.porte || 0));
-                const newMainProcedure = sortedByPorte[0];
-                
-                setSelectedProcedure(newMainProcedure.procedure);
-                if (setProcedureQuantity) {
-                  setProcedureQuantity(newMainProcedure.quantity);
                 }
-                console.log(`🏥 NOVO PRINCIPAL: ${newMainProcedure.procedure.code} (maior porte)`);
                 
-                // 🔧 CORREÇÃO: Remover o procedimento principal da lista de secundários para evitar duplicação
-                setSecondaryProcedures((prevSecondaryProcedures: any) => {
-                  const updatedList = prevSecondaryProcedures.filter((proc: any) => 
-                    proc.procedure.id !== newMainProcedure.procedure.id
-                  );
-                  console.log(`🧹 REMOVIDO DUPLICAÇÃO: ${newMainProcedure.procedure.code} removido dos secundários`);
-                  return updatedList;
-                });
-              }
-              }
+                return currentSecondaryList;
+              });
+            });
+            
+            // Definir procedimento principal se não houver
+            if (!selectedProcedure && formattedProcedures.length > 0) {
+              const sortedByPorte = formattedProcedures.sort((a: any, b: any) => (b.procedure.porte || 0) - (a.procedure.porte || 0));
+              const newMainProcedure = sortedByPorte[0];
               
-              toast({
-                title: "Procedimentos CBHPM combinados",
-                description: `Procedimentos CBHPM da conduta ${conduct.approachName} foram combinados com os existentes`,
-                duration: 4000,
+              setSelectedProcedure(newMainProcedure.procedure);
+              if (setProcedureQuantity) {
+                setProcedureQuantity(newMainProcedure.quantity);
+              }
+              console.log(`🏥 PRINCIPAL: ${newMainProcedure.procedure.code}`);
+              
+              // Remover dos secundários
+              setSecondaryProcedures((prevSecondaryProcedures: any) => {
+                return prevSecondaryProcedures.filter((proc: any) => 
+                  proc.procedure.id !== newMainProcedure.procedure.id
+                );
               });
             }
+            
+            toast({
+              title: "Procedimentos CBHPM combinados",
+              description: `Procedimentos da conduta ${conduct.approachName} combinados`,
+              duration: 3000,
+            });
           }
         }
       } catch (error) {
@@ -790,204 +738,110 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
           const completeData = await response.json();
           console.log('📋 Dados completos da conduta cirúrgica:', completeData);
           
-          // 🔄 MERGE INTELIGENTE: Auto-preencher itens OPME com soma de quantidades
+          // 🔄 MERGE INTELIGENTE: Sempre combinar itens OPME (soma quantidades)
           if (completeData.opmeItems && completeData.opmeItems.length > 0 && setSelectedOpmeItems) {
-            if (isEditMode) {
-              // MODO EDIÇÃO: Apenas sugerir itens OPME que não existem
-              console.log(`🛡️ MODO EDIÇÃO: Verificando itens OPME para sugestão opcional`);
-              
-              setSelectedOpmeItems((prevOpmeItems: any) => {
-                const currentItems = [...(prevOpmeItems || [])];
-                const suggestableOpme = completeData.opmeItems.filter((newOpme: any) => 
-                  !currentItems.some((existing: any) => existing.item.id === newOpme.id)
-                );
-                
-                if (suggestableOpme.length > 0) {
-                  console.log(`💡 ${suggestableOpme.length} itens OPME sugeridos (não adicionados automaticamente):`, suggestableOpme);
-                  toast({
-                    title: "Itens OPME sugeridos disponíveis",
-                    description: `${suggestableOpme.length} item(ns) OPME relacionados estão disponíveis para adição manual`,
-                    duration: 4000,
-                  });
-                } else {
-                  console.log(`✅ Todos os itens OPME da conduta já existem no pedido`);
-                }
-                
-                return currentItems; // Retorna sem modificações no modo edição
-              });
-            } else {
-              // MODO CRIAÇÃO: Auto-preencher itens OPME como antes
-              setSelectedOpmeItems((prevOpmeItems: any) => {
-                const currentItems = [...(prevOpmeItems || [])];
-                let addedCount = 0;
-                let mergedCount = 0;
-                
-                completeData.opmeItems.forEach((newOpme: any) => {
-                  const existingIndex = currentItems.findIndex((existing: any) => 
-                    existing.item.id === newOpme.id
-                  );
-                  
-                  if (existingIndex !== -1) {
-                    // Item já existe - somar quantidades
-                    currentItems[existingIndex].quantity += (newOpme.quantity || 1);
-                    mergedCount++;
-                    console.log(`📦 MERGE: ${newOpme.technicalName} - quantidade somada: ${currentItems[existingIndex].quantity}`);
-                  } else {
-                    // Item novo - adicionar à lista
-                    const newOpmeItem = {
-                      item: {
-                        id: newOpme.id,
-                        technicalName: newOpme.technicalName,
-                        commercialName: newOpme.commercialName,
-                        manufacturerName: newOpme.manufacturerName || '',
-                        anvisaRegistrationNumber: newOpme.anvisaRegistrationNumber,
-                        riskClass: newOpme.riskClass,
-                        registrationHolder: newOpme.registrationHolder
-                      },
-                      quantity: newOpme.quantity || 1
-                    };
-                    currentItems.push(newOpmeItem);
-                    addedCount++;
-                    console.log(`📦 NOVO: ${newOpme.technicalName} - adicionado com quantidade: ${newOpme.quantity || 1}`);
-                  }
-                });
-                
-                console.log(`📦 OPME MERGE: ${addedCount} novos itens, ${mergedCount} quantidades somadas`);
-                
-                toast({
-                  title: "Itens OPME combinados",
-                  description: `${addedCount} novos itens + ${mergedCount} quantidades atualizadas para ${conduct.approachName}`,
-                  duration: 4000,
-                });
-                
-                return currentItems;
-              });
-            }
-          }
-          
-          // 🔄 MERGE INTELIGENTE: Combinar fornecedores únicos  
-          if (completeData.suppliers && completeData.suppliers.length > 0) {
-            if (isEditMode) {
-              // MODO EDIÇÃO: Apenas sugerir fornecedores que não existem
-              console.log(`🛡️ MODO EDIÇÃO: Verificando fornecedores para sugestão opcional`);
-              
-              const currentSuppliers = [
-                selectedSupplier1,
-                selectedSupplier2, 
-                selectedSupplier3
-              ].filter(Boolean); // Remove nulls
-              
-              const suggestableSuppliers = completeData.suppliers.filter((newSupplier: any) =>
-                !currentSuppliers.some((existing: any) => existing.cnpj === newSupplier.cnpj)
-              );
-              
-              if (suggestableSuppliers.length > 0) {
-                console.log(`💡 ${suggestableSuppliers.length} fornecedores sugeridos (não adicionados automaticamente):`, suggestableSuppliers);
-                toast({
-                  title: "Fornecedores sugeridos disponíveis",
-                  description: `${suggestableSuppliers.length} fornecedor(es) relacionados estão disponíveis para adição manual`,
-                  duration: 4000,
-                });
-              } else {
-                console.log(`✅ Todos os fornecedores da conduta já existem no pedido`);
-              }
-              
-              // NO MODO EDIÇÃO: Não modificar fornecedores existentes
-            } else {
-              // MODO CRIAÇÃO: Auto-preencher fornecedores como antes
-              const newSuppliers = completeData.suppliers.slice(0, 3); // Máximo 3 fornecedores
-              
-              // Obter fornecedores atuais
-              const currentSuppliers = [
-                selectedSupplier1,
-                selectedSupplier2, 
-                selectedSupplier3
-              ].filter(Boolean); // Remove nulls
-              
-              // Criar lista única combinando atuais + novos (sem duplicatas por CNPJ)
-              const combinedSuppliers = [...currentSuppliers];
+            setSelectedOpmeItems((prevOpmeItems: any) => {
+              const currentItems = [...(prevOpmeItems || [])];
               let addedCount = 0;
+              let mergedCount = 0;
               
-              newSuppliers.forEach((newSupplier: any) => {
-                const exists = combinedSuppliers.some((existing: any) => 
-                  existing.cnpj === newSupplier.cnpj
+              completeData.opmeItems.forEach((newOpme: any) => {
+                const existingIndex = currentItems.findIndex((existing: any) => 
+                  existing.item.id === newOpme.id
                 );
                 
-                if (!exists && combinedSuppliers.length < 3) {
-                  combinedSuppliers.push({
-                    id: newSupplier.id,
-                    companyName: newSupplier.companyName,
-                    tradeName: newSupplier.tradeName,
-                    cnpj: newSupplier.cnpj,
-                    municipalityId: newSupplier.municipalityId,
-                    address: newSupplier.address,
-                    phone: newSupplier.phone,
-                    email: newSupplier.email,
-                    active: newSupplier.active
+                if (existingIndex !== -1) {
+                  currentItems[existingIndex].quantity += (newOpme.quantity || 1);
+                  mergedCount++;
+                  console.log(`📦 MERGE: ${newOpme.technicalName} - qtd: ${currentItems[existingIndex].quantity}`);
+                } else {
+                  currentItems.push({
+                    item: {
+                      id: newOpme.id,
+                      technicalName: newOpme.technicalName,
+                      commercialName: newOpme.commercialName,
+                      manufacturerName: newOpme.manufacturerName || '',
+                      anvisaRegistrationNumber: newOpme.anvisaRegistrationNumber,
+                      riskClass: newOpme.riskClass,
+                      registrationHolder: newOpme.registrationHolder
+                    },
+                    quantity: newOpme.quantity || 1
                   });
                   addedCount++;
-                  console.log(`🏢 NOVO FORNECEDOR: ${newSupplier.tradeName || newSupplier.companyName}`);
+                  console.log(`📦 NOVO: ${newOpme.technicalName}`);
                 }
               });
               
-              // Atualizar os 3 slots de fornecedores
-              if (setSelectedSupplier1) setSelectedSupplier1(combinedSuppliers[0] || null);
-              if (setSelectedSupplier2) setSelectedSupplier2(combinedSuppliers[1] || null);
-              if (setSelectedSupplier3) setSelectedSupplier3(combinedSuppliers[2] || null);
+              if (addedCount > 0 || mergedCount > 0) {
+                toast({
+                  title: "Itens OPME combinados",
+                  description: `${addedCount} novos + ${mergedCount} atualizados`,
+                  duration: 3000,
+                });
+              }
               
-              console.log(`🏢 FORNECEDORES MERGE: ${addedCount} novos fornecedores únicos adicionados`);
+              return currentItems;
+            });
+          }
+          
+          // 🔄 MERGE INTELIGENTE: Sempre combinar fornecedores (max 3, evita duplicatas por CNPJ)
+          if (completeData.suppliers && completeData.suppliers.length > 0) {
+            const newSuppliers = completeData.suppliers.slice(0, 3);
+            const currentSuppliers = [selectedSupplier1, selectedSupplier2, selectedSupplier3].filter(Boolean);
+            const combinedSuppliers = [...currentSuppliers];
+            let addedCount = 0;
+            
+            newSuppliers.forEach((newSupplier: any) => {
+              const exists = combinedSuppliers.some((existing: any) => existing.cnpj === newSupplier.cnpj);
+              
+              if (!exists && combinedSuppliers.length < 3) {
+                combinedSuppliers.push({
+                  id: newSupplier.id,
+                  companyName: newSupplier.companyName,
+                  tradeName: newSupplier.tradeName,
+                  cnpj: newSupplier.cnpj,
+                  municipalityId: newSupplier.municipalityId,
+                  address: newSupplier.address,
+                  phone: newSupplier.phone,
+                  email: newSupplier.email,
+                  active: newSupplier.active
+                });
+                addedCount++;
+                console.log(`🏢 NOVO: ${newSupplier.tradeName || newSupplier.companyName}`);
+              }
+            });
+            
+            if (setSelectedSupplier1) setSelectedSupplier1(combinedSuppliers[0] || null);
+            if (setSelectedSupplier2) setSelectedSupplier2(combinedSuppliers[1] || null);
+            if (setSelectedSupplier3) setSelectedSupplier3(combinedSuppliers[2] || null);
+            
+            if (addedCount > 0) {
+              console.log(`🏢 ${addedCount} fornecedor(es) adicionado(s)`);
             }
           }
           
-          // 🔄 MERGE INTELIGENTE: Justificativa clínica - concatenar ou usar a mais completa
+          // 🔄 MERGE INTELIGENTE: Sempre combinar justificativas (concatena se diferente)
           if (completeData.justifications && completeData.justifications.length > 0 && setClinicalJustification) {
-            if (isEditMode) {
-              // MODO EDIÇÃO: Apenas sugerir justificativa se não houver uma existente
-              const preferredJustification = completeData.justifications.find((j: any) => j.isPreferred) || completeData.justifications[0];
-              
-              setClinicalJustification((prevJustification: string) => {
-                if (prevJustification && prevJustification.trim()) {
-                  console.log(`🛡️ MODO EDIÇÃO: Justificativa clínica existente preservada - sugestão disponível`);
+            const preferredJustification = completeData.justifications.find((j: any) => j.isPreferred) || completeData.justifications[0];
+            
+            setClinicalJustification((prevJustification: string) => {
+              if (prevJustification && prevJustification.trim()) {
+                if (!prevJustification.includes(preferredJustification.content)) {
+                  const combined = `${prevJustification}\n\n${preferredJustification.content}`;
+                  console.log(`📝 MERGE: Justificativa concatenada`);
                   toast({
-                    title: "Justificativa clínica sugerida",
-                    description: "Nova justificativa relacionada disponível para adição manual",
-                    duration: 4000,
+                    title: "Justificativa combinada",
+                    description: preferredJustification.title,
+                    duration: 3000,
                   });
-                  return prevJustification; // Preservar justificativa existente
-                } else {
-                  // Primeira justificativa no modo edição - permitir
-                  console.log(`📝 NOVA JUSTIFICATIVA (modo edição): ${preferredJustification.title}`);
-                  return preferredJustification.content;
+                  return combined;
                 }
-              });
-            } else {
-              // MODO CRIAÇÃO: Merge inteligente de justificativas como antes
-              const preferredJustification = completeData.justifications.find((j: any) => j.isPreferred) || completeData.justifications[0];
-              
-              setClinicalJustification((prevJustification: string) => {
-                if (prevJustification && prevJustification.trim()) {
-                  // Já há justificativa - concatenar se for diferente
-                  if (!prevJustification.includes(preferredJustification.content)) {
-                    const combined = `${prevJustification}\n\n${preferredJustification.content}`;
-                    console.log(`📝 JUSTIFICATIVA MERGE: Concatenada com justificativa anterior`);
-                    return combined;
-                  } else {
-                    console.log(`📝 JUSTIFICATIVA: Já inclui o texto da nova conduta`);
-                    return prevJustification;
-                  }
-                } else {
-                  // Primeira justificativa
-                  console.log(`📝 NOVA JUSTIFICATIVA: ${preferredJustification.title}`);
-                  return preferredJustification.content;
-                }
-              });
-              
-              toast({
-                title: "Justificativa clínica combinada",
-                description: preferredJustification.title,
-                duration: 4000,
-              });
-            }
+                console.log(`📝 Justificativa já inclusa`);
+                return prevJustification;
+              }
+              console.log(`📝 NOVA: ${preferredJustification.title}`);
+              return preferredJustification.content;
+            });
           }
           
         }
@@ -2040,9 +1894,9 @@ export function SurgeryData({
     try {
       setSupplierLoading(true);
 
-      // Usar a API real de fornecedores - corrigido parâmetro para "term" em vez de "search"
+      // Usar a API real de fornecedores - usando parâmetro correto "q"
       const response = await fetch(
-        `/api/suppliers/search?term=${encodeURIComponent(supplierSearchTerm)}`,
+        `/api/suppliers/search?q=${encodeURIComponent(supplierSearchTerm)}`,
       );
 
       if (!response.ok) {
@@ -2384,11 +2238,12 @@ export function SurgeryData({
   const loadAllSuppliers = async () => {
     try {
       setSupplierLoading(true);
-      const response = await fetch("/api/suppliers/search?term=");
+      // Buscar fornecedores com termo genérico em vez de string vazia
+      const response = await fetch("/api/suppliers/search?q=a");
 
       if (!response.ok) {
-        // Se falhar carregar todos os fornecedores, tentar buscar alguns com termo comum
-        const fallbackResponse = await fetch("/api/suppliers/search?term=a");
+        // Se falhar carregar todos os fornecedores, tentar buscar alguns com outro termo comum
+        const fallbackResponse = await fetch("/api/suppliers/search?q=e");
         if (fallbackResponse.ok) {
           const data = await fallbackResponse.json();
           setSupplierResults(data);
@@ -3092,10 +2947,12 @@ export function SurgeryData({
                     variant="outline"
                     role="combobox"
                     aria-expanded={surgicalProcedureSearchOpen}
-                    className="w-full justify-between bg-background text-foreground border-input hover:bg-accent-light h-12"
+                    className="combobox-medsync"
                     onClick={fetchAllSurgicalProcedures}
                   >
-                    {surgicalProcedureSearchTerm ? surgicalProcedureSearchTerm : "Selecione os procedimentos cirúrgicos apropriados baseados na região anatômica e no diagnóstico"}
+                    <span className={surgicalProcedureSearchTerm ? "combobox-value" : "combobox-placeholder"}>
+                      {surgicalProcedureSearchTerm ? surgicalProcedureSearchTerm : "Selecione os procedimentos cirúrgicos apropriados baseados na região anatômica e no diagnóstico"}
+                    </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
@@ -3565,17 +3422,19 @@ export function SurgeryData({
                       variant="outline"
                       role="combobox"
                       aria-expanded={open}
-                      className="w-full justify-between bg-background text-foreground border-input hover:bg-accent-light"
+                      className="combobox-medsync"
                       disabled={isLoading}
                     >
-                      {isLoading ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Carregando códigos CID-10...
-                        </span>
-                      ) : (
-                        "Pesquise e selecione códigos CID-10"
-                      )}
+                      <span className={isLoading ? "combobox-value" : "combobox-placeholder"}>
+                        {isLoading ? (
+                          <span className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Carregando códigos CID-10...
+                          </span>
+                        ) : (
+                          "Pesquise e selecione códigos CID-10"
+                        )}
+                      </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -3927,9 +3786,11 @@ export function SurgeryData({
                           variant="outline"
                           role="combobox"
                           aria-expanded={secondaryProcedureSearchOpen}
-                          className="w-full justify-between"
+                          className="combobox-medsync"
                         >
-                          "Pesquise e selecione procedimentos CBHPM"
+                          <span className="combobox-placeholder">
+                            Pesquise e selecione procedimentos CBHPM
+                          </span>
                           <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -4034,27 +3895,22 @@ export function SurgeryData({
                                         duration: 2000,
                                       });
                                     }}
-                                    className="py-2 hover:bg-accent-light"
+                                    className="cursor-pointer hover:bg-accent-light"
                                   >
                                     <div className="flex flex-col w-full">
-                                      <div className="flex items-center justify-between">
-                                        <span className="font-medium text-muted-foreground">
+                                      <div className="flex items-center gap-2">
+                                        <strong className="text-muted-foreground">
                                           {procedure.code}
-                                        </span>
+                                        </strong>
                                         {procedure.porte && (
-                                          <span className="text-xs px-2 py-1 bg-accent/50 rounded-full text-muted-foreground">
-                                            Porte: {procedure.porte}
+                                          <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
+                                            Porte {procedure.porte}
                                           </span>
                                         )}
                                       </div>
-                                      <span className="text-sm mt-1 text-foreground">
+                                      <span className="ml-2 text-foreground">
                                         {procedure.name}
                                       </span>
-                                      {procedure.description && (
-                                        <span className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                          {procedure.description}
-                                        </span>
-                                      )}
                                     </div>
                                   </CommandItem>
                                 ))}
@@ -4253,16 +4109,18 @@ export function SurgeryData({
                           variant="outline"
                           role="combobox"
                           aria-expanded={opmeSearchOpen}
-                          className="w-full justify-between bg-background text-foreground border-input hover:bg-accent-light"
+                          className="combobox-medsync"
                         >
-                          {opmeLoading ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Buscando materiais...
-                            </span>
-                          ) : (
-                            "Pesquise e selecione materiais OPME"
-                          )}
+                          <span className={opmeLoading ? "combobox-value" : "combobox-placeholder"}>
+                            {opmeLoading ? (
+                              <span className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Buscando materiais...
+                              </span>
+                            ) : (
+                              "Pesquise e selecione materiais OPME"
+                            )}
+                          </span>
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -4295,27 +4153,23 @@ export function SurgeryData({
                                 <CommandItem
                                   key={item.id}
                                   value={`${item.technicalName} ${item.commercialName}`}
-                                  className="cursor-pointer hover:bg-accent-light flex justify-between"
+                                  className="cursor-pointer hover:bg-accent-light"
                                   onSelect={() => handleSelectOpmeItem(item)}
                                 >
-                                  <div>
-                                    <div className="font-medium">
-                                      {item.technicalName}
-                                    </div>
-                                    <div className="text-xs flex flex-col text-muted-foreground">
-                                      <span>
-                                        Nome Com.: {item.commercialName}
-                                      </span>
+                                  <div className="flex flex-col w-full">
+                                    <div className="flex items-center gap-2">
+                                      <strong className="text-muted-foreground">
+                                        {item.technicalName}
+                                      </strong>
                                       {item.anvisaRegistrationNumber && (
-                                        <span>
-                                          Reg. ANVISA:{" "}
-                                          {item.anvisaRegistrationNumber}
+                                        <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
+                                          ANVISA: {item.anvisaRegistrationNumber}
                                         </span>
                                       )}
-                                      <span>
-                                        Fabric.: {item.manufacturerName}
-                                      </span>
                                     </div>
+                                    <span className="ml-2 text-foreground">
+                                      {item.commercialName} - {item.manufacturerName}
+                                    </span>
                                   </div>
                                 </CommandItem>
                               ))}
@@ -4460,26 +4314,28 @@ export function SurgeryData({
                         variant="outline"
                         role="combobox"
                         aria-expanded={supplier1Open}
-                        className="w-full justify-between bg-background text-foreground border-input hover:bg-accent-light"
+                        className="combobox-medsync"
                       >
-                        {supplierLoading ? (
-                          <span className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Buscando fornecedores...
-                          </span>
-                        ) : selectedSupplier1 ? (
-                          <span className="flex flex-col text-left truncate">
-                            <span className="font-medium">
-                              {selectedSupplier1.tradeName ||
-                                selectedSupplier1.companyName}
+                        <span className={selectedSupplier1 ? "combobox-value" : "combobox-placeholder"}>
+                          {supplierLoading ? (
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Buscando fornecedores...
                             </span>
-                            <span className="text-xs text-muted-foreground">
-                              CNPJ: {selectedSupplier1.cnpj}
+                          ) : selectedSupplier1 ? (
+                            <span className="flex flex-col text-left truncate">
+                              <span className="font-medium">
+                                {selectedSupplier1.tradeName ||
+                                  selectedSupplier1.companyName}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                CNPJ: {selectedSupplier1.cnpj}
+                              </span>
                             </span>
-                          </span>
-                        ) : (
-                          "Selecionar fornecedor"
-                        )}
+                          ) : (
+                            "Selecionar fornecedor"
+                          )}
+                        </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -4524,22 +4380,23 @@ export function SurgeryData({
                               <CommandItem
                                 key={supplier.id}
                                 value={`${supplier.tradeName} ${supplier.companyName} ${supplier.cnpj}`}
-                                className="cursor-pointer hover:bg-accent-light flex justify-between"
+                                className="cursor-pointer hover:bg-accent-light"
                                 onSelect={() => handleSelectSupplier1(supplier)}
                               >
-                                <div>
-                                  <div className="font-medium">
-                                    {supplier.tradeName || supplier.companyName}
+                                <div className="flex flex-col w-full">
+                                  <div className="flex items-center gap-2">
+                                    <strong className="text-muted-foreground">
+                                      {supplier.tradeName || supplier.companyName}
+                                    </strong>
+                                    <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
+                                      {supplier.cnpj}
+                                    </span>
                                   </div>
-                                  {supplier.tradeName !==
-                                    supplier.companyName && (
-                                    <div className="text-xs text-muted-foreground">
+                                  {supplier.tradeName && supplier.tradeName !== supplier.companyName && (
+                                    <span className="ml-2 text-foreground">
                                       {supplier.companyName}
-                                    </div>
+                                    </span>
                                   )}
-                                  <div className="text-xs text-muted-foreground">
-                                    CNPJ: {supplier.cnpj}
-                                  </div>
                                 </div>
                               </CommandItem>
                             ))}
@@ -4584,26 +4441,28 @@ export function SurgeryData({
                         variant="outline"
                         role="combobox"
                         aria-expanded={supplier2Open}
-                        className="w-full justify-between bg-background text-foreground border-input hover:bg-accent-light"
+                        className="combobox-medsync"
                       >
-                        {supplierLoading ? (
-                          <span className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Buscando fornecedores...
-                          </span>
-                        ) : selectedSupplier2 ? (
-                          <span className="flex flex-col text-left truncate">
-                            <span className="font-medium">
-                              {selectedSupplier2.tradeName ||
-                                selectedSupplier2.companyName}
+                        <span className={selectedSupplier2 ? "combobox-value" : "combobox-placeholder"}>
+                          {supplierLoading ? (
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Buscando fornecedores...
                             </span>
-                            <span className="text-xs text-muted-foreground">
-                              CNPJ: {selectedSupplier2.cnpj}
+                          ) : selectedSupplier2 ? (
+                            <span className="flex flex-col text-left truncate">
+                              <span className="font-medium">
+                                {selectedSupplier2.tradeName ||
+                                  selectedSupplier2.companyName}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                CNPJ: {selectedSupplier2.cnpj}
+                              </span>
                             </span>
-                          </span>
-                        ) : (
-                          "Selecionar fornecedor"
-                        )}
+                          ) : (
+                            "Selecionar fornecedor"
+                          )}
+                        </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -4648,22 +4507,23 @@ export function SurgeryData({
                               <CommandItem
                                 key={supplier.id}
                                 value={`${supplier.tradeName} ${supplier.companyName} ${supplier.cnpj}`}
-                                className="cursor-pointer hover:bg-accent-light flex justify-between"
+                                className="cursor-pointer hover:bg-accent-light"
                                 onSelect={() => handleSelectSupplier2(supplier)}
                               >
-                                <div>
-                                  <div className="font-medium">
-                                    {supplier.tradeName || supplier.companyName}
+                                <div className="flex flex-col w-full">
+                                  <div className="flex items-center gap-2">
+                                    <strong className="text-muted-foreground">
+                                      {supplier.tradeName || supplier.companyName}
+                                    </strong>
+                                    <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
+                                      {supplier.cnpj}
+                                    </span>
                                   </div>
-                                  {supplier.tradeName !==
-                                    supplier.companyName && (
-                                    <div className="text-xs text-muted-foreground">
+                                  {supplier.tradeName && supplier.tradeName !== supplier.companyName && (
+                                    <span className="ml-2 text-foreground">
                                       {supplier.companyName}
-                                    </div>
+                                    </span>
                                   )}
-                                  <div className="text-xs text-muted-foreground">
-                                    CNPJ: {supplier.cnpj}
-                                  </div>
                                 </div>
                               </CommandItem>
                             ))}
@@ -4708,26 +4568,28 @@ export function SurgeryData({
                         variant="outline"
                         role="combobox"
                         aria-expanded={supplier3Open}
-                        className="w-full justify-between bg-background text-foreground border-input hover:bg-accent-light"
+                        className="combobox-medsync"
                       >
-                        {supplierLoading ? (
-                          <span className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Buscando fornecedores...
-                          </span>
-                        ) : selectedSupplier3 ? (
-                          <span className="flex flex-col text-left truncate">
-                            <span className="font-medium">
-                              {selectedSupplier3.tradeName ||
-                                selectedSupplier3.companyName}
+                        <span className={selectedSupplier3 ? "combobox-value" : "combobox-placeholder"}>
+                          {supplierLoading ? (
+                            <span className="flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Buscando fornecedores...
                             </span>
-                            <span className="text-xs text-muted-foreground">
-                              CNPJ: {selectedSupplier3.cnpj}
+                          ) : selectedSupplier3 ? (
+                            <span className="flex flex-col text-left truncate">
+                              <span className="font-medium">
+                                {selectedSupplier3.tradeName ||
+                                  selectedSupplier3.companyName}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                CNPJ: {selectedSupplier3.cnpj}
+                              </span>
                             </span>
-                          </span>
-                        ) : (
-                          "Selecionar fornecedor"
-                        )}
+                          ) : (
+                            "Selecionar fornecedor"
+                          )}
+                        </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
@@ -4772,22 +4634,23 @@ export function SurgeryData({
                               <CommandItem
                                 key={supplier.id}
                                 value={`${supplier.tradeName} ${supplier.companyName} ${supplier.cnpj}`}
-                                className="cursor-pointer hover:bg-accent-light flex justify-between"
+                                className="cursor-pointer hover:bg-accent-light"
                                 onSelect={() => handleSelectSupplier3(supplier)}
                               >
-                                <div>
-                                  <div className="font-medium">
-                                    {supplier.tradeName || supplier.companyName}
+                                <div className="flex flex-col w-full">
+                                  <div className="flex items-center gap-2">
+                                    <strong className="text-muted-foreground">
+                                      {supplier.tradeName || supplier.companyName}
+                                    </strong>
+                                    <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
+                                      {supplier.cnpj}
+                                    </span>
                                   </div>
-                                  {supplier.tradeName !==
-                                    supplier.companyName && (
-                                    <div className="text-xs text-muted-foreground">
+                                  {supplier.tradeName && supplier.tradeName !== supplier.companyName && (
+                                    <span className="ml-2 text-foreground">
                                       {supplier.companyName}
-                                    </div>
+                                    </span>
                                   )}
-                                  <div className="text-xs text-muted-foreground">
-                                    CNPJ: {supplier.cnpj}
-                                  </div>
                                 </div>
                               </CommandItem>
                             ))}
@@ -4852,12 +4715,10 @@ export function SurgeryData({
                       className="min-h-48 bg-card text-foreground border-border resize-y"
                     />
                     <div className="mt-3 flex justify-end">
-                      <Button
+                      <button
                         type="button"
-                        variant="outline"
-                        size="sm"
                         disabled={isGeneratingAI}
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-none disabled:opacity-50"
+                        className="btn-medsync-dark disabled:opacity-50"
                         onClick={handleGenerateAIJustification}
                       >
                         {isGeneratingAI ? (
@@ -4867,10 +4728,11 @@ export function SurgeryData({
                           </>
                         ) : (
                           <>
-                            🤖 Gerar Justificativa Clínica com IA
+                            <img src={RoboMedSyncIcon} alt="IA" className="w-5 h-5 mr-2 inline-block" />
+                            Gerar Justificativa Clínica com IA
                           </>
                         )}
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -4880,6 +4742,16 @@ export function SurgeryData({
         </div>
       </CardContent>
       </Card>
+
+      {/* Overlay de Loading da IA */}
+      {isGeneratingAI && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150]" data-testid="ai-loading-overlay">
+          <LoadingLogo 
+            message="A IA está analisando os dados e gerando a justificativa clínica..." 
+            size="lg"
+          />
+        </div>
+      )}
 
       {/* Dialog para seleção de condutas cirúrgicas */}
       {showSurgicalApproachDialog && selectedCidForApproach && (
@@ -5203,6 +5075,7 @@ interface AnatomicalRegionSelectorProps {
   setSelectedSurgicalProcedures?: (procedures: SurgicalProcedure[]) => void;
   availableProceduresFromRegion?: SurgicalProcedure[];
   setAvailableProceduresFromRegion?: (procedures: SurgicalProcedure[]) => void;
+  initialRegionId?: number | null;
 }
 
 export const AnatomicalRegionSelector: React.FC<AnatomicalRegionSelectorProps> = ({
@@ -5210,7 +5083,8 @@ export const AnatomicalRegionSelector: React.FC<AnatomicalRegionSelectorProps> =
   selectedSurgicalProcedures = [],
   setSelectedSurgicalProcedures = () => {},
   availableProceduresFromRegion = [],
-  setAvailableProceduresFromRegion = () => {}
+  setAvailableProceduresFromRegion = () => {},
+  initialRegionId = null
 }) => {
   const [selectedRegion, setSelectedRegion] = useState<AnatomicalRegion | null>(null);
   const [regions, setRegions] = useState<AnatomicalRegion[]>([]);
@@ -5278,6 +5152,20 @@ export const AnatomicalRegionSelector: React.FC<AnatomicalRegionSelectorProps> =
     }
   };
 
+  // Carregar região inicial quando os dados estiverem disponíveis
+  useEffect(() => {
+    // Garantir que temos tanto o ID inicial quanto as regiões carregadas
+    if (!initialRegionId || !regions?.length || isLoading) {
+      return;
+    }
+    
+    const region = regions.find(r => r.id === initialRegionId);
+    if (region && (!selectedRegion || selectedRegion.id !== region.id)) {
+      console.log(`✅ Região anatômica restaurada: ${region.name} (ID: ${region.id})`);
+      setSelectedRegion(region);
+    }
+  }, [initialRegionId, regions, isLoading]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -5292,88 +5180,41 @@ export const AnatomicalRegionSelector: React.FC<AnatomicalRegionSelectorProps> =
       <div className="space-y-6">
         {/* Grid de ícones circulares das regiões */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-6 place-items-center">
-          {regions.map((region) => (
-            <div 
-              key={region.id}
-              onClick={() => handleRegionClick(region)}
-              className={`
-                w-32 h-32 
-                rounded-full 
-                cursor-pointer 
-                transition-all 
-                duration-300
-                hover:scale-105
-                flex
-                items-center
-                justify-center
-                relative
-                group
-                z-[1]
-                bg-muted/40 hover:bg-primary/10
-              `}
-              style={{ 
-                borderRadius: '50%',
-                width: '128px',
-                height: '128px',
-                boxShadow: selectedRegion?.id === region.id 
-                  ? '0 0 20px rgba(59, 130, 246, 0.6), 0 0 40px rgba(59, 130, 246, 0.3)' 
-                  : 'none'
-              }}
-              title={region.name}
-            >
-              {region.iconUrl && (
-                <img
-                  src={selectedRegion?.id === region.id 
-                    ? region.iconUrl.replace('_gray.svg', '_blue.svg')
-                    : region.iconUrl
-                  }
-                  alt={region.name}
-                  className="w-28 h-28 object-contain transition-all duration-300"
-                />
-              )}
-              
-              {/* Tooltip personalizado com posicionamento inteligente */}
-              <div className={`
-                absolute 
-                bottom-full 
-                mb-2 
-                px-4 
-                py-3 
-                bg-card 
-                text-foreground 
-                text-sm 
-                rounded-lg 
-                shadow-lg 
-                opacity-0 
-                group-hover:opacity-100 
-                transition-opacity 
-                duration-200 
-                pointer-events-none 
-                z-[99999] 
-                max-w-[600px] min-w-80
-                ${
-                  region.id === 1 || region.id === 2
-                    ? 'left-0' // Primeiros ícones: tooltip alinhado à esquerda
-                    : region.id === 6 || region.id === 9
-                    ? 'right-0' // Últimos ícones: tooltip alinhado à direita  
-                    : 'left-1/2 transform -translate-x-1/2' // Ícones centrais: tooltip centralizado
-                }
-              `}>
-                <div className="font-semibold">{region.name}</div>
-                {region.description && (
-                  <div className="text-xs text-muted-foreground mt-1 whitespace-normal">{region.description}</div>
+          {regions.map((region) => {
+            const isLeftAligned = region.id === 1 || region.id === 2;
+            const isRightAligned = region.id === 6 || region.id === 9;
+            const tooltipPosition = isLeftAligned ? 'tooltip-left' : isRightAligned ? 'tooltip-right' : 'tooltip-center';
+            const arrowPosition = isLeftAligned ? 'arrow-left' : isRightAligned ? 'arrow-right' : 'arrow-center';
+            
+            return (
+              <div 
+                key={region.id}
+                onClick={() => handleRegionClick(region)}
+                className={`body-region-icon group ${selectedRegion?.id === region.id ? 'selected' : ''}`}
+                title={region.name}
+              >
+                {region.iconUrl && (
+                  <img
+                    src={selectedRegion?.id === region.id 
+                      ? region.iconUrl.replace('_gray.svg', '_blue.svg')
+                      : region.iconUrl
+                    }
+                    alt={region.name}
+                  />
                 )}
-                {/* Seta do tooltip com posicionamento dinâmico */}
-                <div className={`absolute top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 ${
-                  region.id === 1 || region.id === 2
-                    ? 'left-4' // Seta mais à esquerda para tooltips esquerdos
-                    : region.id === 6 || region.id === 9  
-                    ? 'right-4' // Seta mais à direita para tooltips direitos
-                    : 'left-1/2 transform -translate-x-1/2' // Seta centralizada para tooltips centrais
-                }`}></div>
+                
+                {/* Tooltip personalizado com posicionamento inteligente */}
+                <div className={`body-region-tooltip ${tooltipPosition}`}>
+                  <div className="font-semibold">{region.name}</div>
+                  {region.description && (
+                    <div className="text-xs text-muted-foreground mt-1 whitespace-normal">{region.description}</div>
+                  )}
+                  {/* Seta do tooltip com posicionamento dinâmico */}
+                  <div className={`body-region-tooltip-arrow ${arrowPosition}`}></div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
