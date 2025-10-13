@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, date, timestamp, pgEnum, numeric, varchar, jsonb, unique, check, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, date, timestamp, pgEnum, numeric, varchar, jsonb, unique, check, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
@@ -549,8 +549,6 @@ export const insertOrderStatusSchema = createInsertSchema(orderStatuses);
 export type OrderStatus = typeof orderStatuses.$inferSelect;
 export type InsertOrderStatus = z.infer<typeof insertOrderStatusSchema>;
 
-// Manter enum para compatibilidade (deprecated) - atualizado com novos status
-export const orderStatusEnum = pgEnum("order_status", ["em_preenchimento", "em_avaliacao", "aceito", "autorizado_parcial", "cirurgia_realizada", "cancelado"]);
 
 // Enum para tipo de procedimento
 export const procedureTypeEnum = pgEnum("procedure_type", ["eletiva", "urgencia"]);
@@ -572,6 +570,7 @@ export const medicalOrders = pgTable("medical_orders", {
   clinicalJustification: text("clinical_justification"), // Sugestão de justificativa clínica para o procedimento
   procedureLaterality: cidLateralityEnum("procedure_laterality"), // Lateralidade do procedimento principal: esquerdo, direito ou bilateral
   procedureType: procedureTypeEnum("procedure_type"), // Tipo de procedimento: eletiva ou urgência
+  anatomicalRegionId: integer("anatomical_region_id").references(() => anatomicalRegions.id), // Região anatômica selecionada
   // CIDs, OPME Items e Suppliers agora são gerenciados via tabelas relacionais
   // Campo unificado de anexos (substitui exam_images_url, medical_report_url e order_pdf_url)
   attachments: jsonb("attachments").default('[]'), // Array de objetos JSON com todos os anexos
@@ -593,6 +592,7 @@ export const insertMedicalOrderSchema = createInsertSchema(medicalOrders).pick({
   clinicalIndication: true,
   procedureLaterality: true,
   procedureType: true,
+  anatomicalRegionId: true,
   additionalNotes: true,
   statusId: true, // Status do pedido (FK para order_statuses)
   complexity: true,
@@ -731,20 +731,6 @@ export const users = pgTable("users", {
   signatureNote: text("signature_note"), // Nota de texto para aparecer embaixo da assinatura
   logoUrl: text("logo_url"), // URL do logotipo do médico
   
-  // Stripe payment fields
-  stripeCustomerId: text("stripe_customer_id").unique(), // ID do cliente no Stripe
-  stripeSubscriptionId: text("stripe_subscription_id").unique(), // ID da assinatura no Stripe
-  subscriptionStatus: text("subscription_status"), // Status da assinatura: active, canceled, past_due, etc.
-  // Usar sistema existente de userSubscriptions ao invés de referência direta
-  subscriptionStartDate: timestamp("subscription_start_date"), // Data de início da assinatura
-  subscriptionEndDate: timestamp("subscription_end_date"), // Data de fim da assinatura
-  
-  // Campos para sistema de trial personalizado
-  trialStartDate: timestamp("trial_start_date"), // Data de início do trial
-  trialEndDate: timestamp("trial_end_date"), // Data de fim do trial
-  trialDaysOverride: integer("trial_days_override"), // Override personalizado de dias de trial (30, 60, etc.)
-  trialStatus: text("trial_status").default("inactive"), // inactive, active, expired, converted
-  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -853,7 +839,9 @@ export const subscriptionPlans = pgTable("subscription_plans", {
   maxUsers: integer("max_users").default(1), // Número máximo de usuários
   features: text("features").array().default([]), // Array de funcionalidades
   trialDays: integer("trial_days").default(0), // Dias de trial gratuito
-  stripePriceId: text("stripe_price_id").unique(), // ID do preço no Stripe
+  productId: text("product_id").unique(), // ID do produto na plataforma de pagamento
+  priceIdMonthly: text("price_id_monthly").unique(), // ID do preço mensal na plataforma de pagamento
+  priceIdYearly: text("price_id_yearly").unique(), // ID do preço anual na plataforma de pagamento
   isPopular: boolean("is_popular").default(false), // Destacar como popular
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -868,7 +856,9 @@ export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans
   maxUsers: true,
   features: true,
   trialDays: true,
-  stripePriceId: true,
+  productId: true,
+  priceIdMonthly: true,
+  priceIdYearly: true,
   isPopular: true,
   isActive: true,
 });
@@ -897,6 +887,8 @@ export const userSubscriptions = pgTable("user_subscriptions", {
   paymentProviderCustomerId: text("payment_provider_customer_id"), // ID do cliente na plataforma de pagamento
   paymentProviderSubscriptionId: text("payment_provider_subscription_id"), // ID da assinatura na plataforma
   paymentProvider: text("payment_provider").default("none"), // "stripe", "pagar_me", "mercado_pago", etc.
+  
+  // Campos de timestamps
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -921,39 +913,144 @@ export const insertUserSubscriptionSchema = createInsertSchema(userSubscriptions
   paymentProvider: true,
 });
 
-// Incomplete Registrations table (para tracking de leads)
+// Enum para status do lead
+export const leadStatusEnum = pgEnum('lead_status', [
+  'draft',           // Rascunho inicial
+  'form_completed',  // Formulário preenchido
+  'plan_selected',   // Plano selecionado  
+  'checkout_created',// Checkout Session criado
+  'paid',           // Pagamento confirmado
+  'abandoned'       // Processo abandonado
+]);
+
+// Incomplete Registrations table (store temporário completo para registro)
 export const incompleteRegistrations = pgTable("incomplete_registrations", {
   id: serial("id").primaryKey(),
+  
+  // === Dados básicos do lead (preservados) ===
   email: text("email").notNull(), // Email para identificar lead
   firstName: text("first_name"),
-  lastName: text("last_name"),
+  lastName: text("last_name"), 
   cpf: text("cpf"),
   phone: text("phone"),
   username: text("username"),
+  
+  // === Novos dados pessoais completos ===
+  password: text("password"), // Hash da senha (nunca claro)
+  roleId: integer("role_id").references(() => roles.id),
+  crm: text("crm"), // CRM como texto (aceita formatos variados)
+  crmUf: varchar("crm_uf", { length: 2 }).references(() => brazilianStates.stateCode),
+  medicalSpecialtyId: integer("medical_specialty_id").references(() => medicalSpecialties.id),
+  
+  // === Dados de endereço completos ===  
+  cep: varchar("cep", { length: 9 }), // 00000-000
+  address: text("address"), // Logradouro (nome da rua)
+  number: text("number"), // Número da casa/prédio
+  complement: text("complement"), // Complemento (apto, bloco, etc.)
+  neighborhood: text("neighborhood"), // Bairro
+  city: text("city"), // Cidade
+  state: varchar("state", { length: 2 }).references(() => brazilianStates.stateCode), // UF
+  country: varchar("country", { length: 2 }).default('BR'), // País
+  
+  // === Dados de plano e pagamento ===
   selectedPlanId: integer("selected_plan_id").references(() => subscriptionPlans.id),
-  currentStep: text("current_step").notNull(), // 'form_completed', 'plan_selected', 'checkout_started'
+  billingInterval: text("billing_interval"), // 'monthly' ou 'yearly'
+  discountCode: text("discount_code"), // Cupom aplicado
+  
+  // === IDs do Stripe para correlação ===
+  stripeCustomerId: text("stripe_customer_id"), // Customer ID no Stripe
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"), // Session ID
+  stripePaymentIntentId: text("stripe_payment_intent_id"), // Payment Intent ID
+  stripePriceId: text("stripe_price_id"), // Price ID usado
+  
+  // === Token de autorização para edições sem login ===
+  regToken: varchar("reg_token", { length: 255 }).unique(), // Token UUID para autorizar edições
+  regTokenHash: text("reg_token_hash"), // Hash do token para validação
+  
+  // === Status e tracking (melhorados) ===
+  leadStatus: leadStatusEnum("lead_status").default('draft').notNull(), // Status estruturado
+  currentStep: text("current_step").notNull(), // Retrocompatibilidade analytics
+  
+  // === Dados técnicos (preservados) ===
   userAgent: text("user_agent"), // Browser info
-  ipAddress: text("ip_address"), // IP para analytics
-  source: text("source").default("direct"), // Como chegou: 'direct', 'google', 'facebook', etc.
+  ipAddress: text("ip_address"), // IP para analytics  
+  source: text("source").default("direct"), // Como chegou: 'direct', 'google', etc.
+  
+  // === Timestamps (preservados + melhorados) ===
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"), // Quando finalizou (se finalizou)
   abandonedAt: timestamp("abandoned_at"), // Quando foi considerado abandonado
+  lastActivityAt: timestamp("last_activity_at").defaultNow(), // Última atividade
+  
+  // === JSONB para flexibilidade futura ===
+  userDataJson: jsonb("user_data_json"), // Dados extras do formulário
+  addressJson: jsonb("address_json"), // Dados extras de endereço  
+  paymentJson: jsonb("payment_json"), // Metadados do pagamento
+  metadataJson: jsonb("metadata_json"), // Outros metadados
+  
 }, (table) => ({
-  // Index para buscar por email rapidamente
+  // === Índices existentes (preservados) ===
   emailIdx: index("incomplete_registrations_email_idx").on(table.email),
-  // Index para buscar por data
   createdAtIdx: index("incomplete_registrations_created_at_idx").on(table.createdAt),
+  
+  // === Novos índices para performance ===
+  regTokenIdx: index("incomplete_registrations_reg_token_idx").on(table.regToken),
+  leadStatusIdx: index("incomplete_registrations_lead_status_idx").on(table.leadStatus),
+  lastActivityIdx: index("incomplete_registrations_last_activity_idx").on(table.lastActivityAt),
+  stripeSessionIdx: index("incomplete_registrations_stripe_session_idx").on(table.stripeCheckoutSessionId),
+  
+  // === Constraints de unicidade simples (implementaremos lógica condicional na aplicação) ===
+  // NOTA: Unique constraints condicionais serão implementadas via lógica de negócio
+  // Para evitar conflitos durante migração temporária
 }));
 
 export const insertIncompleteRegistrationSchema = createInsertSchema(incompleteRegistrations).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  lastActivityAt: true,
+  regTokenHash: true, // Gerado automaticamente
 });
 
-export type IncompleteRegistration = typeof incompleteRegistrations.$inferSelect;
-export type InsertIncompleteRegistration = z.infer<typeof insertIncompleteRegistrationSchema>;
+// Schema RESTRITO para atualização (PATCH) - APENAS campos seguros permitidos
+export const updateIncompleteRegistrationSchema = z.object({
+  // Dados pessoais básicos (step 1)
+  firstName: z.string().min(1).max(100).optional(),
+  lastName: z.string().min(1).max(200).optional(), 
+  cpf: z.string().length(11).regex(/^\d{11}$/).optional(),
+  phone: z.string().min(10).max(15).optional(),
+  username: z.string().min(3).max(50).optional(),
+  
+  // Dados médicos (step 1)  
+  roleId: z.number().positive().optional(),
+  crm: z.string().max(20).optional(),
+  crmUf: z.string().length(2).optional(),
+  medicalSpecialtyId: z.number().positive().optional(),
+  
+  // Endereço (step 1)
+  cep: z.string().length(9).optional(),
+  address: z.string().max(200).optional(),
+  number: z.string().max(20).optional(), 
+  complement: z.string().max(100).optional(),
+  neighborhood: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
+  state: z.string().length(2).optional(),
+  
+  // Senha (step 1) - será hasheada automaticamente
+  password: z.string().min(6).max(100).optional(),
+  
+  // Dados JSONB opcionais
+  userDataJson: z.record(z.any()).optional(),
+  addressJson: z.record(z.any()).optional(),
+  metadataJson: z.record(z.any()).optional(),
+  
+  // CAMPOS PROIBIDOS (excluídos por segurança):
+  // regToken, regTokenHash, completedAt, leadStatus, stripe_*, createdAt, updatedAt, email
+});
+
+
+export type UpdateIncompleteRegistration = z.infer<typeof updateIncompleteRegistrationSchema>;
 
 // Subscription Payments table
 export const subscriptionPayments = pgTable("subscription_payments", {
@@ -983,7 +1080,7 @@ export const insertSubscriptionPaymentSchema = createInsertSchema(subscriptionPa
   failureReason: true,
 });
 
-// Discount Codes table
+// Discount Codes table - Integrado com Stripe e outros provedores
 export const discountCodes = pgTable("discount_codes", {
   id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
@@ -996,9 +1093,44 @@ export const discountCodes = pgTable("discount_codes", {
   validUntil: timestamp("valid_until"),
   applicablePlans: integer("applicable_plans").array(), // Array de IDs de planos aplicáveis, NULL = todos
   isActive: boolean("is_active").default(true),
+  isAutomatic: boolean("is_automatic"), // Apenas um desconto pode ser automático por vez
+  
+  // === Campos genéricos para integração com provedores de pagamento ===
+  paymentProvider: text("payment_provider").default("internal"), // "stripe", "mercado_pago", "internal", etc.
+  
+  // Campos genéricos de referência externa
+  externalCouponId: text("external_coupon_id").unique(), // ID do cupom no provedor externo
+  externalPromotionCodeId: text("external_promotion_code_id").unique(), // ID do promotion code no provedor
+  customerRestrictions: text("customer_restrictions").array(), // IDs de clientes permitidos
+  firstTimeTransaction: boolean("first_time_transaction").default(false), // Apenas primeira transação
+  minimumAmount: integer("minimum_amount"), // Valor mínimo em centavos
+  maxRedemptions: integer("max_redemptions"), // Máximo de redenções
+  redeemBy: timestamp("redeem_by"), // Data limite para uso
+  
+  // Campos de duração do cupom (para assinaturas)
+  duration: text("duration").default("once"), // "once", "repeating", "forever"
+  durationInMonths: integer("duration_in_months"), // Duração em meses (se duration = 'repeating')
+  providerName: text("provider_name"), // Nome do cupom no provedor
+  
+  // Campos de metadata flexíveis
+  metadata: text("metadata"), // JSON string para dados adicionais
+  restrictions: text("restrictions"), // JSON string para restrições customizadas
+  
+  // Campos de auditoria
+  createdBy: integer("created_by").references(() => users.id), // Usuário que criou
+  lastSyncAt: timestamp("last_sync_at"), // Última sincronização com provedor
+  syncStatus: text("sync_status").default("pending"), // "pending", "synced", "error"
+  syncErrorMessage: text("sync_error_message"), // Mensagem de erro de sincronização
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Garante que apenas um desconto pode ser automático por vez
+  // Permite múltiplos NULL/FALSE, mas apenas um TRUE
+  automaticTrueOnly: uniqueIndex("discount_codes_is_automatic_true")
+    .on(table.isAutomatic)
+    .where(sql`is_automatic IS TRUE`),
+}));
 
 export const insertDiscountCodeSchema = createInsertSchema(discountCodes).pick({
   code: true,
@@ -1010,7 +1142,25 @@ export const insertDiscountCodeSchema = createInsertSchema(discountCodes).pick({
   validUntil: true,
   applicablePlans: true,
   isActive: true,
+  isAutomatic: true,
+  paymentProvider: true,
+  externalCouponId: true,
+  externalPromotionCodeId: true,
+  customerRestrictions: true,
+  firstTimeTransaction: true,
+  minimumAmount: true,
+  maxRedemptions: true,
+  redeemBy: true,
+  duration: true,
+  durationInMonths: true,
+  providerName: true,
+  metadata: true,
+  restrictions: true,
+  createdBy: true,
 });
+
+export type DiscountCode = typeof discountCodes.$inferSelect;
+export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
 
 // Export types
 export type Patient = typeof patients.$inferSelect;
@@ -1169,14 +1319,29 @@ export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema
 export type UserSubscription = typeof userSubscriptions.$inferSelect;
 export type InsertUserSubscription = z.infer<typeof insertUserSubscriptionSchema>;
 
+// Tabela para idempotência de webhooks
+export const webhookEvents = pgTable("webhook_events", {
+  id: serial("id").primaryKey(),
+  eventId: text("event_id").notNull().unique(), // ID único do evento do Stripe
+  eventType: text("event_type").notNull(), // checkout.session.completed, customer.subscription.updated, etc.
+  processed: boolean("processed").default(false).notNull(),
+  processedAt: timestamp("processed_at"),
+  data: jsonb("data"), // Dados do evento para auditoria
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWebhookEventSchema = createInsertSchema(webhookEvents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type WebhookEvent = typeof webhookEvents.$inferSelect;
+export type InsertWebhookEvent = z.infer<typeof insertWebhookEventSchema>;
+
 export type SubscriptionPayment = typeof subscriptionPayments.$inferSelect;
 export type InsertSubscriptionPayment = z.infer<typeof insertSubscriptionPaymentSchema>;
-
-export type IncompleteRegistration = typeof incompleteRegistrations.$inferSelect;
-export type InsertIncompleteRegistration = z.infer<typeof insertIncompleteRegistrationSchema>;
-
-export type DiscountCode = typeof discountCodes.$inferSelect;
-export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
 
 export type Role = typeof roles.$inferSelect;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
