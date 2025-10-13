@@ -199,11 +199,11 @@ export function UnifiedFileUpload({
     <div className="mb-6 text-foreground">
       <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
         {/* Título com fundo azul */}
-        <div className="bg-medsync-blue-light px-4 py-3">
+        <div className="bg-medsync-blue px-4 py-3">
           <div className="flex items-center">
-            <Upload className="mr-2 h-5 w-5 text-muted-foreground" />
+            <Upload className="mr-2 h-5 w-5 text-white" />
             <div>
-              <h3 className="text-lg font-semibold text-muted-foreground">{title}</h3>
+              <h3 className="text-lg font-semibold text-white">{title}</h3>
             </div>
           </div>
         </div>
@@ -307,8 +307,8 @@ export function UnifiedFileUpload({
                     </div>
                     
                     {/* Informações do arquivo */}
-                    <div className="flex-1 min-w-0 mb-2">
-                      <p className="text-sm font-medium text-foreground truncate" title={attachment.filename}>
+                    <div className="flex-1 min-w-0 mb-2 max-w-full">
+                      <p className="text-sm font-medium text-foreground truncate w-full" title={attachment.filename}>
                         {attachment.filename}
                       </p>
                       <p className="text-xs text-muted-foreground">
