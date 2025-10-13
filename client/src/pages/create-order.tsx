@@ -164,9 +164,15 @@ export default function CreateOrder() {
   };
 
   // Handler simples para atualizar estado quando região é selecionada
-  const handleAnatomicalRegionSelect = (region: AnatomicalRegion) => {
+  const handleAnatomicalRegionSelect = async (region: AnatomicalRegion) => {
     console.log("Região anatômica selecionada:", region);
     setSelectedAnatomicalRegion(region);
+    
+    // Salvar ID da região anatômica no banco
+    if (orderId) {
+      await updateOrderField('anatomicalRegionId', region.id);
+      console.log(`✅ Região anatômica ${region.name} (ID: ${region.id}) salva no banco`);
+    }
   };
   
   // Estado de lateralidade da cirurgia (adicionado como um campo independente)
@@ -606,18 +612,23 @@ export default function CreateOrder() {
     try {
       // **ETAPA 1: DADOS BÁSICOS DO PEDIDO** - Primeiro para obter IDs necessários
       console.log('📋 ETAPA 1: Carregando dados básicos do pedido...');
+      
+      // Invalidar cache para garantir dados frescos
+      await queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${currentOrderId}`] });
+      
       const orderBasicData = await apiRequest(`/api/medical-orders/${currentOrderId}`, "GET");
       
       if (!orderBasicData) {
         throw new Error('Pedido médico não encontrado');
       }
 
-      console.log('✅ DADOS BÁSICOS carregados:', { 
+      console.log('✅ DADOS BÁSICOS carregados:', {
         clinicalIndication: orderBasicData.clinicalIndication,
         additionalNotes: orderBasicData.additionalNotes,
         clinicalJustification: orderBasicData.clinicalJustification,
         patientId: orderBasicData.patientId,
-        hospitalId: orderBasicData.hospitalId
+        hospitalId: orderBasicData.hospitalId,
+        anatomicalRegionId: orderBasicData.anatomicalRegionId
       });
 
       // **ETAPA 2: DADOS DO PACIENTE E HOSPITAL** - Usando IDs obtidos na ETAPA 1
@@ -653,6 +664,19 @@ export default function CreateOrder() {
         });
       } else {
         console.log('⚠️ JUSTIFICATIVA CLÍNICA não encontrada ou vazia no banco de dados');
+      }
+      
+      // Carregar região anatômica se existir
+      if (orderBasicData.anatomicalRegionId) {
+        try {
+          const regionData = await apiRequest(`/api/anatomical-regions/${orderBasicData.anatomicalRegionId}`, "GET");
+          if (regionData) {
+            setSelectedAnatomicalRegion(regionData);
+            console.log(`✅ Região anatômica carregada: ${regionData.name} (ID: ${orderBasicData.anatomicalRegionId})`);
+          }
+        } catch (error) {
+          console.error('⚠️ Erro ao carregar região anatômica:', error);
+        }
       }
       
       if (orderBasicData.attachments) {
@@ -3318,6 +3342,7 @@ export default function CreateOrder() {
               setSelectedSurgicalProcedures={setSelectedSurgicalProcedures}
               availableProceduresFromRegion={availableProceduresFromRegion}
               setAvailableProceduresFromRegion={setAvailableProceduresFromRegion}
+              initialRegionId={selectedAnatomicalRegion?.id || null}
             />
           </div>
         )}
