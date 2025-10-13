@@ -2632,6 +2632,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // ✅ CAMPOS ADICIONADOS: clinicalIndication e additionalNotes para edição
           clinicalIndication: order.clinicalIndication || "",
           additionalNotes: order.additionalNotes || "",
+          // ✅ REGIÃO ANATÔMICA: Incluir anatomicalRegionId para persistência visual
+          anatomicalRegionId: order.anatomicalRegionId || null,
           // **CRÍTICO**: Incluir attachments para correção do bug de finalização
           attachments: order.attachments || []
         };

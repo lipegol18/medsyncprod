@@ -1940,6 +1940,7 @@ export class DatabaseStorage implements IStorage {
       if (updates.clinicalJustification !== undefined) updateData.clinicalJustification = updates.clinicalJustification;
       if (updates.procedureLaterality !== undefined) updateData.procedureLaterality = updates.procedureLaterality;
       if (updates.procedureType !== undefined) updateData.procedureType = updates.procedureType;
+      if (updates.anatomicalRegionId !== undefined) updateData.anatomicalRegionId = updates.anatomicalRegionId;
       if (updates.additionalNotes !== undefined) updateData.additionalNotes = updates.additionalNotes;
       if (updates.complexity !== undefined) updateData.complexity = updates.complexity;
       if (updates.statusId !== undefined) updateData.statusId = updates.statusId;
