@@ -145,47 +145,151 @@
 }
 
 /* Classes para diferentes pesos da fonte Inter (fonte padrão) */
-.font-thin { font-weight: 100; }
-.font-extralight { font-weight: 200; }
-.font-light { font-weight: 300; }
-.font-normal { font-weight: 400; }
-.font-medium { font-weight: 500; }
-.font-semibold { font-weight: 600; }
-.font-bold { font-weight: 700; }
-.font-extrabold { font-weight: 800; }
-.font-black { font-weight: 900; }
+.font-thin {
+  font-weight: 100;
+}
+
+.font-extralight {
+  font-weight: 200;
+}
+
+.font-light {
+  font-weight: 300;
+}
+
+.font-normal {
+  font-weight: 400;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.font-extrabold {
+  font-weight: 800;
+}
+
+.font-black {
+  font-weight: 900;
+}
 
 /* Classes para fontes específicas com todos os pesos */
-.font-inter { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-.font-lato { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; }
-.font-nunito { font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif; }
-.font-proxima { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; }
-.font-proxima-condensed { font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif; }
+.font-inter {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-lato {
+  font-family: 'Lato', ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-nunito {
+  font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-proxima {
+  font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-proxima-condensed {
+  font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif;
+}
 
 /* Classes específicas para diferentes pesos da Proxima Nova */
-.font-proxima-light { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 300; }
-.font-proxima-regular { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 400; }
-.font-proxima-semibold { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 600; }
-.font-proxima-bold { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 700; }
-.font-proxima-extrabold { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
-.font-proxima-black { font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif; font-weight: 900; }
+.font-proxima-light {
+  font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 300;
+}
+
+.font-proxima-regular {
+  font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
+}
+
+.font-proxima-semibold {
+  font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+}
+
+.font-proxima-bold {
+  font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+}
+
+.font-proxima-extrabold {
+  font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+}
+
+.font-proxima-black {
+  font-family: 'Proxima Nova', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 900;
+}
 
 /* Classes específicas para diferentes pesos da Proxima Nova Condensed */
-.font-proxima-cond-light { font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif; font-weight: 300; }
-.font-proxima-cond-regular { font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif; font-weight: 400; }
-.font-proxima-cond-semibold { font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif; font-weight: 600; }
+.font-proxima-cond-light {
+  font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 300;
+}
+
+.font-proxima-cond-regular {
+  font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
+}
+
+.font-proxima-cond-semibold {
+  font-family: 'Proxima Nova Condensed', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+}
 
 /* Classes específicas para diferentes pesos da Lato */
-.font-lato-thin { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; font-weight: 100; }
-.font-lato-light { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; font-weight: 300; }
-.font-lato-regular { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; font-weight: 400; }
-.font-lato-bold { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; font-weight: 700; }
-.font-lato-black { font-family: 'Lato', ui-sans-serif, system-ui, sans-serif; font-weight: 900; }
+.font-lato-thin {
+  font-family: 'Lato', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 100;
+}
+
+.font-lato-light {
+  font-family: 'Lato', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 300;
+}
+
+.font-lato-regular {
+  font-family: 'Lato', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
+}
+
+.font-lato-bold {
+  font-family: 'Lato', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+}
+
+.font-lato-black {
+  font-family: 'Lato', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 900;
+}
 
 /* Extensões do sistema Tailwind quando necessário */
-.text-7xl { font-size: 4.5rem; line-height: 1; }
-.text-8xl { font-size: 6rem; line-height: 1; }
-.text-9xl { font-size: 8rem; line-height: 1; }
+.text-7xl {
+  font-size: 4.5rem;
+  line-height: 1;
+}
+
+.text-8xl {
+  font-size: 6rem;
+  line-height: 1;
+}
+
+.text-9xl {
+  font-size: 8rem;
+  line-height: 1;
+}
 
 :root {
   /* Tema MedSync - versão clara por padrão com paleta Sky */
@@ -193,50 +297,73 @@
   --foreground: 222.2 84% 4.9%;
   --muted: 210 40% 96.1%;
   --muted-foreground: 216.9 14.6% 34.9%;
-  --semi-foreground: 218 40% 25%;  /* cinza intermediário entre muted e foreground */
+  --semi-foreground: 218 40% 25%;
+  /* cinza intermediário entre muted e foreground */
   --popover: 0 0% 100%;
   --popover-foreground: 222.2 84% 4.9%;
   --card: 0 0% 100%;
   --card-foreground: 222.2 84% 4.9%;
-  --border: 220 14.3% 95.9%;  /* gray-200 equivalent */
+  --border: 220 14.3% 95.9%;
+  /* gray-200 equivalent */
   --input: 214.3 31.8% 91.4%;
   /* --card-border removida - usando border-gray-200 */
   /* Paleta Sky para elementos principais - Header branco com texto personalizado */
-  --primary: 0 0% 100%;             /* Branco para o header */
-  --primary-foreground: 198 67% 53%; /* #2ca8e0 para textos do header */
-  --secondary: 204 94% 94%;         /* sky-50 */
-  --secondary-foreground: 198 67% 53%; /* #2ca8e0 */
-  --accent: 198 89% 69%;            /* sky-400 equivalent */
+  --primary: 0 0% 100%;
+  /* Branco para o header */
+  --primary-foreground: 198 67% 53%;
+  /* #2ca8e0 para textos do header */
+  --secondary: 204 94% 94%;
+  /* sky-50 */
+  --secondary-foreground: 198 67% 53%;
+  /* #2ca8e0 */
+  --accent: 198 89% 69%;
+  /* sky-400 equivalent */
   --accent-foreground: 0 0% 100%;
-  --accent-light: 192 100% 93%;   /* #dcf6ff - azul muito claro para hover states */
-  --input-field: 204 100% 97%;  /* azul muito claro para campos de seleção */
+  --accent-light: 192 100% 93%;
+  /* #dcf6ff - azul muito claro para hover states */
+  --input-field: 204 100% 97%;
+  /* azul muito claro para campos de seleção */
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
-  --ring: 198 67% 53%;              /* #2ca8e0 */
+  --ring: 198 67% 53%;
+  /* #2ca8e0 */
   --radius: 0.5rem;
-  
+
   /* Cores Sky específicas para botões e elementos que não são o header */
-  --sky-primary: 200 98% 39%;       /* sky-500 para botões */
+  --sky-primary: 200 98% 39%;
+  /* sky-500 para botões */
   --sky-primary-foreground: 0 0% 100%;
-  
+
   /* Cores específicas do MedSync - Paleta oficial */
-  --medsync-blue: 199 67% 53%;      /* #2ca8e0 - MedSync Blue */
-  --medsync-light-blue: 199 73% 55%; /* #36a9e1 - MedSync Light Blue */
-  --medsync-dark-blue: 202 71% 25%; /* #124a6b - MedSync Dark Blue */
-  --medsync-gray: 210 1% 44%;       /* #6e6f70 - MedSync Gray */
-  --medsync-navy-blue: 213 49% 35%; /* #224968 clareado - azul navy médio */
-  --medsync-green: 102 38% 59%;     /* #6fad45 - verde médico */
-  
+  --medsync-blue: 199 67% 53%;
+  /* #2ca8e0 - MedSync Blue */
+  --medsync-light-blue: 199 73% 55%;
+  /* #36a9e1 - MedSync Light Blue */
+  --medsync-dark-blue: 202 71% 25%;
+  /* #124a6b - MedSync Dark Blue */
+  --medsync-gray: 210 1% 44%;
+  /* #6e6f70 - MedSync Gray */
+  --medsync-ligth-gray: 0, 0%, 83%;
+  /* #6e6f70 - MedSync Gray light*/
+  --medsync-navy-blue: 213 49% 35%;
+  /* #224968 clareado - azul navy médio */
+  --medsync-green: 102 38% 59%;
+  /* #6fad45 - verde médico */
+
   /* Cores semânticas para status */
-  --success: 142 76% 36%;           /* green-600 */
+  --success: 142 76% 36%;
+  /* green-600 */
   --success-foreground: 0 0% 100%;
-  --warning: 32 95% 44%;            /* orange-600 */
+  --warning: 32 95% 44%;
+  /* orange-600 */
   --warning-foreground: 0 0% 100%;
-  --error: 0 84.2% 60.2%;           /* red-500 */
+  --error: 0 84.2% 60.2%;
+  /* red-500 */
   --error-foreground: 0 0% 100%;
-  --info: 198 67% 53%;              /* MedSync blue */
+  --info: 198 67% 53%;
+  /* MedSync blue */
   --info-foreground: 0 0% 100%;
-  
+
   /* Variáveis para calendário cirúrgico */
   --calendar-bg: 0 0% 100%;
   --calendar-border: 214.3 31.8% 91.4%;
@@ -252,9 +379,10 @@
   --calendar-button-active-bg: 217.2 91.2% 59.8%;
   --calendar-off-range-bg: 210 40% 98%;
   --calendar-show-more-bg: 220 14.3% 95.9%;
-  
+
   /* Labels de gráficos */
-  --chart-label-text: 0 0% 100%;    /* Branco para labels em gráficos */
+  --chart-label-text: 0 0% 100%;
+  /* Branco para labels em gráficos */
 }
 
 .dark {
@@ -267,7 +395,8 @@
   --popover-foreground: 210 40% 98%;
   --card: 214 50% 20%;
   --card-foreground: 210 40% 98%;
-  --border: 220 14.3% 25%;  /* gray-700 equivalent for dark theme */
+  --border: 220 14.3% 25%;
+  /* gray-700 equivalent for dark theme */
   --input: 214 40% 30%;
   /* --card-border removida - usando border-gray-200 */
   --primary: 210 100% 50%;
@@ -276,31 +405,43 @@
   --secondary-foreground: 210 40% 98%;
   --accent: 198 89% 69%;
   --accent-foreground: 0 0% 100%;
-  --accent-light: 198 67% 25%;   /* Azul escuro para hover em tema dark */
-  --input-field: 214 40% 25%;    /* Azul escuro para campos de seleção */
+  --accent-light: 198 67% 25%;
+  /* Azul escuro para hover em tema dark */
+  --input-field: 214 40% 25%;
+  /* Azul escuro para campos de seleção */
   --destructive: 0 62.8% 50.6%;
   --destructive-foreground: 210 40% 98%;
   --ring: 210 100% 50%;
   --radius: 0.5rem;
-  
+
   /* Cores específicas do MedSync - Paleta oficial (mesmos valores para dark) */
-  --medsync-blue: 199 67% 53%;      /* #2ca8e0 - MedSync Blue */
-  --medsync-light-blue: 199 73% 55%; /* #36a9e1 - MedSync Light Blue */
-  --medsync-dark-blue: 202 71% 25%; /* #124a6b - MedSync Dark Blue */
-  --medsync-gray: 210 1% 44%;       /* #6e6f70 - MedSync Gray */
-  --medsync-navy-blue: 213 49% 32%; /* #224968 clareado para tema dark */
-  --medsync-green: 102 38% 59%;     /* #6fad45 - verde médico */
-  
+  --medsync-blue: 199 67% 53%;
+  /* #2ca8e0 - MedSync Blue */
+  --medsync-light-blue: 199 73% 55%;
+  /* #36a9e1 - MedSync Light Blue */
+  --medsync-dark-blue: 202 71% 25%;
+  /* #124a6b - MedSync Dark Blue */
+  --medsync-gray: 210 1% 44%;
+  /* #6e6f70 - MedSync Gray */
+  --medsync-navy-blue: 213 49% 32%;
+  /* #224968 clareado para tema dark */
+  --medsync-green: 102 38% 59%;
+  /* #6fad45 - verde médico */
+
   /* Cores semânticas para status */
-  --success: 142 76% 36%;           /* green-600 */
+  --success: 142 76% 36%;
+  /* green-600 */
   --success-foreground: 0 0% 100%;
-  --warning: 32 95% 44%;            /* orange-600 */
+  --warning: 32 95% 44%;
+  /* orange-600 */
   --warning-foreground: 0 0% 100%;
-  --error: 0 72.2% 50.6%;           /* red-600 */
+  --error: 0 72.2% 50.6%;
+  /* red-600 */
   --error-foreground: 0 0% 100%;
-  --info: 198 67% 53%;              /* MedSync blue */
+  --info: 198 67% 53%;
+  /* MedSync blue */
   --info-foreground: 0 0% 100%;
-  
+
   /* Variáveis para calendário cirúrgico */
   --calendar-bg: 214 50% 20%;
   --calendar-border: 220 14.3% 25%;
@@ -316,7 +457,7 @@
   --calendar-button-active-bg: 217.2 91.2% 59.8%;
   --calendar-off-range-bg: 214 60% 15%;
   --calendar-show-more-bg: 220 14.3% 25%;
-  
+
   /* Labels de gráficos - mesmo branco em dark mode */
   --chart-label-text: 0 0% 100%;
 }
@@ -330,57 +471,57 @@
     @apply antialiased bg-background text-foreground;
     font-family: 'Proxima Nova', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   }
-  
+
   /* Estilos para a página de autenticação que respondem ao tema */
   .auth-page-container {
     @apply bg-background;
   }
-  
+
   .auth-card {
     @apply bg-card border-primary-foreground;
   }
-  
+
   /* Estilos para formulários de autenticação que respondem ao tema */
-  .auth-card input, 
+  .auth-card input,
   .auth-card select {
     @apply bg-input border-border text-foreground;
   }
-  
+
   .auth-card input::placeholder {
     @apply text-muted-foreground;
   }
-  
+
   /* Labels na seção de autenticação */
   .auth-card label {
     @apply text-foreground;
   }
-  
+
   /* Classes específicas para elementos que devem usar cor personalizada */
   .btn-sky {
     background-color: hsl(var(--medsync-blue));
     color: white;
   }
-  
+
   .btn-sky:hover {
     background-color: hsl(var(--accent));
   }
-  
+
   .text-sky {
     color: hsl(var(--medsync-blue));
   }
-  
+
   .text-medsync-blue {
     color: hsl(var(--medsync-blue));
   }
-  
+
   .border-sky {
     border-color: hsl(var(--medsync-blue));
   }
-  
+
   .bg-sky {
     background-color: hsl(var(--medsync-blue));
   }
-  
+
   /* Force light theme for auth page - override any dark theme styles */
   .auth-page-forced-light {
     /* Force light theme variables even if dark class exists */
@@ -404,52 +545,53 @@
     --destructive-foreground: 0 0% 98% !important;
     --ring: 198 67% 53% !important;
   }
-  
+
   /* Fonte em negrito para textos do header no tema claro */
   .header-text {
-    font-weight: 700 !important; /* bold */
+    font-weight: 700 !important;
+    /* bold */
   }
-  
+
   /* Estilo ativo do header - usa variáveis do tema */
   .header-active {
     background-color: hsl(var(--sky-primary));
     color: hsl(var(--sky-primary-foreground));
     border-radius: 0.25rem;
   }
-  
+
   .header-active:hover {
     background-color: hsl(var(--medsync-dark-blue));
   }
-  
+
   /* Mensagens de erro */
-  .auth-card .text-red-500, 
+  .auth-card .text-red-500,
   .auth-card .text-red-600 {
     @apply text-destructive;
   }
-  
+
   /* Card footer */
   .auth-card .bg-white {
     @apply bg-card border-border;
   }
-  
+
   /* Estilos para os tabs */
   .auth-card .data-\[state\=active\]\:bg-white {
     @apply bg-primary;
   }
-  
+
   .auth-card .data-\[state\=active\]\:text-blue-800 {
     @apply text-primary-foreground;
   }
-  
+
   /* Estilos para botões MedSync que respondem ao tema */
   .btn-medsync-primary {
     @apply bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 py-2 rounded-md;
   }
-  
+
   .btn-medsync-secondary {
     @apply bg-secondary hover:bg-secondary/90 text-secondary-foreground font-medium px-4 py-2 rounded-md;
   }
-  
+
   .btn-medsync-dark {
     background-color: hsl(var(--medsync-dark-blue)) !important;
     color: white !important;
@@ -458,13 +600,13 @@
     border-radius: 0.375rem;
     transition: all 0.2s;
   }
-  
+
   .btn-medsync-dark:hover {
     background-color: hsl(var(--medsync-dark-blue) / 0.9) !important;
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(18, 74, 107, 0.3);
   }
-  
+
   .btn-medsync-light {
     background-color: hsl(var(--medsync-light-blue));
     color: white;
@@ -473,7 +615,7 @@
     border-radius: 0.375rem;
     transition: all 0.2s;
   }
-  
+
   .btn-medsync-light:hover {
     background-color: hsl(var(--medsync-light-blue) / 0.9);
     transform: translateY(-1px);
@@ -601,6 +743,98 @@
     text-align: left;
   }
 
+  /* Ícones de Regiões Anatômicas (Partes do Corpo) */
+  .body-region-icon {
+    width: 128px;
+    height: 128px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+    background-color: hsl(var(--muted) / 0.4);
+  }
+
+  .body-region-icon:hover {
+    transform: scale(1.05);
+    background-color: hsl(var(--primary) / 0.1);
+  }
+
+  .body-region-icon.selected {
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.7), 0 0 40px rgba(0, 0, 0, 0.4);
+  }
+
+  .body-region-icon img {
+    width: 112px;
+    height: 112px;
+    object-fit: contain;
+    transition: all 0.3s ease;
+  }
+
+  /* Tooltip das Regiões Anatômicas */
+  .body-region-tooltip {
+    position: absolute;
+    bottom: 100%;
+    margin-bottom: 0.5rem;
+    padding: 0.75rem 1rem;
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 99999;
+    max-width: 600px;
+    min-width: 320px;
+  }
+
+  .body-region-icon:hover .body-region-tooltip {
+    opacity: 1;
+  }
+
+  /* Posicionamento do Tooltip */
+  .body-region-tooltip.tooltip-left {
+    left: 0;
+  }
+
+  .body-region-tooltip.tooltip-right {
+    right: 0;
+  }
+
+  .body-region-tooltip.tooltip-center {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  /* Seta do Tooltip */
+  .body-region-tooltip-arrow {
+    position: absolute;
+    top: 100%;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid hsl(var(--card));
+  }
+
+  .body-region-tooltip-arrow.arrow-left {
+    left: 1rem;
+  }
+
+  .body-region-tooltip-arrow.arrow-right {
+    right: 1rem;
+  }
+
+  .body-region-tooltip-arrow.arrow-center {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
   /* Botão de fechar modal - reutilizável em todo o sistema */
   .btn-close-modal {
     position: absolute;
@@ -623,90 +857,90 @@
   .btn-close-modal:disabled {
     pointer-events: none;
   }
-  
+
   /* Estilo para cards de conteúdo que respondem ao tema */
   .card-content {
     @apply bg-card rounded-md shadow-md text-card-foreground;
   }
-  
+
   /* Estilos para os steps do MedSync que respondem ao tema */
   .step-indicator {
     @apply flex items-center justify-center w-8 h-8 rounded-full bg-muted text-muted-foreground font-bold;
   }
-  
+
   .step-indicator.active {
     @apply bg-primary text-primary-foreground;
   }
-  
+
   .step-indicator.completed {
     background-color: hsl(var(--success));
     color: hsl(var(--success-foreground));
   }
-  
+
   /* Classes personalizadas para a cor accent-light */
   .bg-accent-light {
     background-color: hsl(var(--accent-light));
   }
-  
+
   .hover\:bg-accent-light:hover {
     background-color: hsl(var(--accent-light));
   }
-  
+
   /* Classe para o azul muito claro dos campos de seleção */
   .bg-input-field {
     background-color: hsl(var(--input-field));
   }
-  
+
   /* Classes para texto com cores do tema */
   .text-accent {
     color: hsl(var(--accent));
   }
-  
+
   /* Classes MedSync - cores da paleta oficial */
   .text-medsync-blue {
     color: hsl(var(--medsync-blue));
   }
-  
+
   .bg-medsync-blue {
     background-color: hsl(var(--medsync-blue));
   }
-  
+
   .border-medsync-blue {
     border-color: hsl(var(--medsync-blue));
   }
-  
+
   .text-medsync-light-blue {
     color: hsl(var(--medsync-light-blue));
   }
-  
+
   .bg-medsync-light-blue {
     background-color: hsl(var(--medsync-light-blue));
   }
-  
+
   .border-medsync-light-blue {
     border-color: hsl(var(--medsync-light-blue));
   }
-  
+
   .text-medsync-dark-blue {
     color: hsl(var(--medsync-dark-blue));
   }
-  
+
   .bg-medsync-dark-blue {
     background-color: hsl(var(--medsync-dark-blue));
   }
-  
+
   .border-medsync-dark-blue {
     border-color: hsl(var(--medsync-dark-blue));
   }
-  
+
   .text-medsync-gray {
     color: hsl(var(--medsync-gray));
   }
-  
+
   .bg-medsync-gray {
     background-color: hsl(var(--medsync-gray));
   }
-  
+
   .border-medsync-gray {
     border-color: hsl(var(--medsync-gray));
   }
@@ -714,28 +948,28 @@
   .border-medsync-light-gray {
     border-color: hsl(214, 14%, 84%);
   }
-  
+
   /* Classes para status semânticos */
   .bg-success {
     background-color: hsl(var(--success));
   }
-  
+
   .text-success {
     color: hsl(var(--success));
   }
-  
+
   .bg-warning {
     background-color: hsl(var(--warning));
   }
-  
+
   .text-warning {
     color: hsl(var(--warning));
   }
-  
+
   .bg-error {
     background-color: hsl(var(--error));
   }
-  
+
   .text-error {
     color: hsl(var(--error));
     font-size: 0.75rem;
@@ -788,12 +1022,12 @@
   }
 
   .breadcrumb-completed {
-    background-color: hsl(142, 76%, 36%);
+    background-color: hsl(var(--medsync-blue));
     color: white;
   }
 
   .breadcrumb-inactive {
-    background-color: hsl(0, 0%, 83%);
+    background-color: hsl(var(--medsync-ligth-gray));
     color: hsl(0, 0%, 40%);
   }
 
@@ -939,36 +1173,36 @@
   .card-content-padding {
     padding: 1.5rem;
   }
-  
+
   .bg-info {
     background-color: hsl(var(--info));
   }
-  
+
   .text-info {
     color: hsl(var(--info));
   }
-  
+
   /* Hero section da página de autenticação - ajuste responsivo da imagem de fundo */
   .auth-hero-section {
     background-size: cover;
     background-repeat: no-repeat;
     background-position: 65% center;
   }
-  
+
   /* Em telas grandes, ajusta a posição vertical para mostrar mais o topo */
   @media (min-width: 1880px) {
     .auth-hero-section {
       background-position: 65% 30%;
     }
   }
-  
+
   /* Em telas muito grandes, prioriza ainda mais o topo */
   @media (min-width: 2200px) {
     .auth-hero-section {
       background-position: 65% 20%;
     }
   }
-  
+
   /* Seção azul com bordas arredondadas na base */
   .blue-section-rounded {
     background-color: hsl(var(--medsync-blue));
@@ -976,7 +1210,7 @@
     border-bottom-left-radius: 60px;
     border-bottom-right-radius: 60px;
   }
-  
+
   /* Remove ring de foco dos inputs completamente */
   input:focus {
     box-shadow: none !important;
@@ -1137,4 +1371,3 @@
 .recharts-pie text {
   fill: hsl(var(--chart-label-text)) !important;
 }
-
