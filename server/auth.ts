@@ -23,7 +23,7 @@ declare global {
 }
 
 export function setupAuth(app: Express) {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = process.env.NODE_ENV === 'development';
   console.log("🔐 Configurando autenticação - Ambiente:", isProduction ? 'production' : 'development');
   
   const sessionSettings: session.SessionOptions = {
