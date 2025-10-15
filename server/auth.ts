@@ -6,13 +6,10 @@ import { randomBytes } from "crypto";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
-import { pool, db } from "./db";
+import { pool } from "./db";
 import { hashPassword, comparePasswords } from "./utils";
 import { sendPasswordResetEmail } from "./sendgrid";
 import { WebhookService } from "./services/webhook-service";
-import { discountCodes } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
-import { getPaymentProvider } from "./payments";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -207,17 +204,8 @@ export function setupAuth(app: Express) {
         roleId: req.body.roleId
       });
 
-      // Separar e mapear dados de endereço do frontend para backend
-      const { 
-        cep, 
-        address: logradouro, 
-        number: numero, 
-        complement: complemento, 
-        neighborhood: bairro, 
-        city: cidade, 
-        state: uf, 
-        ...userData 
-      } = req.body;
+      // Separar dados de endereço dos dados do usuário
+      const { cep, logradouro, numero, complemento, bairro, cidade, uf, ...userData } = req.body;
 
       const user = await storage.createUser({
         ...userData,
@@ -272,7 +260,7 @@ export function setupAuth(app: Express) {
     try {
       console.log("Registro com plano - dados recebidos:", req.body);
       
-      const { planId, discountCodeId, billingInterval = 'monthly', ...registrationData } = req.body;
+      const { planId, ...registrationData } = req.body;
       
       // Verificar se plano existe
       const plan = await storage.getSubscriptionPlan(planId);
@@ -299,17 +287,8 @@ export function setupAuth(app: Express) {
         }
       }
       
-      // Separar e mapear dados de endereço do frontend para backend
-      const { 
-        cep, 
-        address: logradouro, 
-        number: numero, 
-        complement: complemento, 
-        neighborhood: bairro, 
-        city: cidade, 
-        state: uf, 
-        ...userData 
-      } = registrationData;
+      // Separar dados de endereço
+      const { cep, logradouro, numero, complemento, bairro, cidade, uf, ...userData } = registrationData;
       
       // Garantir que o campo name seja criado corretamente
       const fullName = registrationData.name || `${registrationData.firstName} ${registrationData.lastName}`;
@@ -323,31 +302,24 @@ export function setupAuth(app: Express) {
         active: false, // Por padrão inativo
       };
       
-      // Criar usuário primeiro
-      const user = await storage.createUser({
-        ...userToCreate,
-        active: planId === 1 // Ativar imediatamente para trial (plano START)
-      });
-      
-      // Se for plano START (ID 1), criar assinatura de trial
+      // Se for plano START (ID 1), configurar trial
       if (planId === 1) {
         const trialDays = plan.trialDays || 15; // Default 15 dias
         const trialEndDate = new Date(now.getTime() + (trialDays * 24 * 60 * 60 * 1000));
         
-        // Criar assinatura de trial na nova estrutura
-        await storage.createUserSubscription({
-          userId: user.id,
-          planId: planId,
-          status: 'trial',
-          startedAt: now,
-          trialEndsAt: trialEndDate,
-          paymentProvider: 'none',
-          createdAt: now,
-          updatedAt: now
-        });
+        userToCreate = {
+          ...userToCreate,
+          active: true, // Ativar imediatamente para trial
+          trialStartDate: now,
+          trialEndDate: trialEndDate,
+          trialStatus: 'active',
+          trialDaysOverride: trialDays
+        };
         
         console.log(`Configurando trial de ${trialDays} dias para plano START`);
       }
+      
+      const user = await storage.createUser(userToCreate);
       console.log("Usuário criado com sucesso, ID:", user.id);
       
       // Criar endereço se fornecido
@@ -372,145 +344,27 @@ export function setupAuth(app: Express) {
       
       if (planId === 1) {
         // Para plano START, fazer login automático e retornar sucesso
-        req.login(user, async (err) => {
+        req.login(user, (err) => {
           if (err) {
             console.error("Erro no login automático:", err);
             return res.status(500).json({ message: "Erro no login automático" });
           }
           
-          try {
-            // Buscar informações da assinatura de trial criada
-            const userSubscription = await storage.getUserSubscription(user.id);
-            
-            res.status(201).json({
-              ...userWithoutPassword,
-              message: "Conta criada com sucesso! Você tem 15 dias gratuitos para testar o sistema.",
-              trialActive: true,
-              trialEndDate: userSubscription?.trialEndsAt
-            });
-          } catch (error) {
-            console.error("Erro ao buscar assinatura:", error);
-            res.status(201).json({
-              ...userWithoutPassword,
-              message: "Conta criada com sucesso! Você tem 15 dias gratuitos para testar o sistema.",
-              trialActive: true,
-              trialEndDate: null
-            });
-          }
+          res.status(201).json({
+            ...userWithoutPassword,
+            message: "Conta criada com sucesso! Você tem 15 dias gratuitos para testar o sistema.",
+            trialActive: true,
+            trialEndDate: user.trialEndDate
+          });
         });
       } else {
-        // Para outros planos, criar sessão de checkout do Stripe
-        let discountCode = null;
-        if (discountCodeId) {
-          try {
-            // Buscar código de desconto automático
-            const [code] = await db.select().from(discountCodes).where(
-              and(
-                eq(discountCodes.id, discountCodeId),
-                eq(discountCodes.isActive, true),
-                eq(discountCodes.isAutomatic, true)
-              )
-            );
-            
-            if (code) {
-              discountCode = code;
-              console.log('✅ Código de desconto automático encontrado:', {
-                id: code.id,
-                code: code.code,
-                externalCouponId: code.externalCouponId,
-                discountValue: code.discountValue
-              });
-            } else {
-              console.warn('⚠️ Código de desconto não encontrado ou inativo:', discountCodeId);
-            }
-          } catch (error) {
-            console.error('❌ Erro ao buscar código de desconto:', error);
-          }
-        }
-
-        try {
-          // Criar sessão de checkout do Stripe
-          const paymentProvider = getPaymentProvider();
-          if (!paymentProvider) {
-            throw new Error('Provedor de pagamento não disponível');
-          }
-
-          // Preparar metadata para o Stripe
-          const metadata = {
-            userId: user.id.toString(),
-            planId: planId.toString(),
-            ...(discountCode && { discountCodeId: discountCode.id.toString() })
-          };
-
-          // Preparar dados completos do cliente para Stripe
-          const customerData = {
-            email: registrationData.email,
-            name: fullName,
-            phone: registrationData.phone,
-            cpf: registrationData.cpf, // Para compliance fiscal brasileiro
-            address: {
-              line1: `${logradouro}, ${numero}${complemento ? `, ${complemento}` : ''}`,
-              city: cidade,
-              state: uf,
-              postal_code: cep.replace(/\D/g, ''), // CEP apenas números
-              country: 'BR'
-            },
-            metadata: {
-              userId: user.id.toString(),
-              crm: `${registrationData.crm || registrationData.crmNumber}-${registrationData.crmUf || registrationData.crmState}`,
-              medicalSpecialtyId: registrationData.medicalSpecialtyId?.toString(),
-              source: 'medsync-registration'
-            }
-          };
-
-          // Criar sessão de checkout com dados completos do cliente
-          const checkoutParams = {
-            priceId: billingInterval === 'yearly' ? plan.priceIdYearly : plan.priceIdMonthly, // Usar preço baseado no billingInterval
-            mode: 'subscription' as const,
-            customerData: customerData, // Dados para criação automática do Customer
-            successUrl: `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000'}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-            cancelUrl: `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5000'}/checkout/cancel`,
-            couponId: discountCode?.externalCouponId || undefined, // Cupom gerenciado pelo StripeProvider
-            metadata
-          };
-          
-          console.log('🎯 Parâmetros para checkout session:', {
-            billingInterval: billingInterval,
-            priceId: checkoutParams.priceId,
-            priceIdMonthly: plan.priceIdMonthly,
-            priceIdYearly: plan.priceIdYearly,
-            couponId: checkoutParams.couponId,
-            hasDiscount: !!discountCode,
-            discountDetails: discountCode ? {
-              code: discountCode.code,
-              value: discountCode.discountValue,
-              externalId: discountCode.externalCouponId
-            } : null
-          });
-          
-          const checkoutSession = await paymentProvider.createCheckoutSession(checkoutParams);
-
-          console.log('✅ Sessão de checkout criada:', checkoutSession.url);
-
-          res.status(201).json({
-            ...userWithoutPassword,
-            message: "Dados salvos com sucesso. Redirecionando para pagamento...",
-            requiresPayment: true,
-            planId: planId,
-            checkoutUrl: checkoutSession.url,
-            sessionId: checkoutSession.id,
-            discountApplied: !!discountCode
-          });
-        } catch (paymentError) {
-          console.error('❌ Erro ao criar sessão de pagamento:', paymentError);
-          // Fallback para o comportamento anterior
-          res.status(201).json({
-            ...userWithoutPassword,
-            message: "Dados salvos com sucesso. Complete o pagamento para ativar sua conta.",
-            requiresPayment: true,
-            planId: planId
-          });
-        }
+        // Para outros planos, retornar que precisa de pagamento
+        res.status(201).json({
+          ...userWithoutPassword,
+          message: "Dados salvos com sucesso. Complete o pagamento para ativar sua conta.",
+          requiresPayment: true,
+          planId: planId
+        });
       }
     } catch (error) {
       console.error("Erro ao registrar usuário com plano:", error);
@@ -750,90 +604,6 @@ export function setupAuth(app: Express) {
       next(error);
     }
   });
-
-  // === ROTAS DE LEAD TRACKING (migradas de routes.ts) ===
-  
-  // API para tracking de leads incompletos
-  app.post("/api/track-lead", async (req: any, res: any) => {
-    try {
-      const trackingData = req.body;
-      console.log("📧 Lead tracking recebido:", trackingData);
-      
-      // Salvar no banco via storage usando o método que faz merge
-      if (trackingData.email) {
-        // Usar o método que já faz merge automático (não tentará criar duplicata)
-        await storage.createIncompleteRegistration(trackingData);
-      }
-      
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Erro ao processar tracking:", error);
-      res.json({ success: false }); // Não falhar o registro
-    }
-  });
-
-  // API para recuperar dados de registro incompleto pelo email
-  app.get('/api/incomplete-registration/:email', async (req: any, res: any) => {
-    try {
-      const { email } = req.params;
-      
-      if (!email) {
-        return res.status(400).json({ error: 'Email é obrigatório' });
-      }
-
-      console.log('🔍 Buscando registro incompleto para email:', email);
-      
-      const registration = await storage.getIncompleteRegistrationByEmail(email);
-      
-      if (!registration) {
-        return res.status(404).json({ error: 'Registro não encontrado' });
-      }
-
-      // Retornar apenas os dados necessários para preencher o formulário
-      let additionalData = {};
-      
-      // Tentar fazer parse do userDataJson de forma segura
-      if (registration.userDataJson) {
-        try {
-          // Verificar se é string válida antes de fazer parse
-          if (typeof registration.userDataJson === 'string' && registration.userDataJson !== '[object Object]') {
-            additionalData = JSON.parse(registration.userDataJson);
-          } else {
-            console.log('⚠️ userDataJson não é string JSON válida:', registration.userDataJson);
-          }
-        } catch (error) {
-          console.error('❌ Erro ao fazer parse do userDataJson:', error);
-        }
-      }
-      
-      const formData = {
-        firstName: registration.firstName,
-        lastName: registration.lastName, 
-        cpf: registration.cpf,
-        email: registration.email,
-        phone: registration.phone,
-        username: registration.username,
-        // Dados específicos do registro que podem ter sido salvos
-        ...additionalData
-      };
-
-      console.log('✅ Dados encontrados:', { email, hasData: Object.keys(formData).length });
-      
-      res.json({
-        success: true,
-        data: formData,
-        selectedPlanId: registration.selectedPlanId || null
-      });
-
-    } catch (error) {
-      console.error('❌ Erro ao buscar registro incompleto:', error);
-      res.status(500).json({ 
-        error: 'Erro interno do servidor',
-        details: error instanceof Error ? error.message : 'Erro desconhecido'
-      });
-    }
-  });
-
 }
 
 // Middleware para verificar autenticação
@@ -855,7 +625,7 @@ export function isAuthenticated(req: any, res: any, next: any) {
 }
 
 // Middleware para verificar status do trial
-export async function checkTrialStatus(req: any, res: any, next: any) {
+export function checkTrialStatus(req: any, res: any, next: any) {
   // Se não está autenticado, passar adiante para outros middlewares lidarem
   if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
     return next();
@@ -863,62 +633,49 @@ export async function checkTrialStatus(req: any, res: any, next: any) {
 
   const user = req.user;
   
-  try {
-    // Buscar assinatura do usuário na nova estrutura
-    const userSubscription = await storage.getUserSubscription(user.id);
-    
-    // Se não tem assinatura, assumir que não está em trial
-    if (!userSubscription || userSubscription.status !== 'trial') {
-      return next();
-    }
-
-    const now = new Date();
-    const trialEndDate = userSubscription.trialEndsAt ? new Date(userSubscription.trialEndsAt) : null;
-
-    console.log("🔍 Verificação de trial:", {
-      userId: user.id,
-      subscriptionStatus: userSubscription.status,
-      trialEndDate: userSubscription.trialEndsAt,
-      now: now.toISOString(),
-      isExpired: trialEndDate ? now > trialEndDate : false
-    });
-
-    // Se trial expirou
-    if (trialEndDate && now > trialEndDate) {
-      console.log(`❌ Trial expirado para usuário ${user.id}`);
-      
-      // Atualizar status da assinatura no banco
-      await storage.updateUserSubscription(userSubscription.id, { 
-        status: 'expired',
-        updatedAt: new Date()
-      });
-      
-      return res.status(403).json({ 
-        message: "Seu período de teste expirou. Faça upgrade do seu plano para continuar usando o sistema.",
-        trialExpired: true,
-        trialEndDate: userSubscription.trialEndsAt
-      });
-    }
-
-    // Se trial está cancelado
-    if (userSubscription.status === 'cancelled') {
-      console.log(`❌ Trial cancelado para usuário ${user.id}`);
-      return res.status(403).json({
-        message: "Sua conta trial foi cancelada. Entre em contato com o suporte.",
-        trialCancelled: true
-      });
-    }
-
-    // Trial ativo, continuar
-    if (trialEndDate) {
-      console.log(`✅ Trial ativo para usuário ${user.id} até ${trialEndDate.toISOString()}`);
-    }
-    next();
-  } catch (error) {
-    console.error("Erro ao verificar status do trial:", error);
-    // Em caso de erro, permitir que continue para evitar bloqueios
-    next();
+  // Se não tem campos de trial definidos, assumir que não está em trial
+  if (!user.trialStatus || !user.trialEndDate) {
+    return next();
   }
+
+  const now = new Date();
+  const trialEndDate = new Date(user.trialEndDate);
+
+  console.log("🔍 Verificação de trial:", {
+    userId: user.id,
+    trialStatus: user.trialStatus,
+    trialEndDate: user.trialEndDate,
+    now: now.toISOString(),
+    isExpired: now > trialEndDate
+  });
+
+  // Se trial expirou
+  if (user.trialStatus === 'active' && now > trialEndDate) {
+    console.log(`❌ Trial expirado para usuário ${user.id}`);
+    
+    // Atualizar status do trial no banco
+    storage.updateUser(user.id, { trialStatus: 'expired' })
+      .catch(error => console.error("Erro ao atualizar status do trial:", error));
+    
+    return res.status(403).json({ 
+      message: "Seu período de teste expirou. Faça upgrade do seu plano para continuar usando o sistema.",
+      trialExpired: true,
+      trialEndDate: user.trialEndDate
+    });
+  }
+
+  // Se trial está cancelado
+  if (user.trialStatus === 'cancelled') {
+    console.log(`❌ Trial cancelado para usuário ${user.id}`);
+    return res.status(403).json({
+      message: "Sua conta trial foi cancelada. Entre em contato com o suporte.",
+      trialCancelled: true
+    });
+  }
+
+  // Trial ativo, continuar
+  console.log(`✅ Trial ativo para usuário ${user.id} até ${trialEndDate.toISOString()}`);
+  next();
 }
 
 // Middleware para verificar permissões específicas
