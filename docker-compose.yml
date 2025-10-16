@@ -26,6 +26,15 @@ services:
     depends_on:
       - postgres
       - redis
+    # INCLUSÃO DAS LABELS DO TRAEFIK AQUI
+    labels:
+      - "traefik.enable=true"
+      # Substitua medsync.med.br pelo seu domínio real!
+      - "traefik.http.routers.medsync-app.rule=Host(`medsync.med.br`) || Host(`www.medsync.med.br`)"
+      - "traefik.http.routers.medsync-app.entrypoints=https"
+      - "traefik.http.routers.medsync-app.tls=true"
+      - "traefik.http.services.medsync-app.loadbalancer.server.port=5000"
+    # FIM DAS LABELS  
     networks:
       - medsync-network
     healthcheck:
