@@ -26,8 +26,17 @@ services:
     depends_on:
       - postgres
       - redis
+    # INCLUSÃO DAS LABELS DO TRAEFIK AQUI
+    labels:
+      - "traefik.enable=true"
+      # Substitua medsync.med.br pelo seu domínio real!
+      - "traefik.http.routers.medsync-app.rule=Host(`medsync.med.br`) || Host(`www.medsync.med.br`)"
+      - "traefik.http.routers.medsync-app.entrypoints=https"
+      - "traefik.http.routers.medsync-app.tls=true"
+      - "traefik.http.services.medsync-app.loadbalancer.server.port=5000"
+    # FIM DAS LABELS
     networks:
-      - medsync-network
+      - coolify
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/health"]
       interval: 30s
@@ -51,7 +60,7 @@ services:
       - "5432:5432"
     restart: unless-stopped
     networks:
-      - medsync-network
+      - coolify
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medsync} -d medsync"]
       interval: 10s
@@ -69,28 +78,14 @@ services:
       - "6379:6379"
     restart: unless-stopped
     networks:
-      - medsync-network
+      - coolify
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3
 
-  # Nginx como proxy reverso (opcional)
-  nginx:
-    image: nginx:alpine
-    container_name: medsync-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - medsync-app
-    restart: unless-stopped
-    networks:
-      - medsync-network
+# O Nginx (proxy reverso) foi removido para evitar conflito com o Traefik.
 
 volumes:
   postgres_data:
@@ -101,5 +96,5 @@ volumes:
     driver: local
 
 networks:
-  medsync-network:
-    driver: bridge
+  coolify:
+    external: true
