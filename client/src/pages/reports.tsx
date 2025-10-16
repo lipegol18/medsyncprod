@@ -695,27 +695,37 @@ function ReceivedValuesTab({ appliedFilters }: { appliedFilters: any }) {
               key={index}
               className="border-border bg-card shadow-lg hover:bg-accent transition-colors"
             >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-card-foreground text-lg flex items-center justify-between">
-                  #{item.orderId} - {item.patientName}
-                  <span className="text-sm font-normal text-muted-foreground">
+              <CardHeader className="pb-2 pt-3 px-4">
+                <div className="flex items-start justify-between mb-1">
+                  <span className="text-card-foreground text-sm font-semibold">ID: #{item.orderId}</span>
+                  <span className="text-xs font-normal text-muted-foreground">
                     {item.orderDate
                       ? new Date(item.orderDate).toLocaleDateString("pt-BR")
                       : "N/A"}
                   </span>
+                </div>
+                <CardTitle className="text-card-foreground text-sm font-normal">
+                  Paciente: {item.patientName}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-muted-foreground text-sm">Status:</p>
-                  <p className="text-card-foreground text-sm">{item.status}</p>
+              <CardContent className="space-y-1 px-4 pb-3">
+                <div className="text-xs">
+                  <span className="text-muted-foreground">Hospital: </span>
+                  <span className="text-card-foreground font-medium">{item.hospitalName}</span>
+                  <span className="text-muted-foreground ml-3">Status: </span>
+                  <span className="text-card-foreground">{item.status}</span>
                 </div>
 
-                <div className="border-t border-border pt-3">
-                  <p className="text-muted-foreground text-sm">
-                    Valor Financeiro:
-                  </p>
-                  <p className="text-2xl font-bold text-emerald-600">
+                {item.procedures && item.procedures.length > 0 && (
+                  <div className="pt-1">
+                    <p className="text-card-foreground text-xs font-medium">
+                      {item.procedures[0]}
+                    </p>
+                  </div>
+                )}
+
+                <div className="border-t border-border pt-2">
+                  <p className="text-xl font-bold text-emerald-600">
                     R${" "}
                     {item.totalReceivedValue.toLocaleString("pt-BR", {
                       minimumFractionDigits: 2,
@@ -723,14 +733,14 @@ function ReceivedValuesTab({ appliedFilters }: { appliedFilters: any }) {
                   </p>
                 </div>
 
-                <div className="pt-3">
+                <div className="pt-1">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() =>
                       (window.location.href = `/order-details/${item.orderId}`)
                     }
-                    className="w-full border-border hover:bg-accent hover:text-accent-foreground"
+                    className="w-full h-7 text-xs border-border hover:bg-accent hover:text-accent-foreground"
                   >
                     Ver Detalhes
                   </Button>
