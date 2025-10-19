@@ -157,6 +157,13 @@ export const patients = pgTable("patients", {
   notes: text("notes"),
   isActive: boolean("is_active").default(false), // Paciente ativo
   activatedBy: text("activated_by"), // Médico que ativou o paciente
+  createdAt: timestamp("created_at").defaultNow().notNull(), // Data/hora da criação
+  createdBy: integer("created_by").references(() => users.id), // Usuário que criou
+  isDeleted: boolean("is_deleted").default(false).notNull(), // Soft delete: paciente foi excluído?
+  deletedAt: timestamp("deleted_at"), // Data/hora da exclusão
+  deletedBy: integer("deleted_by").references(() => users.id), // Usuário que excluiu
+  updatedAt: timestamp("updated_at"), // Data/hora da última edição
+  updatedBy: integer("updated_by").references(() => users.id), // Usuário que editou por último
 });
 
 export const insertPatientSchema = createInsertSchema(patients).pick({
@@ -730,6 +737,7 @@ export const users = pgTable("users", {
   signatureUrl: text("signature_url"), // URL da assinatura do médico
   signatureNote: text("signature_note"), // Nota de texto para aparecer embaixo da assinatura
   logoUrl: text("logo_url"), // URL do logotipo do médico
+  crmUrl: text("crm_url"), // URL do cartão CRM do médico
   
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
