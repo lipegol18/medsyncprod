@@ -16,7 +16,6 @@ import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { HealthInsurancePlan } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
 
 interface HealthInsurancePlanSearchProps {
   selectedPlan: HealthInsurancePlan | null;
@@ -119,11 +118,10 @@ export function HealthInsurancePlanSearch({
     <div className={cn("w-full", className)}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button
-            variant={null}
+          <button
             role="combobox"
             aria-expanded={open}
-            className="combobox-medsync text-sm h-8"
+            className="combobox-medsync text-sm w-full"
             disabled={isLoading}
           >
             {isLoading ? (
@@ -132,15 +130,14 @@ export function HealthInsurancePlanSearch({
                 Carregando planos...
               </div>
             ) : (
-              <span className={cn(
-                "truncate",
+              <span className={
                 !selectedPlan ? "combobox-placeholder" : "combobox-value"
-              )}>
+              }>
                 {displayValue}
               </span>
             )}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-70" />
-          </Button>
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </button>
         </PopoverTrigger>
         <PopoverContent className="w-full p-0" align="start">
           <Command shouldFilter={false}>
