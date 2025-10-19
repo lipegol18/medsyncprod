@@ -125,13 +125,14 @@ export function Header() {
   const { theme, setTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
+  // Estados separados para controlar menus mobile e desktop
+  const [notificationsMobileOpen, setNotificationsMobileOpen] = useState(false);
+  const [notificationsDesktopOpen, setNotificationsDesktopOpen] = useState(false);
+  
   // Hook de notificações
   const { 
     notifications, 
     unreadCount, 
-    isOpen: notificationsOpen,
-    toggleNotifications,
-    closeNotifications,
     markAsRead,
     markAllAsRead
   } = useNotifications();
@@ -240,7 +241,7 @@ export function Header() {
           {/* Ícones Mobile - Lado direito */}
           <div className="flex items-center gap-1">
             {/* Notificações Mobile */}
-            <DropdownMenu open={notificationsOpen} onOpenChange={() => toggleNotifications()}>
+            <DropdownMenu open={notificationsMobileOpen} onOpenChange={setNotificationsMobileOpen}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="p-1">
                   <div className="relative">
@@ -286,7 +287,7 @@ export function Header() {
                         if (notification.link) {
                           window.location.href = notification.link;
                         }
-                        closeNotifications();
+                        setNotificationsMobileOpen(false);
                       }}
                     >
                       <div className="flex flex-col w-full">
@@ -314,19 +315,10 @@ export function Header() {
                 )}
                 
                 <DropdownMenuSeparator className="bg-border" />
-                <DropdownMenuItem 
-                  className="p-2 text-center text-primary hover:bg-muted"
-                  onClick={() => {
-                    markAllAsRead();
-                    closeNotifications();
-                  }}
-                >
-                  Marcar todas como lidas
-                </DropdownMenuItem>
                 <Link href="/notifications">
                   <DropdownMenuItem 
                     className="p-2 text-center hover:bg-muted"
-                    onClick={() => closeNotifications()}
+                    onClick={() => setNotificationsMobileOpen(false)}
                   >
                     <span className="w-full block text-center">
                       Ver todas
@@ -385,7 +377,7 @@ export function Header() {
         {/* Ícones à direita - Desktop */}
         <div className="hidden lg:flex items-center gap-2">
           {/* Componente de notificações */}
-          <DropdownMenu open={notificationsOpen} onOpenChange={() => toggleNotifications()}>
+          <DropdownMenu open={notificationsDesktopOpen} onOpenChange={setNotificationsDesktopOpen}>
             <DropdownMenuTrigger asChild>
               <div className="header-icon-trigger">
                 {unreadCount > 0 ? (
@@ -429,7 +421,7 @@ export function Header() {
                       if (notification.link) {
                         window.location.href = notification.link;
                       }
-                      closeNotifications();
+                      setNotificationsDesktopOpen(false);
                     }}
                   >
                     <div className="flex flex-col w-full">
@@ -457,19 +449,10 @@ export function Header() {
               )}
               
               <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem 
-                className="p-2 text-center text-primary hover:bg-muted"
-                onClick={() => {
-                  markAllAsRead();
-                  closeNotifications();
-                }}
-              >
-                Marcar todas como lidas
-              </DropdownMenuItem>
               <Link href="/notifications">
                 <DropdownMenuItem 
                   className="p-2 text-center hover:bg-muted"
-                  onClick={() => closeNotifications()}
+                  onClick={() => setNotificationsDesktopOpen(false)}
                 >
                   <span className="w-full block text-center">
                     Ver todas
