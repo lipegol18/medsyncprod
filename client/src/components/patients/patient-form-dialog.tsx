@@ -34,7 +34,6 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -548,12 +547,12 @@ export function PatientFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1200px] max-h-[95vh] w-[95vw] sm:w-full bg-background border-border text-foreground overflow-hidden flex flex-col">
+      <DialogContent className="max-w-[1200px] max-h-[95vh] w-[95vw] sm:w-full bg-white border-sky-200 text-sky-900 overflow-hidden flex flex-col">
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="text-foreground text-lg font-medium">
+          <DialogTitle className="text-foreground text-lg font-semibold">
             {isEditMode ? "Editar Paciente" : "Novo Paciente"}
           </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogDescription className="text-sky-700/80">
             {isEditMode 
               ? "Atualize as informações do paciente selecionado." 
               : "Adicione um novo paciente ao sistema."
@@ -569,9 +568,9 @@ export function PatientFormDialog({
               
               {/* Coluna Esquerda - Dados Pessoais */}
               <div className="space-y-4">
-                <Card className="bg-card border-border">
+                <Card className="bg-white border-sky-200">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-card-foreground text-sm">
+                    <CardTitle className="flex items-center gap-2 text-foreground text-sm font-semibold">
                       <User className="w-4 h-4" />
                       Dados Pessoais
                     </CardTitle>
@@ -583,11 +582,12 @@ export function PatientFormDialog({
                         name="fullName"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-foreground">Nome Completo *</FormLabel>
+                            <FormLabel className="text-foreground font-semibold">Nome Completo *</FormLabel>
                             <FormControl>
                               <Input 
+                                placeholder="João da Silva"
                                 {...field} 
-                                className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                                className="input-medsync-combo"
                               />
                             </FormControl>
                             <FormMessage />
@@ -600,7 +600,7 @@ export function PatientFormDialog({
                         name="cpf"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-foreground">CPF *</FormLabel>
+                            <FormLabel className="text-foreground font-semibold">CPF *</FormLabel>
                             <FormControl>
                               <Input 
                                 placeholder="000.000.000-00" 
@@ -612,8 +612,8 @@ export function PatientFormDialog({
                                 onBlur={async (e) => {
                                   await checkExistingPatientAndFill(e.target.value);
                                 }}
-                                maxLength={14} // CPF formatado tem 14 caracteres
-                                className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                                maxLength={14}
+                                className="input-medsync-combo"
                               />
                             </FormControl>
                             <FormMessage />
@@ -627,12 +627,12 @@ export function PatientFormDialog({
                           name="birthDate"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-foreground">Data de Nascimento *</FormLabel>
+                              <FormLabel className="text-foreground font-semibold">Data de Nascimento *</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="date" 
                                   {...field} 
-                                  className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                                  className="input-medsync-combo"
                                 />
                               </FormControl>
                               <FormMessage />
@@ -645,14 +645,14 @@ export function PatientFormDialog({
                           name="gender"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-foreground">Sexo *</FormLabel>
+                              <FormLabel className="text-foreground font-semibold">Sexo *</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
-                                  <SelectTrigger className="bg-input border-border text-foreground">
+                                  <SelectTrigger className="combobox-medsync">
                                     <SelectValue placeholder="Selecione..." />
                                   </SelectTrigger>
                                 </FormControl>
-                                <SelectContent>
+                                <SelectContent className="bg-white border-sky-200">
                                   <SelectItem value="M">Masculino</SelectItem>
                                   <SelectItem value="F">Feminino</SelectItem>
                                 </SelectContent>
@@ -669,12 +669,13 @@ export function PatientFormDialog({
                           name="email"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-foreground">E-mail</FormLabel>
+                              <FormLabel className="text-foreground font-semibold">E-mail</FormLabel>
                               <FormControl>
                                 <Input 
-                                  type="email" 
+                                  type="email"
+                                  placeholder="exemplo@email.com"
                                   {...field} 
-                                  className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                                  className="input-medsync-combo"
                                 />
                               </FormControl>
                               <FormMessage />
@@ -687,7 +688,7 @@ export function PatientFormDialog({
                           name="phone"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel className="text-foreground">Telefone</FormLabel>
+                              <FormLabel className="text-foreground font-semibold">Telefone</FormLabel>
                               <FormControl>
                                 <Input 
                                   placeholder="(00) 00000-0000" 
@@ -696,8 +697,8 @@ export function PatientFormDialog({
                                     const maskedValue = applyPhoneMask(e.target.value);
                                     field.onChange(maskedValue);
                                   }}
-                                  maxLength={15} // Telefone formatado máximo: (99) 99999-9999
-                                  className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                                  maxLength={15}
+                                  className="input-medsync-combo"
                                 />
                               </FormControl>
                               <FormMessage />
@@ -711,7 +712,7 @@ export function PatientFormDialog({
                         name="phone2"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-foreground">Telefone 2</FormLabel>
+                            <FormLabel className="text-foreground font-semibold">Telefone 2</FormLabel>
                             <FormControl>
                               <Input 
                                 placeholder="(00) 00000-0000" 
@@ -720,8 +721,8 @@ export function PatientFormDialog({
                                   const maskedValue = applyPhoneMask(e.target.value);
                                   field.onChange(maskedValue);
                                 }}
-                                maxLength={15} // Telefone formatado máximo: (99) 99999-9999
-                                className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                                maxLength={15}
+                                className="input-medsync-combo"
                               />
                             </FormControl>
                             <FormMessage />
@@ -734,11 +735,9 @@ export function PatientFormDialog({
               </div>
 
               {/* Coluna Direita - Plano de Saúde e Digitalização */}
-              <div className="space-y-4">
-                <Card className="bg-card border-border">
-                  <CardHeader className="pb-4">
-                  </CardHeader>
-                  <CardContent>
+              <div className="flex flex-col space-y-4">
+                <Card className="bg-white border-sky-200">
+                  <CardContent className="p-8">
                     <div className="grid grid-cols-2 gap-3">
                       {/* Documento de Identidade */}
                       <div className="space-y-2">
@@ -751,22 +750,20 @@ export function PatientFormDialog({
                           disabled={showDocScanner}
                           className="w-full"
                         >
-                          <Button
+                          <button
                             type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-full h-20 border-border text-muted-foreground hover:bg-accent text-xs flex flex-col justify-center items-center border-dashed px-2 py-3"
+                            className="w-full h-20 border-2 border-dashed border-sky-300 text-sky-700 hover:bg-sky-50 hover:border-sky-400 text-xs flex flex-col justify-center items-center px-2 py-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => docFileInputRef.current?.click()}
                             disabled={showDocScanner}
                           >
                             <FileText className="w-5 h-5 mb-2" />
-                            <span className="font-medium text-center leading-tight">
+                            <span className="font-semibold text-center leading-tight">
                               {showDocScanner ? "Processando..." : "RG/CNH"}
                             </span>
-                            <span className="text-xs text-muted-foreground mt-1 text-center leading-tight">
+                            <span className="text-xs text-sky-600 mt-1 text-center leading-tight">
                               Clique ou arraste aqui
                             </span>
-                          </Button>
+                          </button>
                         </DragDropZone>
                         
                         <input
@@ -789,22 +786,20 @@ export function PatientFormDialog({
                           disabled={showInsuranceCardScanner}
                           className="w-full"
                         >
-                          <Button
+                          <button
                             type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-full h-20 border-border text-muted-foreground hover:bg-accent text-xs flex flex-col justify-center items-center border-dashed px-2 py-3"
+                            className="w-full h-20 border-2 border-dashed border-sky-300 text-sky-700 hover:bg-sky-50 hover:border-sky-400 text-xs flex flex-col justify-center items-center px-2 py-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => insuranceCardFileInputRef.current?.click()}
                             disabled={showInsuranceCardScanner}
                           >
                             <CreditCard className="w-5 h-5 mb-2" />
-                            <span className="font-medium text-center leading-tight">
+                            <span className="font-semibold text-center leading-tight">
                               {showInsuranceCardScanner ? "Processando..." : "Carteirinha"}
                             </span>
-                            <span className="text-xs text-muted-foreground mt-1 text-center leading-tight">
+                            <span className="text-xs text-sky-600 mt-1 text-center leading-tight">
                               Clique ou arraste aqui
                             </span>
-                          </Button>
+                          </button>
                         </DragDropZone>
                         
                         <input
@@ -819,8 +814,8 @@ export function PatientFormDialog({
 
                     {/* Informações extraídas */}
                     {extractedInfo && (
-                      <div className="mt-3 p-2 bg-muted rounded text-foreground text-sm">
-                        <div className="font-medium mb-1">Dados extraídos:</div>
+                      <div className="mt-3 p-2 bg-sky-50 rounded text-sky-900 text-sm border border-sky-200">
+                        <div className="font-semibold mb-1 text-foreground">Dados extraídos:</div>
                         {extractedInfo.type === 'identity' && (
                           <>
                             {extractedInfo.data.fullName && (
@@ -859,21 +854,21 @@ export function PatientFormDialog({
                 </Card>
 
                 {/* Plano de Saúde */}
-                <Card className="bg-card border-border">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-card-foreground text-sm">
+                <Card className="bg-white border-sky-200 flex-1 flex flex-col">
+                  <CardHeader className="p-8">
+                    <CardTitle className="flex items-center gap-2 text-foreground text-sm font-semibold">
                       <Heart className="w-4 h-4" />
                       Plano de Saúde
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardContent className="space-y-3 flex-1">
                     <div className="space-y-3">
                       <FormField
                         control={form.control}
                         name="insurance"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-foreground text-sm">Seguradora</FormLabel>
+                            <FormLabel className="text-foreground font-semibold text-sm">Seguradora</FormLabel>
                             <FormControl>
                               <HealthInsuranceSearch
                                 selectedProvider={selectedProvider}
@@ -894,7 +889,7 @@ export function PatientFormDialog({
                         name="plan"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-foreground text-sm">Plano</FormLabel>
+                            <FormLabel className="text-foreground font-semibold text-sm">Plano</FormLabel>
                             <FormControl>
                               <HealthInsurancePlanSearch
                                 selectedPlan={selectedPlan}
@@ -917,11 +912,12 @@ export function PatientFormDialog({
                       name="insuranceNumber"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-foreground text-sm">Número da Carteirinha</FormLabel>
+                          <FormLabel className="text-foreground font-semibold text-sm">Número da Carteirinha</FormLabel>
                           <FormControl>
                             <Input 
+                              placeholder="000000"
                               {...field} 
-                              className="bg-input border-border text-foreground placeholder:text-muted-foreground h-8 text-sm"
+                              className="input-medsync-combo text-sm"
                             />
                           </FormControl>
                           <FormMessage />
@@ -937,21 +933,20 @@ export function PatientFormDialog({
 
             {/* Botões de Ação */}
             <div className="flex justify-end space-x-2 pt-4">
-              <Button
+              <button
                 type="button"
-                variant="outline"
                 onClick={() => onOpenChange(false)}
-                className="border-border text-muted-foreground hover:bg-accent"
+                className="btn-medsync-light"
               >
                 Cancelar
-              </Button>
-              <Button 
+              </button>
+              <button 
                 type="submit" 
                 disabled={form.formState.isSubmitting}
-                className="bg-primary hover:bg-primary/90 text-foreground"
+                className="bg-medsync-blue hover:bg-medsync-blue-dark text-white font-semibold px-4 py-2 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {form.formState.isSubmitting ? "Salvando..." : (isEditMode ? "Atualizar" : "Salvar")}
-              </Button>
+              </button>
             </div>
             </form>
           </Form>
