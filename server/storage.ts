@@ -345,9 +345,11 @@ export interface IStorage {
   getPatients(): Promise<Patient[]>;
   getPatientsByDoctor(doctorId: number): Promise<Patient[]>;
   getRecentPatientsByDoctor(doctorId: number, limit?: number): Promise<Patient[]>;
-  createPatient(patient: InsertPatient): Promise<Patient>;
-  updatePatient(id: number, patient: Partial<InsertPatient>): Promise<Patient | undefined>;
-  deletePatient(id: number): Promise<boolean>;
+  createPatient(patient: InsertPatient, userId?: number): Promise<Patient>;
+  updatePatient(id: number, patient: Partial<InsertPatient>, userId?: number): Promise<Patient | undefined>;
+  deletePatient(id: number, userId?: number): Promise<boolean>; // Soft delete com auditoria
+  restorePatient(id: number): Promise<boolean>; // Restaurar paciente excluído
+  getDeletedPatients(): Promise<Patient[]>; // Listar pacientes excluídos
 
   // OPME item operations
   getOpmeItem(id: number): Promise<OpmeItem | undefined>;
@@ -1090,7 +1092,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPatients(): Promise<Patient[]> {
-    return await db.select().from(patients);
+    return await db
+      .select()
+      .from(patients)
+      .where(eq(patients.isDeleted, false)); // Filtrar pacientes não excluídos
   }
 
   async getPatientsByDoctor(doctorId: number): Promise<Patient[]> {
@@ -1109,14 +1114,18 @@ export class DatabaseStorage implements IStorage {
         plan: patients.plan,
         notes: patients.notes,
         isActive: patients.isActive,
-        activatedBy: patients.activatedBy
+        activatedBy: patients.activatedBy,
+        isDeleted: patients.isDeleted,
+        deletedAt: patients.deletedAt,
+        deletedBy: patients.deletedBy,
       })
       .from(patients)
       .innerJoin(doctorPatients, eq(patients.id, doctorPatients.patientId))
       .where(
         and(
           eq(doctorPatients.doctorId, doctorId),
-          eq(doctorPatients.isActive, true)
+          eq(doctorPatients.isActive, true),
+          eq(patients.isDeleted, false) // Filtrar pacientes não excluídos
         )
       )
       .orderBy(patients.fullName);
@@ -1138,14 +1147,18 @@ export class DatabaseStorage implements IStorage {
         plan: patients.plan,
         notes: patients.notes,
         isActive: patients.isActive,
-        activatedBy: patients.activatedBy
+        activatedBy: patients.activatedBy,
+        isDeleted: patients.isDeleted,
+        deletedAt: patients.deletedAt,
+        deletedBy: patients.deletedBy,
       })
       .from(patients)
       .innerJoin(doctorPatients, eq(patients.id, doctorPatients.patientId))
       .where(
         and(
           eq(doctorPatients.doctorId, doctorId),
-          eq(doctorPatients.isActive, true)
+          eq(doctorPatients.isActive, true),
+          eq(patients.isDeleted, false) // Filtrar pacientes não excluídos
         )
       )
       .orderBy(desc(doctorPatients.associatedAt))
@@ -1160,37 +1173,82 @@ export class DatabaseStorage implements IStorage {
     return patient;
   }
 
-  async createPatient(insertPatient: InsertPatient): Promise<Patient> {
+  async createPatient(insertPatient: InsertPatient, userId?: number): Promise<Patient> {
     const [patient] = await db
       .insert(patients)
-      .values(insertPatient)
+      .values({
+        ...insertPatient,
+        createdBy: userId || null
+      })
       .returning();
     return patient;
   }
 
-  async updatePatient(id: number, patientData: Partial<InsertPatient>): Promise<Patient | undefined> {
+  async updatePatient(id: number, patientData: Partial<InsertPatient>, userId?: number): Promise<Patient | undefined> {
     const [updated] = await db
       .update(patients)
-      .set(patientData)
+      .set({
+        ...patientData,
+        updatedAt: new Date(),
+        updatedBy: userId || null
+      })
       .where(eq(patients.id, id))
       .returning();
     return updated;
   }
 
-  async deletePatient(id: number): Promise<boolean> {
+  async deletePatient(id: number, userId?: number): Promise<boolean> {
     try {
-      console.log(`Tentando excluir paciente ID ${id}...`);
+      console.log(`[SOFT DELETE] Marcando paciente ID ${id} como excluído...`);
       
-      const result = await db
-        .delete(patients)
-        .where(eq(patients.id, id));
+      // Soft delete: marcar como excluído ao invés de remover do banco
+      const [result] = await db
+        .update(patients)
+        .set({ 
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy: userId || null
+        })
+        .where(eq(patients.id, id))
+        .returning();
       
-      console.log(`Resultado da exclusão:`, result);
-      return true;
+      console.log(`[SOFT DELETE] Paciente ID ${id} marcado como excluído por usuário ${userId || 'desconhecido'}`);
+      return !!result;
     } catch (error) {
-      console.error(`Erro ao excluir paciente ID ${id}:`, error);
+      console.error(`[SOFT DELETE] Erro ao marcar paciente ID ${id} como excluído:`, error);
       return false;
     }
+  }
+
+  async restorePatient(id: number): Promise<boolean> {
+    try {
+      console.log(`[RESTORE] Restaurando paciente ID ${id}...`);
+      
+      // Restaurar paciente: remover marcação de exclusão
+      const [result] = await db
+        .update(patients)
+        .set({ 
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null
+        })
+        .where(eq(patients.id, id))
+        .returning();
+      
+      console.log(`[RESTORE] Paciente ID ${id} restaurado com sucesso`);
+      return !!result;
+    } catch (error) {
+      console.error(`[RESTORE] Erro ao restaurar paciente ID ${id}:`, error);
+      return false;
+    }
+  }
+
+  async getDeletedPatients(): Promise<Patient[]> {
+    return await db
+      .select()
+      .from(patients)
+      .where(eq(patients.isDeleted, true))
+      .orderBy(desc(patients.deletedAt));
   }
 
   // OPME item methods
@@ -1937,11 +1995,14 @@ export class DatabaseStorage implements IStorage {
       if (updates.userId !== undefined) updateData.userId = updates.userId;
       if (updates.hospitalId !== undefined) updateData.hospitalId = updates.hospitalId;
       if (updates.clinicalIndication !== undefined) updateData.clinicalIndication = updates.clinicalIndication;
+      if (updates.clinical_indication !== undefined) updateData.clinicalIndication = updates.clinical_indication;
       if (updates.clinicalJustification !== undefined) updateData.clinicalJustification = updates.clinicalJustification;
+      if (updates.clinical_justification !== undefined) updateData.clinicalJustification = updates.clinical_justification;
       if (updates.procedureLaterality !== undefined) updateData.procedureLaterality = updates.procedureLaterality;
       if (updates.procedureType !== undefined) updateData.procedureType = updates.procedureType;
       if (updates.anatomicalRegionId !== undefined) updateData.anatomicalRegionId = updates.anatomicalRegionId;
       if (updates.additionalNotes !== undefined) updateData.additionalNotes = updates.additionalNotes;
+      if (updates.additional_notes !== undefined) updateData.additionalNotes = updates.additional_notes;
       if (updates.complexity !== undefined) updateData.complexity = updates.complexity;
       if (updates.statusId !== undefined) updateData.statusId = updates.statusId;
       if (updates.receivedValue !== undefined) updateData.receivedValue = updates.receivedValue;

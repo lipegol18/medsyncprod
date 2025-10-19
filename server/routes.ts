@@ -2613,6 +2613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           procedureType: order.procedureType,
           procedureLaterality: order.procedureLaterality,
           status: statusMapping[order.statusId as keyof typeof statusMapping] || "nao_especificado",
+          statusCode: statusMapping[order.statusId as keyof typeof statusMapping] || "nao_especificado",
           statusId: order.statusId,
           previousStatusId: order.previousStatusId,
           // Adicionar campos de cor do cache
@@ -4045,13 +4046,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           activatedBy: patientData.activatedBy || (req.user?.name as string) || "Sistema",
         };
 
-        // Salvar o paciente no banco de dados
-        const newPatient = await storage.createPatient(patientToSave);
+        // Obter ID do usuário autenticado para auditoria
+        const userId = (req.user as any)?.id;
+
+        // Salvar o paciente no banco de dados com auditoria de criação
+        const newPatient = await storage.createPatient(patientToSave, userId);
 
         console.log("Novo paciente cadastrado no banco de dados:", newPatient);
 
         // Automaticamente associar o paciente ao médico que está logado
-        const userId = (req.user as any)?.id;
         if (userId && newPatient.id) {
           try {
             const associationData = {
@@ -4286,8 +4289,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             patientData.activatedBy || (req.user?.name as string) || "Sistema",
         };
 
-        // Salvar o paciente no banco de dados
-        const newPatient = await storage.createPatient(patientToSave);
+        // Salvar o paciente no banco de dados com auditoria de criação
+        const newPatient = await storage.createPatient(patientToSave, userId);
 
         // Exibir informações do paciente salvo
         console.log("Novo paciente cadastrado no banco de dados:", newPatient);
@@ -4909,10 +4912,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Obter os dados do paciente
         const patientData = req.body;
 
-        // Atualizar o paciente no banco de dados
+        // Atualizar o paciente no banco de dados com auditoria
+        const userId = req.user?.id; // Pegar ID do usuário autenticado
         const updatedPatient = await storage.updatePatient(
           patientId,
           patientData,
+          userId
         );
         if (!updatedPatient) {
           return res.status(404).json({ message: "Paciente não encontrado" });
@@ -4926,7 +4931,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  // Endpoint para excluir um paciente
+  // Endpoint para excluir um paciente (SOFT DELETE)
   app.delete(
     "/api/patients/:id",
     
@@ -4943,16 +4948,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ message: "Paciente não encontrado" });
         }
 
-        // Excluir o paciente do banco de dados
-        const success = await storage.deletePatient(patientId);
+        // Verificar se já está excluído
+        if (existingPatient.isDeleted) {
+          return res.status(400).json({ message: "Paciente já está excluído" });
+        }
+
+        // Soft delete: marcar como excluído com auditoria
+        const userId = req.user?.id; // Pegar ID do usuário autenticado
+        const success = await storage.deletePatient(patientId, userId);
         if (!success) {
           return res.status(500).json({ message: "Erro ao excluir paciente" });
         }
 
-        res.status(200).json({ message: "Paciente excluído com sucesso" });
+        res.status(200).json({ 
+          message: "Paciente excluído com sucesso",
+          note: "O paciente foi marcado como excluído e pode ser restaurado se necessário"
+        });
       } catch (error) {
         console.error("Erro ao excluir paciente:", error);
         res.status(500).json({ message: "Erro ao excluir paciente" });
+      }
+    },
+  );
+
+  // Endpoint para restaurar um paciente excluído
+  app.post(
+    "/api/patients/:id/restore",
+    
+    async (req: Request, res: Response) => {
+      try {
+        const patientId = parseInt(req.params.id);
+        if (isNaN(patientId)) {
+          return res.status(400).json({ message: "ID de paciente inválido" });
+        }
+
+        // Verificar se o paciente existe
+        const existingPatient = await storage.getPatient(patientId);
+        if (!existingPatient) {
+          return res.status(404).json({ message: "Paciente não encontrado" });
+        }
+
+        // Verificar se está excluído
+        if (!existingPatient.isDeleted) {
+          return res.status(400).json({ message: "Paciente não está excluído" });
+        }
+
+        // Restaurar paciente
+        const success = await storage.restorePatient(patientId);
+        if (!success) {
+          return res.status(500).json({ message: "Erro ao restaurar paciente" });
+        }
+
+        res.status(200).json({ 
+          message: "Paciente restaurado com sucesso",
+          patient: await storage.getPatient(patientId)
+        });
+      } catch (error) {
+        console.error("Erro ao restaurar paciente:", error);
+        res.status(500).json({ message: "Erro ao restaurar paciente" });
+      }
+    },
+  );
+
+  // Endpoint para listar pacientes excluídos
+  app.get(
+    "/api/patients/deleted/list",
+    
+    async (req: Request, res: Response) => {
+      try {
+        const deletedPatients = await storage.getDeletedPatients();
+        res.json(deletedPatients);
+      } catch (error) {
+        console.error("Erro ao buscar pacientes excluídos:", error);
+        res.status(500).json({ error: "Erro ao buscar pacientes excluídos" });
       }
     },
   );
@@ -5517,6 +5585,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Rota para upload de cartão CRM do usuário
+  app.post('/api/users/:id/crm',  (req: Request, res: Response) => {
+    try {
+      const upload = multer({
+        storage: multer.diskStorage({
+          destination: function (req, file, cb) {
+            const uploadPath = path.join(process.cwd(), 'uploads', 'temp', 'crm');
+            if (!fs.existsSync(uploadPath)) {
+              fs.mkdirSync(uploadPath, { recursive: true });
+            }
+            cb(null, uploadPath);
+          },
+          filename: function (req, file, cb) {
+            const uniqueSuffix = Date.now();
+            const ext = path.extname(file.originalname);
+            cb(null, `crm_${uniqueSuffix}${ext}`);
+          }
+        }),
+        limits: { fileSize: 5 * 1024 * 1024 }
+      });
+
+      upload.single('crm')(req, res, async function(err) {
+        if (err) {
+          console.error('Erro ao fazer upload de cartão CRM:', err);
+          return res.status(500).json({ error: 'Falha ao processar upload: ' + err.message });
+        }
+        
+        if (!req.file) {
+          return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+        }
+
+        const userId = parseInt(req.params.id);
+        const fileName = path.basename(req.file.path);
+        const tempPath = req.file.path;
+        
+        // Estrutura final para cartões CRM de usuário
+        const finalDir = path.join(process.cwd(), 'uploads', 'users', `user_${userId}`, 'crm');
+        const finalPath = path.join(finalDir, fileName);
+        const crmUrl = `/uploads/users/user_${userId}/crm/${fileName}`;
+        
+        // Criar diretório final
+        if (!fs.existsSync(finalDir)) {
+          fs.mkdirSync(finalDir, { recursive: true });
+        }
+        
+        // Mover arquivo
+        try {
+          fs.renameSync(tempPath, finalPath);
+        } catch (error) {
+          fs.copyFileSync(tempPath, finalPath);
+          fs.unlinkSync(tempPath);
+        }
+        
+        // Atualizar URL do cartão CRM no banco de dados
+        storage.updateUser(userId, { crmUrl: crmUrl }).then(() => {
+          console.log(`CRM URL salva no banco: ${crmUrl}`);
+        }).catch((dbError) => {
+          console.error('Erro ao salvar CRM URL no banco:', dbError);
+        });
+        
+        console.log(`Upload de cartão CRM bem sucedido: ${fileName}`);
+        res.status(200).json({ 
+          url: crmUrl,
+          originalName: req.file.originalname,
+          size: req.file.size
+        });
+      });
+    } catch (error) {
+      console.error('Erro ao processar upload de cartão CRM:', error);
+      res.status(500).json({ error: 'Falha ao processar upload' });
+    }
+  });
+
+  // Rota para remover logo do usuário
+  app.delete('/api/users/:id/logo', async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.params.id);
+      console.log(`Removendo logo do usuário ${userId}`);
+      
+      // Buscar usuário para obter a URL atual do logo
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+      
+      // Remover arquivo físico se existir
+      if (user.logoUrl) {
+        const filePath = path.join(process.cwd(), user.logoUrl);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`Arquivo de logo removido: ${filePath}`);
+        }
+      }
+      
+      // Atualizar banco de dados
+      await storage.updateUser(userId, { logoUrl: null });
+      console.log(`Logo removido do banco de dados para usuário ${userId}`);
+      
+      res.status(200).json({ message: 'Logo removido com sucesso' });
+    } catch (error) {
+      console.error('Erro ao remover logo:', error);
+      res.status(500).json({ error: 'Erro ao remover logo' });
+    }
+  });
+
+  // Rota para remover assinatura do usuário
+  app.delete('/api/users/:id/signature', async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.params.id);
+      console.log(`Removendo assinatura do usuário ${userId}`);
+      
+      // Buscar usuário para obter a URL atual da assinatura
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+      
+      // Remover arquivo físico se existir
+      if (user.signatureUrl) {
+        const filePath = path.join(process.cwd(), user.signatureUrl);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`Arquivo de assinatura removido: ${filePath}`);
+        }
+      }
+      
+      // Atualizar banco de dados
+      await storage.updateUser(userId, { signatureUrl: null });
+      console.log(`Assinatura removida do banco de dados para usuário ${userId}`);
+      
+      res.status(200).json({ message: 'Assinatura removida com sucesso' });
+    } catch (error) {
+      console.error('Erro ao remover assinatura:', error);
+      res.status(500).json({ error: 'Erro ao remover assinatura' });
+    }
+  });
+
+  // Rota para remover cartão CRM do usuário
+  app.delete('/api/users/:id/crm', async (req: Request, res: Response) => {
+    try {
+      const userId = parseInt(req.params.id);
+      console.log(`Removendo cartão CRM do usuário ${userId}`);
+      
+      // Buscar usuário para obter a URL atual do cartão CRM
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'Usuário não encontrado' });
+      }
+      
+      // Remover arquivo físico se existir
+      if (user.crmUrl) {
+        const filePath = path.join(process.cwd(), user.crmUrl);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`Arquivo de cartão CRM removido: ${filePath}`);
+        }
+      }
+      
+      // Atualizar banco de dados
+      await storage.updateUser(userId, { crmUrl: null });
+      console.log(`Cartão CRM removido do banco de dados para usuário ${userId}`);
+      
+      res.status(200).json({ message: 'Cartão CRM removido com sucesso' });
+    } catch (error) {
+      console.error('Erro ao remover cartão CRM:', error);
+      res.status(500).json({ error: 'Erro ao remover cartão CRM' });
+    }
+  });
+
   // Endpoint para exclusão de usuários
   app.delete(
     "/api/users/:id",
@@ -5745,10 +5982,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Preparar dados com apenas campos válidos para a nova estrutura relacional
         const orderWithDefaults = {
           ...orderData,
-          // Mapear campos do frontend para o formato do banco (snake_case)
-          clinical_indication: orderData.clinicalIndication,
-          additional_notes: orderData.additionalNotes,
-          clinical_justification: orderData.clinicalJustification,
+          // Mapear campos do frontend para o formato do banco (snake_case) APENAS se existirem
+          ...(orderData.clinicalIndication !== undefined && { clinical_indication: orderData.clinicalIndication }),
+          ...(orderData.additionalNotes !== undefined && { additional_notes: orderData.additionalNotes }),
+          ...(orderData.clinicalJustification !== undefined && { clinical_justification: orderData.clinicalJustification }),
           // CIDs, OPME Items e Suppliers são gerenciados via tabelas relacionais separadas
           // Não incluir campos removidos: cidCodeId, opmeItemIds, supplierIds, etc.
         };
@@ -9824,7 +10061,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PUT /api/orders/:id/cids - Gerenciar CIDs relacionais de um pedido médico
+  // ❌ ROTA LEGADA COMENTADA - MOVIDA PARA relational-routes.ts
+  // Esta rota NUNCA é executada porque relational-routes.ts registra PUT /api/orders/:id/cids ANTES
+  // A rota correta está em: server/relational-routes.ts (linha 52)
+  /*
   app.put("/api/orders/:id/cids",  async (req: Request, res: Response) => {
     try {
       const orderId = parseInt(req.params.id);
@@ -9873,8 +10113,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   });
+  */
 
-  // PUT /api/orders/:id/procedures - Gerenciar procedimentos CBHPM relacionais de um pedido médico
+  // ❌ ROTA LEGADA COMENTADA - MOVIDA PARA relational-routes.ts
+  // Esta rota NUNCA é executada porque relational-routes.ts registra PUT /api/orders/:id/procedures ANTES
+  // A rota correta está em: server/relational-routes.ts (linha 153)
+  // - Aceita { procedures: [...] } com objetos completos (procedureId, quantityRequested, isMain)
+  // - Calcula automaticamente o procedimento principal pelo maior porte
+  // - Salva corretamente o campo is_main no banco de dados
+  /*
   app.put("/api/orders/:id/procedures",  async (req: Request, res: Response) => {
     try {
       const orderId = parseInt(req.params.id);
@@ -9925,6 +10172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   });
+  */
 
   // PUT /api/orders/:id/surgical-approaches - Gerenciar condutas cirúrgicas relacionais de um pedido médico
   app.put("/api/orders/:id/surgical-approaches", isAuthenticated, async (req: Request, res: Response) => {
@@ -9977,7 +10225,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PUT /api/orders/:id/suppliers - Gerenciar fornecedores relacionais de um pedido médico
+  // ❌ ROTA LEGADA COMENTADA - MOVIDA PARA relational-routes.ts
+  // Esta rota NUNCA é executada porque relational-routes.ts registra PUT /api/orders/:id/suppliers ANTES
+  // A rota correta está em: server/relational-routes.ts (linha 118)
+  /*
   app.put("/api/orders/:id/suppliers", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const orderId = parseInt(req.params.id);
@@ -10025,6 +10276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   });
+  */
 
   // GET /api/surgical-approaches/:id/complete - Buscar conduta cirúrgica com todos os dados associados
   app.get("/api/surgical-approaches/:id/complete",  async (req: Request, res: Response) => {

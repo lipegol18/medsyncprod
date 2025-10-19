@@ -97,7 +97,8 @@ router.post('/upload-attachment/:orderId', uploadForOrder.single('file'), async 
       type: type as 'image' | 'pdf',
       size: req.file.size,
       uploadedAt: new Date().toISOString(),
-      orderId: parseInt(orderId)
+      orderId: parseInt(orderId),
+      source: 'order_details' as 'order_details' // Marcando como anexo adicionado na tela de detalhes
     };
 
     console.log(`📁 Arquivo salvo em: ${newFilePath}`);
@@ -206,7 +207,8 @@ router.post('/upload-attachments/:orderId', uploadForOrder.array('files', 10), a
         type: type as 'image' | 'pdf',
         size: file.size,
         uploadedAt: new Date().toISOString(),
-        orderId: parseInt(orderId)
+        orderId: parseInt(orderId),
+        source: 'order_details' as 'order_details' // Marcando como anexo adicionado na tela de detalhes
       });
       
       console.log(`📁 Arquivo salvo em: ${newFilePath}`);
