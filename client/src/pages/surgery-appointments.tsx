@@ -1,11 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useLocation } from 'wouter';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { SurgeryAppointmentFormCompact } from '@/components/surgery-appointment-form-compact';
 import { SurgicalCalendarBig } from '@/components/surgical-calendar-big';
-import { ArrowLeft } from 'lucide-react';
 import type { SurgeryAppointment } from '@shared/schema';
 
 // Interface estendida que inclui os dados do paciente
@@ -27,7 +24,6 @@ interface SurgeryAppointmentWithDetails extends SurgeryAppointment {
 }
 
 export default function SurgeryAppointments() {
-  const [, setLocation] = useLocation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<SurgeryAppointmentWithPatient | null>(null);
 
@@ -104,7 +100,7 @@ export default function SurgeryAppointments() {
     
     try {
       // Converter Date para string ISO se necessário
-      const processedUpdates = { ...updates };
+      const processedUpdates: any = { ...updates };
       if (updates.scheduledDate) {
         if (updates.scheduledDate instanceof Date) {
           processedUpdates.scheduledDate = updates.scheduledDate.toISOString();
@@ -158,25 +154,7 @@ export default function SurgeryAppointments() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setLocation('/')}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft size={16} />
-            Voltar
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Agenda Cirúrgica</h1>
-            <p className="text-gray-600 mt-2">Gerencie seus agendamentos de cirurgia</p>
-          </div>
-        </div>
-      </div>
-
+    <>
       <SurgicalCalendarBig 
         appointments={appointments}
         onNewAppointment={handleCreateAppointment}
@@ -199,6 +177,6 @@ export default function SurgeryAppointments() {
           />
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

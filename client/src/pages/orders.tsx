@@ -16,9 +16,11 @@ import { SurgeryAppointmentFormCompact } from "@/components/surgery-appointment-
 import { StatusChangeModal } from "@/components/status-change-modal";
 import { SupplierApprovalModal } from "@/components/supplier-approval-modal";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ChevronLeft, FileText, Eye, FileCheck, AlertCircle, Clock, Phone, Search, Filter, X, ChevronDown, Check, Edit2, Plus, Trash2, Loader2, Download, CheckCircle, ArrowRight, Undo2, Building2, Calendar, CalendarDays, Users, TrendingUp, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, FileText, Eye, FileCheck, AlertCircle, Clock, Phone, Search, Filter, X, ChevronDown, Check, Edit2, Plus, Trash2, Loader2, Download, CheckCircle, ArrowRight, Undo2, Building2, Calendar, CalendarDays, Users, TrendingUp, CheckCircle2, ChevronsUpDown } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { useAuth } from "@/hooks/use-auth";
 import { format } from "date-fns";
@@ -71,6 +73,10 @@ export default function Orders() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedHospital, setSelectedHospital] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
+  
+  // Estados para controlar abertura dos comboboxes
+  const [openHospitalCombobox, setOpenHospitalCombobox] = useState(false);
+  const [openStatusCombobox, setOpenStatusCombobox] = useState(false);
   
   // Estados para controlar carregamento e erros
   const [isLoading, setIsLoading] = useState(true);
@@ -550,6 +556,7 @@ export default function Orders() {
       // Invalidar queries relacionadas para atualizar estatísticas
       queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
       
       toast({
@@ -927,6 +934,7 @@ export default function Orders() {
         // Invalidar queries relacionadas para atualizar estatísticas
         queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
         queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
+        queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
         queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
       }
     } catch (error: any) {
@@ -1119,11 +1127,12 @@ export default function Orders() {
                   {/* Campo de busca por paciente ou ID */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-sky-600" />
-                    <Input
+                    <input
+                      type="text"
                       placeholder="Buscar por paciente ou ID..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 bg-white border-sky-200 text-foreground placeholder:text-sky-600/60 focus:border-sky-400 focus:ring-sky-400"
+                      className="input-medsync-combo pl-10"
                     />
                     {searchTerm && (
                       <Button
@@ -1137,41 +1146,95 @@ export default function Orders() {
                     )}
                   </div>
 
-                  {/* Filtro por hospital */}
-                  <Select value={selectedHospital} onValueChange={setSelectedHospital}>
-                    <SelectTrigger className="bg-white border-sky-200 text-foreground focus:border-sky-400 focus:ring-sky-400">
-                      <SelectValue placeholder="Filtrar por hospital..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-sky-200">
-                      {hospitalsList.map((hospital) => (
-                        <SelectItem 
-                          key={hospital.id} 
-                          value={hospital.id.toString()}
-                          className="text-foreground hover:bg-sky-50"
-                        >
-                          {hospital.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* Filtro por hospital - Combobox com busca */}
+                  <Popover open={openHospitalCombobox} onOpenChange={setOpenHospitalCombobox}>
+                    <PopoverTrigger asChild>
+                      <button
+                        role="combobox"
+                        aria-expanded={openHospitalCombobox}
+                        className="combobox-medsync w-full"
+                      >
+                        <span className={selectedHospital ? "combobox-value" : "combobox-placeholder"}>
+                          {selectedHospital
+                            ? hospitalsList.find((hospital) => hospital.id.toString() === selectedHospital)?.name
+                            : "Filtrar por hospital..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0 bg-white border-sky-200">
+                      <Command>
+                        <CommandInput placeholder="Buscar hospital..." className="h-9" />
+                        <CommandList>
+                          <CommandEmpty>Nenhum hospital encontrado.</CommandEmpty>
+                          <CommandGroup>
+                            {hospitalsList.map((hospital) => (
+                              <CommandItem
+                                key={hospital.id}
+                                value={hospital.name}
+                                onSelect={() => {
+                                  setSelectedHospital(hospital.id.toString());
+                                  setOpenHospitalCombobox(false);
+                                }}
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${
+                                    selectedHospital === hospital.id.toString() ? "opacity-100" : "opacity-0"
+                                  }`}
+                                />
+                                {hospital.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
 
-                  {/* Filtro por status */}
-                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                    <SelectTrigger className="bg-white border-sky-200 text-foreground focus:border-sky-400 focus:ring-sky-400">
-                      <SelectValue placeholder="Filtrar por status..." />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-sky-200">
-                      {Object.entries(orderStatus).map(([key, status]) => (
-                        <SelectItem 
-                          key={key} 
-                          value={key}
-                          className="text-foreground hover:bg-sky-50"
-                        >
-                          {status.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* Filtro por status - Combobox com busca */}
+                  <Popover open={openStatusCombobox} onOpenChange={setOpenStatusCombobox}>
+                    <PopoverTrigger asChild>
+                      <button
+                        role="combobox"
+                        aria-expanded={openStatusCombobox}
+                        className="combobox-medsync w-full"
+                      >
+                        <span className={selectedStatus ? "combobox-value" : "combobox-placeholder"}>
+                          {selectedStatus
+                            ? orderStatus[selectedStatus as keyof typeof orderStatus]?.label
+                            : "Filtrar por status..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0 bg-white border-sky-200">
+                      <Command>
+                        <CommandInput placeholder="Buscar status..." className="h-9" />
+                        <CommandList>
+                          <CommandEmpty>Nenhum status encontrado.</CommandEmpty>
+                          <CommandGroup>
+                            {Object.entries(orderStatus).map(([key, status]) => (
+                              <CommandItem
+                                key={key}
+                                value={status.label}
+                                onSelect={() => {
+                                  setSelectedStatus(key);
+                                  setOpenStatusCombobox(false);
+                                }}
+                              >
+                                <Check
+                                  className={`mr-2 h-4 w-4 ${
+                                    selectedStatus === key ? "opacity-100" : "opacity-0"
+                                  }`}
+                                />
+                                {status.label}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 
                 {/* Botão de limpar filtros quando há filtros ativos */}
@@ -1730,9 +1793,9 @@ export default function Orders() {
       {/* Modal de Agendamento Cirúrgico */}
       <Dialog open={showAppointmentModal} onOpenChange={setShowAppointmentModal}>
         <DialogContent className="bg-card border-gray-200 text-foreground max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-primary text-xl">
-              <CalendarDays className="h-5 w-5 inline mr-2" />
+          <DialogHeader className="bg-medsync-blue text-white py-4 -mx-6 -mt-6 mb-2 rounded-t-lg">
+            <DialogTitle className="text-white text-xl font-bold text-center flex items-center justify-center gap-2">
+              <Calendar className="h-5 w-5" />
               <span id="appointment-modal-title">Agendar Cirurgia</span>
             </DialogTitle>
           </DialogHeader>

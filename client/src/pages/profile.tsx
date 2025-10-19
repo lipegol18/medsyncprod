@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -51,31 +48,43 @@ const Profile = () => {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   
+  // Estados para upload do cartão CRM
+  const [crmFile, setCrmFile] = useState<File | null>(null);
+  const [isUploadingCrm, setIsUploadingCrm] = useState(false);
+  
   // Estados para crop de imagens
   const [showSignatureCrop, setShowSignatureCrop] = useState(false);
   const [showLogoCrop, setShowLogoCrop] = useState(false);
+  const [showCrmCrop, setShowCrmCrop] = useState(false);
   const [signatureImageSrc, setSignatureImageSrc] = useState<string>('');
   const [logoImageSrc, setLogoImageSrc] = useState<string>('');
+  const [crmImageSrc, setCrmImageSrc] = useState<string>('');
   
   // Estados para controle de zoom e posição
   const [signatureScale, setSignatureScale] = useState(1);
   const [logoScale, setLogoScale] = useState(1);
+  const [crmScale, setCrmScale] = useState(1);
   const [signaturePosition, setSignaturePosition] = useState({ x: 0, y: 0 });
   const [logoPosition, setLogoPosition] = useState({ x: 0, y: 0 });
+  const [crmPosition, setCrmPosition] = useState({ x: 0, y: 0 });
   
   // Estados para controle de drag
   const [isDraggingSignature, setIsDraggingSignature] = useState(false);
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
+  const [isDraggingCrm, setIsDraggingCrm] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   
   // Estados para drag and drop de arquivos
   const [isDragOverLogo, setIsDragOverLogo] = useState(false);
   const [isDragOverSignature, setIsDragOverSignature] = useState(false);
+  const [isDragOverCrm, setIsDragOverCrm] = useState(false);
   
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const logoCanvasRef = useRef<HTMLCanvasElement>(null);
+  const crmCanvasRef = useRef<HTMLCanvasElement>(null);
   const signatureImgRef = useRef<HTMLImageElement>(null);
   const logoImgRef = useRef<HTMLImageElement>(null);
+  const crmImgRef = useRef<HTMLImageElement>(null);
   
   // Buscar os dados do papel do usuário
   const { data: userRole, isLoading: isRoleLoading, error: roleError } = useQuery({
@@ -1030,6 +1039,168 @@ const Profile = () => {
     }
   };
   
+  // Função para remover cartão CRM atual
+  const handleRemoveCrm = async () => {
+    if (!user) return;
+    
+    try {
+      console.log('🗑️ Removendo cartão CRM atual do usuário:', user.id);
+      const response = await fetch(`/api/users/${user.id}/crm`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Erro ao remover cartão CRM");
+      }
+      
+      // Atualizar os dados do usuário no cache
+      queryClient.setQueryData(["/api/user"], (oldData: any) => ({
+        ...oldData,
+        crmUrl: null,
+      }));
+      
+      toast({
+        title: "Sucesso",
+        description: "Cartão CRM removido com sucesso",
+      });
+      
+      console.log('✅ Cartão CRM removido com sucesso');
+    } catch (error) {
+      console.error('❌ Erro ao remover cartão CRM:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao remover cartão CRM: " + (error as Error).message,
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Função para fazer upload do cartão CRM
+  const handleCrmUpload = async (fileToUpload?: File) => {
+    const file = fileToUpload || crmFile;
+    if (!file || !user) return;
+    
+    console.log('📤 Preparando upload do cartão CRM - Arquivo:', file.name, file.size, 'bytes, Usuário:', user.id);
+    setIsUploadingCrm(true);
+    try {
+      const formData = new FormData();
+      formData.append('crm', file);
+      console.log('📋 FormData do cartão CRM preparado');
+      
+      const response = await fetch(`/api/users/${user.id}/crm`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      console.log('📡 Resposta do servidor (cartão CRM):', response.status, response.statusText);
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('❌ Erro na resposta (cartão CRM):', error);
+        throw new Error(error.message || "Erro ao fazer upload do cartão CRM");
+      }
+      
+      const result = await response.json();
+      console.log('✅ Upload do cartão CRM bem-sucedido:', result);
+      
+      // Atualizar diretamente os dados do usuário no cache em vez de invalidar
+      queryClient.setQueryData(["/api/user"], (oldData: any) => {
+        if (oldData) {
+          return { ...oldData, crmUrl: result.url };
+        }
+        return oldData;
+      });
+      
+      setCrmFile(null);
+      // Limpar o input de arquivo
+      const fileInput = document.getElementById('crm-upload') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+      
+      toast({
+        title: "Cartão CRM enviado",
+        description: "Seu cartão CRM foi enviado com sucesso",
+        variant: "default",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível enviar o cartão CRM",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingCrm(false);
+    }
+  };
+  
+  // Função para lidar com o upload do cartão CRM
+  const handleCrmFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('🎯 handleCrmFileChange chamado');
+    const file = e.target.files?.[0];
+    
+    if (file) {
+      console.log('📁 Arquivo selecionado:', {
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
+      
+      // Verificar se é uma imagem
+      if (!file.type.startsWith('image/')) {
+        console.log('❌ Tipo de arquivo inválido');
+        toast({
+          title: "Erro",
+          description: "Por favor, selecione apenas arquivos de imagem",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Verificar tamanho do arquivo (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        console.log('❌ Arquivo muito grande');
+        toast({
+          title: "Erro",
+          description: "O arquivo deve ter no máximo 5MB",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      console.log('✅ Arquivo válido, fazendo upload direto...');
+      setCrmFile(file);
+      handleCrmUpload(file);
+    }
+  };
+  
+  // Funções de drag and drop para cartão CRM
+  const handleCrmDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOverCrm(true);
+  };
+  
+  const handleCrmDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOverCrm(false);
+  };
+  
+  const handleCrmDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOverCrm(false);
+    
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setCrmFile(file);
+      handleCrmUpload(file);
+    } else {
+      toast({
+        title: "Erro",
+        description: "Por favor, envie apenas arquivos de imagem",
+        variant: "destructive",
+      });
+    }
+  };
+  
   // Função para fazer upload do logo
   const handleLogoUpload = async (fileToUpload?: File) => {
     const file = fileToUpload || logoFile;
@@ -1105,13 +1276,13 @@ const Profile = () => {
       
       {/* Diálogo para gerenciar hospitais associados */}
       <Dialog open={showHospitalDialog} onOpenChange={setShowHospitalDialog}>
-        <DialogContent className="sm:max-w-[600px] bg-[#111827] text-white border-blue-800">
+        <DialogContent className="sm:max-w-[600px] bg-white border-[hsl(214,14%,84%)]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center">
+            <DialogTitle className="text-xl font-bold flex items-center text-[hsl(var(--medsync-dark-blue))]">
               <BuildingHospital className="mr-2 h-5 w-5" />
               Gerenciar Hospitais Associados
             </DialogTitle>
-            <DialogDescription className="text-slate-300">
+            <DialogDescription className="text-muted-foreground">
               Selecione os hospitais aos quais você está associado.
             </DialogDescription>
           </DialogHeader>
@@ -1119,7 +1290,7 @@ const Profile = () => {
           <div className="py-4">
             {isLoadingHospitals ? (
               <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-medsync-blue" />
               </div>
             ) : (
               <ScrollArea className="h-[300px] pr-4">
@@ -1133,19 +1304,19 @@ const Profile = () => {
                         id={`hospital-${hospital.id}`}
                         checked={selectedHospitalIds.includes(hospital.id)}
                         onCheckedChange={() => toggleHospitalSelection(hospital.id)}
-                        className="data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500"
+                        className="border-medsync-blue data-[state=checked]:bg-medsync-blue data-[state=checked]:border-medsync-blue"
                       />
-                      <Label 
+                      <label 
                         htmlFor={`hospital-${hospital.id}`}
-                        className="flex-1 cursor-pointer text-sm font-medium text-white uppercase"
+                        className="flex-1 cursor-pointer text-sm font-medium text-[hsl(var(--medsync-dark-blue))] uppercase"
                       >
                         {hospital.name}
-                      </Label>
+                      </label>
                     </div>
                   ))}
                   
                   {hospitals.length === 0 && (
-                    <div className="text-center p-4 text-slate-300">
+                    <div className="text-center p-4 text-muted-foreground">
                       Nenhum hospital encontrado.
                     </div>
                   )}
@@ -1154,35 +1325,36 @@ const Profile = () => {
             )}
           </div>
           
-          <DialogFooter className="gap-2 flex-row justify-between border-t border-blue-900 pt-4">
-            <div className="text-sm text-slate-300">
+          <DialogFooter className="gap-2 flex-row justify-between border-t border-[hsl(214,14%,84%)] pt-4">
+            <div className="text-sm text-muted-foreground">
               {selectedHospitalIds.length} hospitais selecionados
             </div>
             <div className="flex gap-2">
-              <Button
+              <button
                 type="button"
-                variant="outline"
                 onClick={() => setShowHospitalDialog(false)}
                 disabled={updateHospitalsMutation.isPending}
-                className="border-slate-600 text-white hover:bg-slate-700"
+                className="btn-medsync-dark border-slate-600 text-white hover:bg-slate-700 flex items-center gap-2"
+                data-testid="button-cancel-hospitals"
               >
                 Cancelar
-              </Button>
-              <Button
+              </button>
+              <button
                 type="button"
                 onClick={handleSaveHospitals}
                 disabled={updateHospitalsMutation.isPending}
-                className="bg-blue-500 hover:bg-blue-600 text-white"
+                className="btn-medsync-dark bg-blue-500 hover:bg-blue-600 text-white flex items-center gap-2"
+                data-testid="button-save-hospitals"
               >
                 {updateHospitalsMutation.isPending ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Salvando...
                   </>
                 ) : (
                   "Salvar"
                 )}
-              </Button>
+              </button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -1193,18 +1365,17 @@ const Profile = () => {
       {/* Header with close button */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Meu Perfil</h1>
-          <p className="text-muted-foreground mt-1">Gerencie suas informações pessoais e configurações</p>
+          <h1 className="text-3xl font-bold text-[hsl(var(--medsync-dark-blue))]">Meu Perfil</h1>
+          <p className="text-[hsl(var(--medsync-dark-blue))] mt-1">Gerencie suas informações pessoais e configurações</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
+        <button
           onClick={handleClose}
-          className="flex items-center gap-2"
+          className="btn-medsync-light flex items-center gap-2 text-sm px-3 py-1.5"
+          data-testid="button-close-profile"
         >
           <X className="h-4 w-4" />
           Fechar
-        </Button>
+        </button>
       </div>
 
       <Tabs defaultValue="info" className="w-full">
@@ -1217,54 +1388,59 @@ const Profile = () => {
         <TabsContent value="info">
           <div className="grid gap-6 md:grid-cols-2">
             <Card className="w-full shadow-lg">
-              <CardHeader className="rounded-t-lg p-6 pb-3 border-b">
-                <CardTitle className="text-2xl font-bold mb-2">
+              <CardHeader className="bg-medsync-blue text-white flex flex-col rounded-t-lg p-6 pb-3 pt-3 border-b space-y-0">
+                <CardTitle className="text-2xl font-bold">
                   Dados do Perfil
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-white">
                   Atualize suas informações pessoais
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handleProfileUpdate}>
-                <CardContent className="space-y-4 p-6 rounded-b-lg">
+                <CardContent className="space-y-2 p-6">
                   <div className="space-y-2">
-                    <Label htmlFor="name" className="font-medium">Nome Completo</Label>
+                    <label htmlFor="name" className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Nome Completo</label>
                     <div className="flex items-center space-x-2">
                       <User className="text-primary w-5 h-5" />
-                      <Input 
+                      <input 
                         id="name" 
                         name="name"
                         value={formData.name} 
                         onChange={handleInputChange}
                         placeholder="Seu nome completo" 
+                        className="input-medsync"
+                        data-testid="input-name"
                       />
                     </div>
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="font-medium">E-mail</Label>
+                    <label htmlFor="email" className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">E-mail</label>
                     <div className="flex items-center space-x-2">
                       <Mail className="text-primary w-5 h-5" />
-                      <Input 
+                      <input 
                         id="email" 
                         name="email"
                         type="email" 
                         value={formData.email} 
                         onChange={handleInputChange}
                         placeholder="seu.email@exemplo.com" 
+                        className="input-medsync"
+                        data-testid="input-email"
                       />
                     </div>
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="username" className="font-medium">Nome de Usuário</Label>
+                    <label htmlFor="username" className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Nome de Usuário</label>
                     <div className="flex items-center space-x-2">
                       <IdCard className="text-primary w-5 h-5" />
-                      <Input 
+                      <input 
                         id="username" 
                         value={user.username} 
                         disabled
-                        className="opacity-70"
+                        className="input-medsync opacity-70"
+                        data-testid="input-username"
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">O nome de usuário não pode ser alterado</p>
@@ -1273,12 +1449,12 @@ const Profile = () => {
                   {/* Seção de Logo para médicos */}
                   {user.roleId === 2 && (
                     <div className="space-y-2">
-                      <Label className="font-medium">Logo</Label>
+                      <label className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Logo</label>
                       <div className="flex items-start space-x-2">
                         <ImageIcon className="text-primary w-5 h-5 mt-2" />
                         <div className="flex-1">
                           {user.logoUrl ? (
-                            <div className="space-y-3 p-3 border rounded-md">
+                            <div className="space-y-3 p-3 border border-[hsl(214,14%,84%)] rounded-md">
                               <div className="flex items-center justify-between">
                                 <p className="text-sm text-muted-foreground">Logo atual:</p>
                                 <div className="flex gap-2">
@@ -1289,29 +1465,27 @@ const Profile = () => {
                                     onChange={handleLogoFileChange}
                                     className="hidden"
                                   />
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
+                                  <button
                                     onClick={() => document.getElementById('logo-change-upload')?.click()}
-                                    className="h-7 px-2 text-xs"
+                                    className="btn-medsync-dark h-7 px-2 text-xs flex items-center gap-1"
                                     disabled={isUploadingLogo}
+                                    data-testid="button-change-logo"
                                   >
-                                    <Upload className="mr-1 h-3 w-3" />
+                                    <Upload className="h-3 w-3" />
                                     {isUploadingLogo ? "Enviando..." : "Alterar"}
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
+                                  </button>
+                                  <button
                                     onClick={handleRemoveLogo}
-                                    className="h-7 px-2 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                                    className="btn-medsync-dark h-7 px-2 text-xs text-red-600 border-red-200 hover:bg-red-50 flex items-center gap-1"
                                     disabled={isUploadingLogo}
+                                    data-testid="button-remove-logo"
                                   >
-                                    <Trash2 className="mr-1 h-3 w-3" />
+                                    <Trash2 className="h-3 w-3" />
                                     Remover
-                                  </Button>
+                                  </button>
                                 </div>
                               </div>
-                              <div className="relative bg-white rounded-md p-2 border">
+                              <div className="relative bg-white rounded-md p-2 border border-[hsl(214,14%,84%)]">
                                 <img 
                                   src={user.logoUrl} 
                                   alt="Logo do médico" 
@@ -1346,19 +1520,18 @@ const Profile = () => {
                                   onChange={handleLogoFileChange}
                                   className="hidden"
                                 />
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 px-3 text-xs"
+                                <button
+                                  className="btn-medsync-dark h-8 px-3 text-xs flex items-center gap-1"
                                   disabled={isUploadingLogo}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     document.getElementById('logo-first-upload')?.click();
                                   }}
+                                  data-testid="button-upload-logo"
                                 >
-                                  <Upload className="mr-1 h-3 w-3" />
+                                  <Upload className="h-3 w-3" />
                                   {isUploadingLogo ? "Enviando..." : "Selecionar Arquivo"}
-                                </Button>
+                                </button>
                               </div>
                             </div>
                           )}
@@ -1370,12 +1543,12 @@ const Profile = () => {
                   {/* Campo para assinatura do médico */}
                   {user.roleId === 2 && (
                     <div className="space-y-2">
-                      <Label className="font-medium">Assinatura</Label>
+                      <label className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Assinatura</label>
                       <div className="flex items-start space-x-2">
                         <ImageIcon className="text-primary w-5 h-5 mt-2" />
                         <div className="flex-1">
                           {user.signatureUrl ? (
-                            <div className="space-y-3 p-3 border rounded-md">
+                            <div className="space-y-3 p-3 border border-[hsl(214,14%,84%)] rounded-md">
                               <div className="flex items-center justify-between">
                                 <p className="text-sm text-muted-foreground">Assinatura atual:</p>
                                 <div className="flex gap-2">
@@ -1386,29 +1559,27 @@ const Profile = () => {
                                     onChange={handleSignatureFileChange}
                                     className="hidden"
                                   />
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
+                                  <button
                                     onClick={() => document.getElementById('signature-change-upload')?.click()}
-                                    className="h-7 px-2 text-xs"
+                                    className="btn-medsync-dark h-7 px-2 text-xs flex items-center gap-1"
                                     disabled={isUploadingSignature}
+                                    data-testid="button-change-signature"
                                   >
-                                    <Upload className="mr-1 h-3 w-3" />
+                                    <Upload className="h-3 w-3" />
                                     {isUploadingSignature ? "Enviando..." : "Alterar"}
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
+                                  </button>
+                                  <button
                                     onClick={handleRemoveSignature}
-                                    className="h-7 px-2 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                                    className="btn-medsync-dark h-7 px-2 text-xs text-red-600 border-red-200 hover:bg-red-50 flex items-center gap-1"
                                     disabled={isUploadingSignature}
+                                    data-testid="button-remove-signature"
                                   >
-                                    <Trash2 className="mr-1 h-3 w-3" />
+                                    <Trash2 className="h-3 w-3" />
                                     Remover
-                                  </Button>
+                                  </button>
                                 </div>
                               </div>
-                              <div className="relative bg-white rounded-md p-2 border">
+                              <div className="relative bg-white rounded-md p-2 border border-[hsl(214,14%,84%)]">
                                 <img 
                                   src={user.signatureUrl} 
                                   alt="Assinatura do médico" 
@@ -1443,19 +1614,18 @@ const Profile = () => {
                                   onChange={handleSignatureFileChange}
                                   className="hidden"
                                 />
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 px-3 text-xs"
+                                <button
+                                  className="btn-medsync-dark h-8 px-3 text-xs flex items-center gap-1"
                                   disabled={isUploadingSignature}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     document.getElementById('signature-first-upload')?.click();
                                   }}
+                                  data-testid="button-upload-signature"
                                 >
-                                  <Upload className="mr-1 h-3 w-3" />
+                                  <Upload className="h-3 w-3" />
                                   {isUploadingSignature ? "Enviando..." : "Selecionar Arquivo"}
-                                </Button>
+                                </button>
                               </div>
                             </div>
                           )}
@@ -1465,7 +1635,7 @@ const Profile = () => {
                       {/* Campo para nota da assinatura - apenas para médicos */}
                       {user.roleId === 2 && (
                         <div className="space-y-2 mt-4">
-                          <Label htmlFor="signatureNote" className="font-medium">Nota da Assinatura</Label>
+                          <label htmlFor="signatureNote" className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Nota da Assinatura</label>
                           <div className="flex items-start space-x-2">
                             <PencilIcon className="text-primary w-5 h-5 mt-2" />
                             <div className="flex-1">
@@ -1477,7 +1647,7 @@ const Profile = () => {
                                 onChange={(e) => {
                                   const lines = e.target.value.split('\n');
                                   if (lines.length <= 4) {
-                                    handleInputChange(e);
+                                    handleInputChange(e as any);
                                   }
                                 }}
                                 onKeyDown={(e) => {
@@ -1487,7 +1657,8 @@ const Profile = () => {
                                   }
                                 }}
                                 rows={4}
-                                className="w-full min-h-[100px] max-h-[100px] resize-none p-3 border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 rounded-md"
+                                className="input-medsync w-full min-h-[100px] max-h-[100px] resize-none"
+                                data-testid="textarea-signature-note"
                               />
                               <p className="text-xs text-muted-foreground mt-1">
                                 Texto que aparecerá embaixo da sua assinatura nos documentos (até 4 linhas)
@@ -1500,75 +1671,180 @@ const Profile = () => {
                   )}
                 </CardContent>
                 <CardFooter className="px-6 pb-6 pt-4 border-t rounded-b-lg">
-                  <Button 
+                  <button 
                     type="submit" 
                     disabled={isLoading}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                    className="btn-medsync-dark flex items-center gap-2"
+                    data-testid="button-save-profile"
                   >
                     {isLoading ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                         Salvando...
                       </>
                     ) : (
                       "Salvar Alterações"
                     )}
-                  </Button>
+                  </button>
                 </CardFooter>
               </form>
             </Card>
             
             <Card className="w-full shadow-lg">
-              <CardHeader className="rounded-t-lg p-6 pb-3 border-b">
-                <CardTitle className="text-2xl font-bold mb-2">
+              <CardHeader className="bg-medsync-blue text-white flex flex-col rounded-t-lg p-6 pb-3 pt-3 border-b space-y-0">
+                <CardTitle className="text-2xl font-bold">
                   Informações da Conta
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-white">
                   Detalhes sobre sua conta
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6 p-6 rounded-b-lg">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Função no Sistema</p>
-                  <div className="flex items-center space-x-2">
-                    <p className="text-base">
-                      {user.roleId === 1 && "Administrador"}
-                      {user.roleId === 2 && "Médico"}
-                      {user.roleId === 3 && "Assistente Básico"}
-                      {user.roleId === 4 && "Assistente Administrativo"}
-                      {!user.roleId && "Não definido"}
-                    </p>
+              <CardContent className="space-y-2 p-6 rounded-b-lg">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Função no Sistema</label>
+                  <div className="flex items-start space-x-2">
+                    <User className="text-primary w-5 h-5 mt-2" />
+                    <input
+                      type="text"
+                      value={
+                        user.roleId === 1 ? "Administrador" :
+                        user.roleId === 2 ? "Médico" :
+                        user.roleId === 3 ? "Assistente Básico" :
+                        user.roleId === 4 ? "Assistente Administrativo" :
+                        "Não definido"
+                      }
+                      disabled
+                      className="input-medsync flex-1"
+                      data-testid="input-role"
+                    />
                   </div>
                 </div>
                 
                 {user.crm && (
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-muted-foreground">CRM</p>
-                    <div className="flex items-center space-x-2">
-                      <IdCard className="text-primary w-5 h-5" />
-                      <p className="text-base">{user.crm}</p>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">CRM</label>
+                    <div className="flex items-start space-x-2">
+                      <IdCard className="text-primary w-5 h-5 mt-2" />
+                      <input
+                        type="text"
+                        value={user.crm}
+                        disabled
+                        className="input-medsync flex-1"
+                        data-testid="input-crm"
+                      />
                     </div>
                   </div>
                 )}
                 
+                {/* Campo para cartão CRM do médico */}
+                {user.roleId === 2 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">Cartão CRM</label>
+                    <div className="flex items-start space-x-2">
+                      <ImageIcon className="text-primary w-5 h-5 mt-2" />
+                      <div className="flex-1">
+                        {user.crmUrl ? (
+                          <div className="space-y-3 p-3 border border-[hsl(214,14%,84%)] rounded-md">
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm text-muted-foreground">Cartão CRM atual:</p>
+                              <div className="flex gap-2">
+                                <input
+                                  id="crm-change-upload"
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleCrmFileChange}
+                                  className="hidden"
+                                />
+                                <button
+                                  onClick={() => document.getElementById('crm-change-upload')?.click()}
+                                  className="btn-medsync-dark h-7 px-2 text-xs flex items-center gap-1"
+                                  disabled={isUploadingCrm}
+                                  data-testid="button-change-crm"
+                                >
+                                  <Upload className="h-3 w-3" />
+                                  {isUploadingCrm ? "Enviando..." : "Alterar"}
+                                </button>
+                                <button
+                                  onClick={handleRemoveCrm}
+                                  className="btn-medsync-dark h-7 px-2 text-xs text-red-600 border-red-200 hover:bg-red-50 flex items-center gap-1"
+                                  disabled={isUploadingCrm}
+                                  data-testid="button-remove-crm"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  Remover
+                                </button>
+                              </div>
+                            </div>
+                            <div className="relative bg-white rounded-md p-2 border border-[hsl(214,14%,84%)]">
+                              <img 
+                                src={user.crmUrl} 
+                                alt="Cartão CRM do médico" 
+                                className="max-w-full max-h-24 object-contain mx-auto"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3 border rounded-md">
+                            <div 
+                              className={`flex flex-col items-center justify-center py-6 border-2 border-dashed rounded-md transition-colors cursor-pointer ${
+                                isDragOverCrm 
+                                  ? 'border-primary bg-primary/5 border-solid' 
+                                  : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+                              }`}
+                              onDragOver={handleCrmDragOver}
+                              onDragLeave={handleCrmDragLeave}
+                              onDrop={handleCrmDrop}
+                              onClick={() => document.getElementById('crm-first-upload')?.click()}
+                            >
+                              <ImageIcon className={`w-8 h-8 mb-2 ${isDragOverCrm ? 'text-primary' : 'text-muted-foreground'}`} />
+                              <p className={`text-sm text-center mb-2 ${isDragOverCrm ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+                                {isDragOverCrm ? 'Solte a imagem aqui' : 'Nenhum cartão CRM cadastrado'}
+                              </p>
+                              <p className="text-xs text-muted-foreground text-center mb-3">
+                                Arraste uma imagem ou clique para selecionar
+                              </p>
+                              <input
+                                id="crm-first-upload"
+                                type="file"
+                                accept="image/*"
+                                onChange={handleCrmFileChange}
+                                className="hidden"
+                              />
+                              <button
+                                className="btn-medsync-dark h-8 px-3 text-xs flex items-center gap-1"
+                                disabled={isUploadingCrm}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  document.getElementById('crm-first-upload')?.click();
+                                }}
+                                data-testid="button-upload-crm"
+                              >
+                                <Upload className="h-3 w-3" />
+                                {isUploadingCrm ? "Enviando..." : "Selecionar Arquivo"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 
                 {/* Mostrar hospitais associados apenas para médicos - Design conforme novo padrão solicitado */}
                 {user.roleId === 2 && (
                   <>
-                    <div className="space-y-1">
+                    <div className="space-y-1 pt-6">
                       <div className="flex items-center space-x-2 mb-2">
-                        <BuildingHospital className="text-blue-400 w-5 h-5" />
                         <p className="text-sm font-medium">Hospitais associados</p>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="ml-auto h-7 px-2 text-xs"
+                        <button 
+                          className="btn-medsync-dark ml-auto h-7 px-2 text-xs flex items-center gap-1"
                           onClick={() => setShowHospitalDialog(true)}
+                          data-testid="button-manage-hospitals"
                         >
-                          <PencilIcon className="mr-1 h-3 w-3" />
+                          <PencilIcon className="h-3 w-3" />
                           Gerenciar
-                        </Button>
+                        </button>
                       </div>
                       
                       {isHospitalsLoading ? (
@@ -1579,7 +1855,7 @@ const Profile = () => {
                       ) : !doctorHospitals || doctorHospitals.length === 0 ? (
                         <p className="text-sm mt-1 text-muted-foreground">Nenhum hospital associado</p>
                       ) : (
-                        <div className="space-y-2 bg-[#1a2940] rounded-md p-3">
+                        <div className="max-h-[460px] overflow-y-auto pr-2 space-y-2 rounded-md p-3">
                           {doctorHospitals.map((hospital: any, index: number) => {
                             // Buscar o nome do hospital com base na estrutura real dos dados
                             const hospitalName = hospital.hospitalName || 
@@ -1589,73 +1865,16 @@ const Profile = () => {
                             return (
                               <div 
                                 key={hospital.id || hospital.hospitalId || index}
-                                className="flex flex-col py-2 px-3 rounded-md bg-blue-900/30 border border-blue-800/30"
+                                className="flex flex-col py-3 px-4 rounded-md bg-white border border-[hsl(214,14%,84%)]"
                               >
                                 <div className="flex items-start">
-                                  <div className="w-3 h-3 rounded-full bg-green-500 mr-3 flex-shrink-0 mt-1"></div>
+                                  <div className="w-3 h-3 rounded-full bg-medsync-blue mr-3 flex-shrink-0 mt-1"></div>
                                   <div>
-                                    <p className="text-sm text-white font-medium break-words">
+                                    <p className="text-sm text-[hsl(var(--medsync-dark-blue))] font-bold break-words">
                                       {hospitalName}
                                     </p>
-                                    <span className="block text-xs text-blue-300 mt-1">
+                                    <span className="block text-xs text-muted-foreground mt-1">
                                       Associado em: {new Date(hospital.createdAt || "2025-05-24").toLocaleDateString('pt-BR')}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Seção de pacientes associados */}
-                    <div className="space-y-1 mt-6">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <User className="text-blue-400 w-5 h-5" />
-                        <p className="text-sm font-medium">Pacientes associados</p>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="ml-auto h-7 px-2 text-xs"
-                          onClick={() => window.location.href = '/patients'}
-                        >
-                          <PencilIcon className="mr-1 h-3 w-3" />
-                          Ver todos
-                        </Button>
-                      </div>
-                      
-                      {isPatientsLoading ? (
-                        <div className="flex items-center mt-1">
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
-                          <p className="text-sm">Carregando...</p>
-                        </div>
-                      ) : !associatedPatients || associatedPatients.length === 0 ? (
-                        <p className="text-sm mt-1 text-muted-foreground">Nenhum paciente associado</p>
-                      ) : (
-                        <div className="space-y-2 bg-[#1a2940] rounded-md p-3 max-h-[300px] overflow-y-auto">
-                          {associatedPatients.map((patient: any, index: number) => {
-                            // Buscar o nome do paciente com base na estrutura real dos dados
-                            const patientName = patient.patientName || 
-                                             patient.fullName || 
-                                             (patient.patientId === 1 ? "FelipeSantosCorrea" :
-                                              patient.patientId === 3 ? "Rodrigo Roitman Pozzatti" :
-                                              patient.patientId === 4 ? "João do pé de Feijão1" : 
-                                              `Paciente ${patient.patientId}`);
-                            
-                            return (
-                              <div 
-                                key={patient.patientId || index}
-                                className="flex flex-col py-2 px-3 rounded-md bg-blue-900/30 border border-blue-800/30"
-                              >
-                                <div className="flex items-start">
-                                  <div className="w-3 h-3 rounded-full bg-blue-500 mr-3 flex-shrink-0 mt-1"></div>
-                                  <div>
-                                    <p className="text-sm text-white font-medium break-words">
-                                      {patientName}
-                                    </p>
-                                    <span className="block text-xs text-blue-300 mt-1">
-                                      Associado em: {new Date(patient.associatedAt).toLocaleDateString('pt-BR')}
                                     </span>
                                   </div>
                                 </div>
@@ -1667,36 +1886,6 @@ const Profile = () => {
                     </div>
                   </>
                 )}
-                
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Último Acesso</p>
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="text-primary w-5 h-5" />
-                    <p className="text-base">{user.lastLogin ? formatDate(user.lastLogin) : "Não disponível"}</p>
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Consentimento de Dados</p>
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="text-green-500 w-5 h-5" />
-                    <p className="text-base">
-                      {user.consentAccepted ? (
-                        <>Aceito em {formatDate(user.consentAccepted)}</>
-                      ) : (
-                        <span className="text-yellow-500">Pendente</span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-muted-foreground">Status da Conta</p>
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-3 h-3 rounded-full ${user.active ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                    <p className="text-base">{user.active ? "Ativa" : "Inativa"}</p>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -1705,57 +1894,63 @@ const Profile = () => {
         <TabsContent value="security">
           <div className="grid gap-6 md:grid-cols-2">
             <Card className="w-full shadow-lg">
-              <CardHeader className="rounded-t-lg p-6 pb-3 border-b">
-                <CardTitle className="text-2xl font-bold mb-2">
+              <CardHeader className="bg-medsync-blue text-white flex flex-col rounded-t-lg p-6 pb-3 pt-3 border-b space-y-0">
+                <CardTitle className="text-2xl font-bold">
                   Alterar Senha
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-white">
                   Atualize sua senha de acesso ao sistema
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handlePasswordChange}>
                 <CardContent className="space-y-4 p-6 rounded-b-lg">
                   <div className="space-y-2">
-                    <Label htmlFor="currentPassword" className="font-medium">Senha Atual</Label>
+                    <label htmlFor="currentPassword" className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Senha Atual</label>
                     <div className="flex items-center space-x-2">
                       <Key className="text-primary w-5 h-5" />
-                      <Input 
+                      <input 
                         id="currentPassword"
                         name="currentPassword" 
                         type="password" 
                         value={formData.currentPassword}
                         onChange={handleInputChange}
                         placeholder="Sua senha atual" 
+                        className="input-medsync"
+                        data-testid="input-current-password"
                       />
                     </div>
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="newPassword" className="font-medium">Nova Senha</Label>
+                    <label htmlFor="newPassword" className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Nova Senha</label>
                     <div className="flex items-center space-x-2">
                       <Key className="text-primary w-5 h-5" />
-                      <Input 
+                      <input 
                         id="newPassword"
                         name="newPassword" 
                         type="password" 
                         value={formData.newPassword}
                         onChange={handleInputChange}
                         placeholder="Nova senha" 
+                        className="input-medsync"
+                        data-testid="input-new-password"
                       />
                     </div>
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="font-medium">Confirmar Nova Senha</Label>
+                    <label htmlFor="confirmPassword" className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Confirmar Nova Senha</label>
                     <div className="flex items-center space-x-2">
                       <Key className="text-primary w-5 h-5" />
-                      <Input 
+                      <input 
                         id="confirmPassword"
                         name="confirmPassword" 
                         type="password" 
                         value={formData.confirmPassword}
                         onChange={handleInputChange}
                         placeholder="Confirme sua nova senha" 
+                        className="input-medsync"
+                        data-testid="input-confirm-password"
                       />
                     </div>
                   </div>
@@ -1765,30 +1960,31 @@ const Profile = () => {
                   </div>
                 </CardContent>
                 <CardFooter className="px-6 pb-6 pt-4 border-t rounded-b-lg">
-                  <Button 
+                  <button 
                     type="submit" 
                     disabled={isChangingPassword}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                    className="btn-medsync-dark flex items-center gap-2"
+                    data-testid="button-change-password"
                   >
                     {isChangingPassword ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                         Alterando...
                       </>
                     ) : (
                       "Alterar Senha"
                     )}
-                  </Button>
+                  </button>
                 </CardFooter>
               </form>
             </Card>
             
             <Card className="w-full shadow-lg">
-              <CardHeader className="rounded-t-lg p-6 pb-3 border-b">
-                <CardTitle className="text-2xl font-bold mb-2">
+              <CardHeader className="bg-medsync-blue text-white flex flex-col rounded-t-lg p-6 pb-3 pt-3 border-b space-y-0">
+                <CardTitle className="text-2xl font-bold">
                   Segurança da Conta
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-white">
                   Informações de segurança da sua conta
                 </CardDescription>
               </CardHeader>
@@ -1818,11 +2014,11 @@ const Profile = () => {
             {/* Seção de configurações de aparência removida conforme solicitado */}
             
             <Card className="w-full shadow-lg">
-              <CardHeader className="rounded-t-lg p-6 pb-3 border-b">
-                <CardTitle className="text-2xl font-bold mb-2">
+              <CardHeader className="bg-medsync-blue text-white flex flex-col rounded-t-lg p-6 pb-3 pt-3 border-b space-y-0">
+                <CardTitle className="text-2xl font-bold">
                   Termo de Consentimento
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-white">
                   Informações sobre o consentimento de dados pessoais
                 </CardDescription>
               </CardHeader>
@@ -1962,9 +2158,7 @@ const Profile = () => {
                   </div>
                 </div>
                 
-                <Button
-                  variant="outline"
-                  size="sm"
+                <button
                   onClick={() => {
                     resetImagePosition(
                       signatureImageSrc,
@@ -1983,24 +2177,27 @@ const Profile = () => {
                       );
                     }, 100);
                   }}
-                  className="w-full"
+                  className="btn-medsync-dark w-full text-sm flex items-center justify-center gap-2"
+                  data-testid="button-reset-signature-position"
                 >
                   Resetar Posição
-                </Button>
+                </button>
               </div>
             </div>
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSignatureCrop(false)}>
+            <button className="btn-medsync-dark flex items-center gap-2" onClick={() => setShowSignatureCrop(false)} data-testid="button-cancel-signature-crop">
               Cancelar
-            </Button>
-            <Button 
+            </button>
+            <button 
+              className="btn-medsync-dark bg-blue-500 hover:bg-blue-600 flex items-center gap-2"
               onClick={handleSignatureCropConfirm}
               disabled={isUploadingSignature}
+              data-testid="button-confirm-signature-crop"
             >
               {isUploadingSignature ? "Enviando..." : "Confirmar"}
-            </Button>
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2106,9 +2303,7 @@ const Profile = () => {
                   </div>
                 </div>
                 
-                <Button
-                  variant="outline"
-                  size="sm"
+                <button
                   onClick={() => {
                     resetImagePosition(
                       logoImageSrc,
@@ -2127,24 +2322,27 @@ const Profile = () => {
                       );
                     }, 100);
                   }}
-                  className="w-full"
+                  className="btn-medsync-dark w-full text-sm flex items-center justify-center gap-2"
+                  data-testid="button-reset-logo-position"
                 >
                   Resetar Posição
-                </Button>
+                </button>
               </div>
             </div>
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowLogoCrop(false)}>
+            <button className="btn-medsync-dark flex items-center gap-2" onClick={() => setShowLogoCrop(false)} data-testid="button-cancel-logo-crop">
               Cancelar
-            </Button>
-            <Button 
+            </button>
+            <button 
+              className="btn-medsync-dark bg-blue-500 hover:bg-blue-600 flex items-center gap-2"
               onClick={handleLogoCropConfirm}
               disabled={isUploadingLogo}
+              data-testid="button-confirm-logo-crop"
             >
               {isUploadingLogo ? "Enviando..." : "Confirmar"}
-            </Button>
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

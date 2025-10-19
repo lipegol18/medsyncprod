@@ -12,7 +12,12 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, UserPlus, Pencil, Trash2, CheckCircle, Circle, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Search, UserPlus, Pencil, Trash2, CheckCircle, Circle, Loader2, Filter, X, ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { type Patient } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PatientFormDialog } from "@/components/patients/patient-form-dialog";
@@ -23,6 +28,10 @@ import { openWhatsAppChat } from "@/lib/whatsapp";
 
 export default function Patients() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterCpf, setFilterCpf] = useState("");
+  const [filterBirthDate, setFilterBirthDate] = useState("");
+  const [filterInsurance, setFilterInsurance] = useState("");
+  const [openInsuranceCombobox, setOpenInsuranceCombobox] = useState(false);
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [openPatientForm, setOpenPatientForm] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | undefined>(undefined);
@@ -71,29 +80,70 @@ export default function Patients() {
   // Verificar se o usuário é um médico
   const isMedico = user?.roleId === 2;
   
+  // Criar lista de convênios únicos para o filtro
+  const uniqueInsurances = patients 
+    ? Array.from(new Set(patients.map(p => p.insurance).filter(Boolean))) as string[]
+    : [];
+  
+  // Verificar se há filtros ativos
+  const hasActiveFilters = searchTerm.trim() || filterCpf.trim() || filterBirthDate.trim() || filterInsurance;
+  
+  // Funções para limpar filtros
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setFilterCpf("");
+    setFilterBirthDate("");
+    setFilterInsurance("");
+  };
+  
+  const clearSearchTerm = () => setSearchTerm("");
+  const clearFilterCpf = () => setFilterCpf("");
+  const clearFilterBirthDate = () => setFilterBirthDate("");
+  
   useEffect(() => {
     if (!patients) return;
     
     // Filtrar a lista de pacientes com base no perfil e critérios de busca
     let filtered = [...patients];
     
-    // Se o usuário for médico e não estiver buscando por termo
-    if (isMedico && !searchTerm.trim()) {
-      // Mostrar apenas pacientes associados
+    // Se o usuário for médico, sempre restringir aos pacientes associados
+    if (isMedico) {
       const associatedIds = (associatedPatients || []).map(ap => ap.patientId);
       filtered = patients.filter(patient => associatedIds.includes(patient.id));
-    } 
-    // Se houver um termo de busca, aplicar o filtro independentemente do perfil
-    else if (searchTerm.trim()) {
+    }
+    
+    // Aplicar filtro de nome
+    if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      filtered = patients.filter((patient) => 
-        patient.fullName.toLowerCase().includes(term) ||
-        patient.cpf.toLowerCase().includes(term)
+      filtered = filtered.filter((patient) => 
+        patient.fullName.toLowerCase().includes(term)
+      );
+    }
+    
+    // Aplicar filtro de CPF
+    if (filterCpf.trim()) {
+      const cpfTerm = filterCpf.toLowerCase();
+      filtered = filtered.filter((patient) => 
+        patient.cpf.toLowerCase().includes(cpfTerm)
+      );
+    }
+    
+    // Aplicar filtro de Data de Nascimento
+    if (filterBirthDate.trim()) {
+      filtered = filtered.filter((patient) => 
+        formatDate(patient.birthDate).includes(filterBirthDate)
+      );
+    }
+    
+    // Aplicar filtro de Convênio
+    if (filterInsurance) {
+      filtered = filtered.filter((patient) => 
+        patient.insurance === filterInsurance
       );
     }
     
     setFilteredPatients(filtered);
-  }, [patients, searchTerm, associatedPatients, isMedico]);
+  }, [patients, searchTerm, filterCpf, filterBirthDate, filterInsurance, associatedPatients, isMedico]);
 
   const formatDate = (dateString: string | Date) => {
     const date = new Date(dateString);
@@ -271,58 +321,199 @@ export default function Patients() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <main className="flex-grow overflow-auto">
-        <div className="container mx-auto px-4 py-6">
-          <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-muted-foreground hover:text-foreground hover:bg-accent p-2"
-                onClick={() => window.history.back()}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L4.414 9H17a1 1 0 110 2H4.414l5.293 5.293a1 1 0 010 1.414z" clipRule="evenodd" />
-                </svg>
-              </Button>
-              <div>
-                <h2 className="text-2xl font-bold text-foreground">Meus Pacientes</h2>
-                <p className="text-muted-foreground">
-                  Gerenciamento de pacientes e histórico médico
-                </p>
+    <div className="min-h-screen flex flex-col bg-muted">
+      <main className="flex-grow bg-muted/30">
+        <div className="container mx-auto px-4 py-6 max-w-8xl">
+          {/* Cabeçalho Moderno com Fundo Azul */}
+          <div className="mb-8">
+            <div className="flex flex-col mb-8 p-10 rounded-xl bg-medsync-blue">
+              <div className="flex items-center justify-center my-2">
+                <h1 className="text-3xl font-bold text-white text-center">
+                  Gestão de Pacientes
+                </h1>
               </div>
             </div>
-            <Button onClick={handleAddNew} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <UserPlus className="mr-2 h-4 w-4" />
-              Novo Paciente
-            </Button>
           </div>
           
-          <div className="mb-6">
-            <h3 className="text-lg font-medium text-foreground mb-2">Pacientes Cadastrados</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Visualize e gerencia seus pacientes
-            </p>
-            <div className="mb-4 relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome ou CPF..."
-                className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            
-            {/* Indicador de busca ativa */}
-            {searchTerm.trim() && (
-              <div className="mb-3 text-sm text-muted-foreground flex items-center gap-2">
-                <span className="bg-accent px-2 py-1 rounded-md text-accent-foreground">
-                  Resultados filtrados pela sua busca: "{searchTerm}"
-                </span>
+          {/* Seção de Filtros Moderna */}
+          {!isLoading && !error && patients && patients.length > 0 && (
+            <Card className="border-gray-200 bg-gradient-to-r from-sky-50 to-sky-100/50 shadow-sm mb-6">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-sky-200 rounded-lg">
+                      <Filter className="h-5 w-5 text-sky-700" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-sky-800">Filtros de Busca</h3>
+                      <p className="text-sm text-sky-700/80">Encontre pacientes específicos</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {hasActiveFilters && (
+                      <div className="px-3 py-1 bg-sky-200/70 rounded-full text-xs font-medium text-sky-800">
+                        {filteredPatients.length} de {patients.length} resultados
+                      </div>
+                    )}
+                    <Button
+                      onClick={handleAddNew}
+                      className="bg-medsync-blue hover:bg-medsync-blue-dark text-white font-semibold"
+                    >
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Novo Paciente
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {/* Filtro por Nome */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-sky-600" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nome..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="input-medsync-combo pl-10"
+                    />
+                    {searchTerm && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearSearchTerm}
+                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 text-sky-600 hover:text-sky-800"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Filtro por CPF */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Buscar por CPF..."
+                      value={filterCpf}
+                      onChange={(e) => setFilterCpf(e.target.value)}
+                      className="input-medsync-combo"
+                    />
+                    {filterCpf && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearFilterCpf}
+                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 text-sky-600 hover:text-sky-800"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Filtro por Data de Nascimento */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Data de nascimento (dd/mm/aaaa)..."
+                      value={filterBirthDate}
+                      onChange={(e) => setFilterBirthDate(e.target.value)}
+                      className="input-medsync-combo"
+                    />
+                    {filterBirthDate && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearFilterBirthDate}
+                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 text-sky-600 hover:text-sky-800"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Filtro por Convênio - Combobox com busca */}
+                  <Popover open={openInsuranceCombobox} onOpenChange={setOpenInsuranceCombobox}>
+                    <PopoverTrigger asChild>
+                      <button
+                        role="combobox"
+                        aria-expanded={openInsuranceCombobox}
+                        className="combobox-medsync w-full"
+                      >
+                        <span className={filterInsurance ? "combobox-value" : "combobox-placeholder"}>
+                          {filterInsurance
+                            ? uniqueInsurances.find((insurance) => insurance === filterInsurance)
+                            : "Filtrar por convênio..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0 bg-white border-sky-200">
+                      <Command>
+                        <CommandInput placeholder="Buscar convênio..." className="h-9" />
+                        <CommandList>
+                          <CommandEmpty>Nenhum convênio encontrado.</CommandEmpty>
+                          <CommandGroup>
+                            {uniqueInsurances.map((insurance) => (
+                              <CommandItem
+                                key={insurance}
+                                value={insurance}
+                                onSelect={(currentValue) => {
+                                  setFilterInsurance(currentValue === filterInsurance ? "" : currentValue);
+                                  setOpenInsuranceCombobox(false);
+                                }}
+                              >
+                                {insurance}
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    filterInsurance === insurance ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                {/* Botão de limpar filtros quando há filtros ativos */}
+                {hasActiveFilters && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearAllFilters}
+                      className="border-sky-300 text-sky-700 hover:bg-sky-100"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Limpar todos os filtros
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Card principal com toda a listagem */}
+          <Card className="border-gray-200 bg-card shadow-lg">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-sky-200 rounded-lg">
+                  <UserPlus className="h-5 w-5 text-sky-700" />
+                </div>
+                <div>
+                  <CardTitle className="flex items-center text-foreground">
+                    Meus Pacientes
+                  </CardTitle>
+                  <CardDescription className="text-muted-foreground">
+                    Visualização e gerenciamento dos seus pacientes
+                  </CardDescription>
+                </div>
               </div>
-            )}
-              
+            </CardHeader>
+            <CardContent>
             {isLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 5 }).map((_, index) => (
@@ -351,27 +542,29 @@ export default function Patients() {
                   <table className="w-full">
                     <thead>
                       <tr>
-                        {(user?.roleId === 2 || user?.roleId === 1) && (
-                          <th className="text-center py-3 px-4 border-b border-border text-muted-foreground font-medium">Associado</th>
-                        )}
-                        <th className="text-left py-3 px-4 border-b border-border text-muted-foreground font-medium">Nome</th>
-                        <th className="text-left py-3 px-4 border-b border-border text-muted-foreground font-medium">CPF</th>
-                        <th className="text-left py-3 px-4 border-b border-border text-muted-foreground font-medium">Data de Nascimento</th>
-                        <th className="text-left py-3 px-4 border-b border-border text-muted-foreground font-medium">Idade</th>
-                        <th className="text-left py-3 px-4 border-b border-border text-muted-foreground font-medium">Convênio</th>
-                        <th className="text-right py-3 px-4 border-b border-border text-muted-foreground font-medium">Ações</th>
+                        {/* COMENTADO: Coluna de associação manual removida da interface */}
+                        {/* {(user?.roleId === 2 || user?.roleId === 1) && (
+                          <th className="text-center py-3 px-4 border-b border-border text-muted-foreground font-bold">Associado</th>
+                        )} */}
+                        <th className="text-left py-3 px-4 border-b border-border text-muted-foreground font-bold">Nome</th>
+                        <th className="text-left py-3 px-4 border-b border-border text-muted-foreground font-bold">CPF</th>
+                        <th className="text-left py-3 px-4 border-b border-border text-muted-foreground font-bold">Data de Nascimento</th>
+                        <th className="text-left py-3 px-4 border-b border-border text-muted-foreground font-bold">Idade</th>
+                        <th className="text-left py-3 px-4 border-b border-border text-muted-foreground font-bold">Convênio</th>
+                        <th className="text-right py-3 px-4 border-b border-border text-muted-foreground font-bold">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredPatients.map((patient) => {
+                      {filteredPatients.map((patient, index) => {
                         // Verificar se o paciente está associado ao médico atual
                         const isAssociated = associatedPatients?.some(ap => ap.patientId === patient.id) || false;
                         
                         // Removi os logs de diagnóstico que não são mais necessários
                         
                         return (
-                          <tr key={patient.id} className="border-b border-border hover:bg-accent/50">
-                            {(user?.roleId === 2 || user?.roleId === 1) && (
+                          <tr key={patient.id} className={`border-b border-border hover:bg-accent/50 ${index % 2 === 0 ? 'bg-white' : 'bg-muted'}`}>
+                            {/* COMENTADO: Célula de status de associação removida da interface */}
+                            {/* {(user?.roleId === 2 || user?.roleId === 1) && (
                               <td className="py-3 px-4 text-center">
                                 {isLoadingAssociations ? (
                                   <div className="flex justify-center">
@@ -383,15 +576,24 @@ export default function Patients() {
                                   <Circle className="h-5 w-5 text-muted-foreground mx-auto" />
                                 )}
                               </td>
-                            )}
-                            <td className="py-3 px-4 text-foreground">{patient.fullName}</td>
+                            )} */}
+                            <td className="py-3 px-4 text-foreground font-medium">{patient.fullName}</td>
                             <td className="py-3 px-4 text-foreground">{patient.cpf}</td>
                             <td className="py-3 px-4 text-foreground">{formatDate(patient.birthDate)}</td>
                             <td className="py-3 px-4 text-foreground">{calculateAge(patient.birthDate)} anos</td>
-                            <td className="py-3 px-4 text-foreground">{patient.insurance || "Não informado"}</td>
+                            <td className="py-3 px-4">
+                              {patient.insurance ? (
+                                <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100 border-sky-200">
+                                  {patient.insurance}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">Não informado</span>
+                              )}
+                            </td>
                             <td className="py-3 px-4 text-right">
                               <div className="flex justify-end gap-2">
-                                {(user?.roleId === 2 || user?.roleId === 1) && (
+                                {/* COMENTADO: Botão de associar/desassociar manualmente removido da interface */}
+                                {/* {(user?.roleId === 2 || user?.roleId === 1) && (
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
@@ -419,11 +621,11 @@ export default function Patients() {
                                       </>
                                     )}
                                   </Button>
-                                )}
+                                )} */}
                                 <Button 
                                   variant="outline" 
                                   size="sm" 
-                                  className="border-border text-green-600 hover:bg-green-50 hover:text-green-700 dark:text-green-400 dark:hover:bg-green-900/20 dark:hover:text-green-300"
+                                  className="border-green-200 text-green-700 hover:bg-green-50 h-9 font-medium hover:shadow-sm"
                                   onClick={() => handleWhatsAppMessage(patient.phone || "")}
                                   title="Enviar mensagem no WhatsApp"
                                 >
@@ -432,21 +634,23 @@ export default function Patients() {
                                 <Button 
                                   variant="outline" 
                                   size="sm" 
-                                  className="border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+                                  className="border-sky-200 text-sky-700 hover:bg-sky-50 h-9 font-medium hover:shadow-sm"
                                   onClick={() => handleEdit(patient)}
                                 >
                                   <Pencil className="mr-2 h-4 w-4" />
                                   Editar
                                 </Button>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="border-border text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                  onClick={() => handleDelete(patient)}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Excluir
-                                </Button>
+                                {user?.roleId === 1 && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="border-red-200 text-red-700 hover:bg-red-50 h-9 font-medium hover:shadow-sm"
+                                    onClick={() => handleDelete(patient)}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Excluir
+                                  </Button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -457,7 +661,8 @@ export default function Patients() {
                 </div>
               </div>
             )}
-          </div>
+          </CardContent>
+        </Card>
         </div>
       </main>
       

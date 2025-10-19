@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute, useParams, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -49,7 +49,10 @@ import {
   AlertTriangle,
   Download,
   ArrowRight,
-  Truck
+  Truck,
+  StickyNote,
+  Upload,
+  X
 } from "lucide-react";
 import { addOrderDetailsTranslations } from "@/lib/translations/order-details";
 import { useToast } from "@/hooks/use-toast";
@@ -121,6 +124,284 @@ interface ProcedureItem {
   createdAt: string;
   updatedAt: string;
 }
+
+// Componente para card de anexo individual
+const AttachmentCard = ({ attachment, orderId }: { attachment: any; orderId: number }) => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (isDeleting) return;
+    
+    if (!confirm('Tem certeza que deseja excluir este anexo?')) return;
+
+    setIsDeleting(true);
+    
+    try {
+      const filename = attachment.url.split('/').pop();
+      const response = await fetch(`/api/delete-attachment/${orderId}/${filename}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        toast({
+          title: "Anexo excluído",
+          description: "O anexo foi removido com sucesso"
+        });
+        
+        // Invalidar cache para recarregar anexos
+        queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
+      } else {
+        throw new Error('Erro ao excluir anexo');
+      }
+    } catch (error) {
+      console.error('Erro ao excluir anexo:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o anexo",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Regras de proteção para anexos:
+  // 1. NÃO deletar anexos do cadastro inicial (source === 'initial_registration')
+  // 2. NÃO deletar PDFs gerados pelo sistema (filename contém pedido_XXX_ ou order_XXX_)
+  // 3. PODE deletar anexos adicionados na página de detalhes (source === 'order_details' ou sem source)
+  const isSystemGeneratedPdf = attachment.type === 'pdf' && 
+    (attachment.filename?.includes(`pedido_${orderId}_`) || 
+     attachment.filename?.includes(`order_${orderId}_`));
+  
+  const canDelete = 
+    attachment.source !== 'initial_registration' && // Não é do cadastro inicial
+    !isSystemGeneratedPdf; // Não é PDF gerado pelo sistema
+
+  return (
+    <div className="relative group bg-background p-4 rounded-lg border border-border">
+      {/* Botão X no canto superior direito - apenas para anexos adicionados posteriormente */}
+      {canDelete && (
+        <button
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="absolute top-2 right-2 z-10 bg-destructive hover:bg-destructive/90 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+          title="Excluir anexo"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+
+      {/* Miniatura ou ícone baseado no tipo de arquivo */}
+      <div className="relative mb-3">
+        {attachment.type === 'image' ? (
+          <img 
+            src={attachment.url} 
+            alt={attachment.filename} 
+            className="w-full h-32 object-cover rounded-md border border-primary"
+          />
+        ) : attachment.type === 'pdf' ? (
+          <div className="w-full h-32 bg-destructive/10 border border-destructive rounded-md flex items-center justify-center">
+            <FileText className="h-12 w-12 text-destructive" />
+          </div>
+        ) : (
+          <div className="w-full h-32 bg-muted border border-border rounded-md flex items-center justify-center">
+            <Package className="h-12 w-12 text-muted-foreground" />
+          </div>
+        )}
+        
+        {/* Overlay com ações */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-md flex items-center justify-center">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => window.open(attachment.url, '_blank')}
+            className="bg-primary hover:bg-primary/90 border-border/50 text-foreground"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Abrir
+          </Button>
+        </div>
+      </div>
+      
+      {/* Informações do arquivo */}
+      <div className="space-y-2">
+        <h4 className="text-sm font-medium text-foreground truncate" title={attachment.filename}>
+          {attachment.filename}
+        </h4>
+        
+        <div className="flex items-center justify-between text-xs text-foreground">
+          <Badge 
+            variant="secondary" 
+            className={`
+              ${attachment.type === 'image' ? 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600' : 
+                attachment.type === 'pdf' ? 'bg-destructive/20 text-destructive' : 
+                'bg-muted text-foreground'}
+            `}
+          >
+            {attachment.type === 'image' ? 'Imagem' : 
+             attachment.type === 'pdf' ? 'PDF' : 
+             'Arquivo'}
+          </Badge>
+          
+          <span>
+            {attachment.size ? `${(attachment.size / 1024).toFixed(1)} KB` : 'Tamanho desconhecido'}
+          </span>
+        </div>
+        
+        {attachment.uploadedAt && (
+          <div className="text-xs text-foreground">
+            Enviado em: {format(new Date(attachment.uploadedAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Componente para upload de anexos
+const AttachmentUploader = ({ orderId }: { orderId: number }) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const processFiles = async (files: FileList | File[]) => {
+    if (isUploading) return;
+    
+    const fileArray = Array.from(files);
+    const validFiles = fileArray.filter(file => {
+      const isValidType = file.type.startsWith('image/') || file.type === 'application/pdf';
+      const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
+      return isValidType && isValidSize;
+    });
+
+    if (validFiles.length === 0) {
+      toast({
+        title: "Arquivo inválido",
+        description: "Apenas imagens (JPG, PNG) ou PDFs até 10MB são permitidos",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    
+    try {
+      let uploadedCount = 0;
+      
+      for (const file of validFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+          const response = await fetch(`/api/upload-attachment/${orderId}`, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
+          });
+          
+          if (!response.ok) {
+            throw new Error('Erro no upload');
+          }
+          
+          uploadedCount++;
+        } catch (error) {
+          console.error(`Erro no upload de ${file.name}:`, error);
+        }
+      }
+
+      if (uploadedCount > 0) {
+        toast({
+          title: "Upload concluído",
+          description: `${uploadedCount} arquivo(s) enviado(s) com sucesso`
+        });
+        
+        // Invalidar cache para recarregar anexos
+        queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
+      }
+    } catch (error) {
+      console.error('Erro no processamento dos arquivos:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao processar os arquivos",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileDrop = async (files: FileList) => {
+    await processFiles(files);
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      await processFiles(files);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div>
+      <div
+        className="p-8 border-2 border-dashed border-border rounded-lg transition-colors hover:border-medsync-blue/50 cursor-pointer bg-background"
+        onClick={() => !isUploading && fileInputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!isUploading) {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+              handleFileDrop(files);
+            }
+          }
+        }}
+      >
+        <div className="text-center">
+          <div className="flex flex-col items-center gap-2">
+            <Upload className="h-8 w-8 text-medsync-blue" />
+            <div>
+              <p className="text-lg font-medium text-foreground">
+                {isUploading ? 'Enviando arquivos...' : 'Clique ou arraste arquivos aqui'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Imagens (JPG, PNG) ou PDFs • Máximo 10MB por arquivo
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*,.pdf"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+    </div>
+  );
+};
 
 // Componente para lista de procedimentos CBHPM
 const ProceduresList = ({ orderId, orderStatus }: { orderId: number; orderStatus: string }) => {
@@ -327,23 +608,24 @@ const ProceduresList = ({ orderId, orderStatus }: { orderId: number; orderStatus
         const StatusIcon = statusConfig.icon;
         
         return (
-          <div key={procedure.id} className="bg-card border-border p-4 rounded-md border">
+          <div key={procedure.id} className="bg-white border border-border rounded-md p-4">
             <div className="flex justify-between items-start mb-3">
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <Hash className="h-4 w-4 text-primary-foreground" />
-                  <span className="text-sm text-primary-foreground font-medium">
+                <div className="flex items-start gap-3 flex-wrap">
+                  <span className="inline-flex items-center justify-center px-3 py-1 bg-medsync-blue text-white text-sm font-semibold rounded flex-shrink-0">
                     {procedure.code}
                   </span>
-                  {index === 0 && (
-                    <Badge variant="secondary" className="text-xs bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600">
-                      Procedimento Principal
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-2 flex-wrap flex-1">
+                    <h3 className="font-medium text-foreground">
+                      {procedure.name}
+                    </h3>
+                    {index === 0 && (
+                      <Badge variant="secondary" className="text-xs bg-medsync-blue text-white">
+                        Procedimento Principal
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                <h3 className="font-medium text-foreground mb-1">
-                  {procedure.name}
-                </h3>
               </div>
               
               {statusConfig.showStatus && (
@@ -360,13 +642,13 @@ const ProceduresList = ({ orderId, orderStatus }: { orderId: number; orderStatus
               <div className="space-y-2">
                 <div>
                   <span className="text-foreground">Quantidade Solicitada:</span>{' '}
-                  <span className="text-white font-medium">{procedure.quantityRequested}</span>
+                  <span className="text-foreground font-semibold">{procedure.quantityRequested}</span>
                 </div>
                 {/* Mostrar quantidade aprovada baseada no status do pedido */}
                 {(orderStatus === 'aceito' || orderStatus === 'autorizado_parcial' || orderStatus === 'cirurgia_realizada' || orderStatus === 'recebido') && (
                   <div>
                     <span className="text-foreground">Quantidade Aprovada:</span>{' '}
-                    <span className="text-white font-medium">
+                    <span className="text-foreground font-semibold">
                       {orderStatus === 'aceito' || orderStatus === 'cirurgia_realizada' ? 
                         procedure.quantityRequested : // Para pedidos aceitos totalmente, quantidade aprovada = solicitada
                         (procedure.quantityApproved !== null ? procedure.quantityApproved : 'Pendente')
@@ -384,7 +666,7 @@ const ProceduresList = ({ orderId, orderStatus }: { orderId: number; orderStatus
                     <span className="text-foreground">Valor Recebido:</span>
                   </div>
                   <div className="ml-6">
-                    <span className="text-white font-medium">
+                    <span className="text-foreground font-semibold">
                       {formatCurrency(procedure.receivedValue)}
                     </span>
                   </div>
@@ -421,14 +703,14 @@ const ProceduresList = ({ orderId, orderStatus }: { orderId: number; orderStatus
       {/* Resumo dos procedimentos */}
       <div className="mt-6 pt-4 border-t border-border">
         <div className="flex justify-between items-center text-sm">
-          <span className="text-primary-foreground">
-            Total de procedimentos: <span className="text-white font-medium">{procedures.length}</span>
+          <span className="text-foreground">
+            Total de procedimentos: <span className="text-foreground font-semibold">{procedures.length}</span>
           </span>
           {/* Mostrar valor total apenas para pedidos finalizados */}
           {(orderStatus === 'cirurgia_realizada' || orderStatus === 'recebido') && (
-            <span className="text-primary-foreground">
+            <span className="text-foreground">
               Valor total recebido:{' '}
-              <span className="text-white font-medium">
+              <span className="text-foreground font-semibold">
                 {formatCurrency(
                   procedures.reduce((total: number, proc: ProcedureItem) => 
                     total + ((proc.receivedValue || 0) * (proc.quantityApproved || 0)), 0
@@ -499,19 +781,16 @@ const OpmeItemsList = ({ orderId }: { orderId: number }) => {
       </CardHeader>
       <CardContent>
         {opmeItems && opmeItems.length > 0 ? (
-          <div className="space-y-4">
-            {opmeItems.map((item: OpmeItem) => (
-              <div key={item.id} className="bg-background p-6 rounded-lg border border-border">
-                <div className="flex justify-between items-start mb-4">
+          <div className="space-y-2">
+            {opmeItems.map((item: OpmeItem, index: number) => (
+              <div key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-sky-50'} border border-border rounded-md p-3`}>
+                <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-foreground text-lg mb-2">
+                    <h3 className="font-medium text-foreground">
                       {item.opmeItem.commercialName}
                     </h3>
-                    <p className="text-primary-foreground text-sm mb-2">
-                      {item.opmeItem.technicalName}
-                    </p>
                   </div>
-                  <Badge variant="secondary" className="bg-accent text-foreground">
+                  <Badge variant="secondary" className="bg-medsync-blue text-white">
                     Qtd: {item.quantity}
                   </Badge>
                 </div>
@@ -535,20 +814,6 @@ const OpmeItemsList = ({ orderId }: { orderId: number }) => {
                     <div>
                       <span className="text-foreground">Classe de Risco:</span>{' '}
                       <span className="text-foreground">{item.opmeItem.riskClass}</span>
-                    </div>
-                  )}
-                  
-                  {item.opmeItem.registrationHolder && (
-                    <div>
-                      <span className="text-foreground">Detentor:</span>{' '}
-                      <span className="text-foreground">{item.opmeItem.registrationHolder}</span>
-                    </div>
-                  )}
-                  
-                  {item.opmeItem.manufacturerName && (
-                    <div>
-                      <span className="text-foreground">Fabricante:</span>{' '}
-                      <span className="text-foreground">{item.opmeItem.manufacturerName}</span>
                     </div>
                   )}
                   
@@ -583,16 +848,6 @@ const OpmeItemsList = ({ orderId }: { orderId: number }) => {
                     </div>
                   </div>
                 )}
-
-                <div className="mt-3 flex items-center">
-                  <span className="text-foreground text-sm">Status:</span>
-                  <Badge 
-                    variant={item.opmeItem.isValid ? "default" : "destructive"}
-                    className={`ml-2 ${item.opmeItem.isValid ? 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600' : 'bg-destructive/20 text-destructive'}`}
-                  >
-                    {item.opmeItem.isValid ? 'Vigente' : 'Vencido'}
-                  </Badge>
-                </div>
               </div>
             ))}
           </div>
@@ -1273,10 +1528,10 @@ export default function OrderDetails() {
     <div className="container max-w-5xl mx-auto py-8">
       {/* Botão voltar e título */}
       <div className="flex items-center justify-between mb-6">
-        <Button variant="outline" onClick={handleGoBack}>
+        <button className="btn-medsync-light flex items-center" onClick={handleGoBack}>
           <ChevronLeft className="mr-2 h-4 w-4" />
           {t('orderDetails.backButton')}
-        </Button>
+        </button>
         <h1 className="text-2xl font-bold text-foreground">
           {t('orderDetails.title')} #{order.id}
         </h1>
@@ -1406,9 +1661,9 @@ export default function OrderDetails() {
         {/* Aba Geral */}
         <TabsContent value="geral">
           <Card className="border border-border bg-card">
-            <CardHeader>
+            <CardHeader className="flex flex-col px-6 py-4">
               <CardTitle className="text-lg text-foreground">{t('orderDetails.generalInfo.title')}</CardTitle>
-              <CardDescription>{t('orderDetails.generalInfo.description')}</CardDescription>
+              <CardDescription className="text-xs m-0">{t('orderDetails.generalInfo.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -1422,11 +1677,11 @@ export default function OrderDetails() {
                     </div>
                     <div>
                       <span className="text-foreground">Lateralidade da Cirurgia:</span>{' '}
-                      <span className="text-foreground">{formatProcedureLaterality(order.procedureLaterality)}</span>
+                      <span className="text-foreground font-semibold">{formatProcedureLaterality(order.procedureLaterality)}</span>
                     </div>
                     <div>
                       <span className="text-foreground">{t('orderDetails.generalInfo.surgeryCharacter')}:</span>{' '}
-                      <span className="text-foreground">
+                      <span className="text-foreground font-semibold">
                         {formatProcedureType(order.procedureType)}
                       </span>
                     </div>
@@ -1435,25 +1690,51 @@ export default function OrderDetails() {
 
                 <Separator className="bg-accent" />
 
-                <div>
-                  <h3 className="text-md font-medium text-primary-foreground mb-2">Indicação Clínica</h3>
-                  <div className="bg-accent p-4 rounded-md">
-                    {order.clinicalIndication ? (
-                      <p className="text-foreground whitespace-pre-line">{order.clinicalIndication}</p>
-                    ) : (
-                      <p className="text-foreground italic">Nenhuma indicação clínica informada</p>
-                    )}
+                {/* Indicação Clínica */}
+                <div className="mb-6 text-foreground">
+                  <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
+                    {/* Título com fundo azul */}
+                    <div className="bg-medsync-blue px-4 py-2">
+                      <div className="flex items-center">
+                        <FileText className="mr-2 h-5 w-5 text-white" />
+                        <div>
+                          <h3 className="text-lg font-semibold text-white">Indicação Clínica</h3>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Conteúdo */}
+                    <div className="p-5">
+                      {order.clinicalIndication ? (
+                        <p className="text-foreground whitespace-pre-line">{order.clinicalIndication}</p>
+                      ) : (
+                        <p className="text-foreground italic">Nenhuma indicação clínica informada</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <h3 className="text-md font-medium text-primary-foreground mb-2">{t('orderDetails.generalInfo.observations')}</h3>
-                  <div className="bg-accent p-4 rounded-md">
-                    {order.additionalNotes ? (
-                      <p className="text-foreground whitespace-pre-line">{order.additionalNotes}</p>
-                    ) : (
-                      <p className="text-foreground italic">{t('orderDetails.generalInfo.noObservations')}</p>
-                    )}
+                {/* Observações Médicas */}
+                <div className="mb-6 text-foreground">
+                  <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
+                    {/* Título com fundo azul */}
+                    <div className="bg-medsync-blue px-4 py-2">
+                      <div className="flex items-center">
+                        <StickyNote className="mr-2 h-5 w-5 text-white" />
+                        <div>
+                          <h3 className="text-lg font-semibold text-white">{t('orderDetails.generalInfo.observations')}</h3>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Conteúdo */}
+                    <div className="p-5">
+                      {order.additionalNotes ? (
+                        <p className="text-foreground whitespace-pre-line">{order.additionalNotes}</p>
+                      ) : (
+                        <p className="text-foreground italic">{t('orderDetails.generalInfo.noObservations')}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1465,20 +1746,21 @@ export default function OrderDetails() {
         <TabsContent value="diagnosticos">
           <Card className="border border-border bg-card">
             <CardHeader>
-              <CardTitle className="text-lg text-foreground">{t('orderDetails.diagnostics.title')}</CardTitle>
-              <CardDescription>{t('orderDetails.diagnostics.description')}</CardDescription>
+              <CardTitle className="text-lg text-foreground">Códigos CID-10</CardTitle>
             </CardHeader>
             <CardContent>
               {order.cidCodes && order.cidCodes.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {order.cidCodes.map((cid: any, index: number) => (
-                    <div key={index} className="bg-accent p-4 rounded-md">
-                      <div className="flex items-start">
-                        <Badge variant="outline" className="mr-3 bg-accent">
-                          CID-10: {cid.code}
-                        </Badge>
-                        <div>
-                          <p className="text-foreground">
+                    <div key={index} className="bg-white border border-border rounded-md p-4">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0">
+                          <span className="inline-flex items-center justify-center px-3 py-1 bg-medsync-blue text-white text-sm font-semibold rounded">
+                            {cid.code}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-foreground text-sm leading-relaxed">
                             {cid.description || t('orderDetails.diagnostics.descriptionNotAvailable')}
                           </p>
                         </div>
@@ -1574,6 +1856,16 @@ export default function OrderDetails() {
         
         {/* Aba Anexos */}
         <TabsContent value="anexos">
+          <Card className="border border-border bg-card mb-6">
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Adicionar Novos Anexos</CardTitle>
+              <CardDescription>Faça upload de imagens ou PDFs relacionados ao pedido</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AttachmentUploader orderId={order.id} />
+            </CardContent>
+          </Card>
+
           <Card className="border border-border bg-card">
             <CardHeader>
               <CardTitle className="text-lg text-foreground">Anexos do Pedido</CardTitle>
@@ -1583,71 +1875,11 @@ export default function OrderDetails() {
               {order.attachments && order.attachments.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {order.attachments.map((attachment: any, index: number) => (
-                    <div key={attachment.id || index} className="relative group bg-background p-4 rounded-lg border border-border">
-                      {/* Miniatura ou ícone baseado no tipo de arquivo */}
-                      <div className="relative mb-3">
-                        {attachment.type === 'image' ? (
-                          <img 
-                            src={attachment.url} 
-                            alt={attachment.filename} 
-                            className="w-full h-32 object-cover rounded-md border border-primary"
-                          />
-                        ) : attachment.type === 'pdf' ? (
-                          <div className="w-full h-32 bg-destructive/10 border border-destructive rounded-md flex items-center justify-center">
-                            <FileText className="h-12 w-12 text-destructive" />
-                          </div>
-                        ) : (
-                          <div className="w-full h-32 bg-muted border border-border rounded-md flex items-center justify-center">
-                            <Package className="h-12 w-12 text-muted-foreground" />
-                          </div>
-                        )}
-                        
-                        {/* Overlay com ações */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-md flex items-center justify-center">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => window.open(attachment.url, '_blank')}
-                            className="bg-primary hover:bg-primary/90 border-border/50 text-foreground"
-                          >
-                            <Download className="h-4 w-4 mr-2" />
-                            Abrir
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      {/* Informações do arquivo */}
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-foreground truncate" title={attachment.filename}>
-                          {attachment.filename}
-                        </h4>
-                        
-                        <div className="flex items-center justify-between text-xs text-foreground">
-                          <Badge 
-                            variant="secondary" 
-                            className={`
-                              ${attachment.type === 'image' ? 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600' : 
-                                attachment.type === 'pdf' ? 'bg-destructive/20 text-destructive' : 
-                                'bg-muted text-foreground'}
-                            `}
-                          >
-                            {attachment.type === 'image' ? 'Imagem' : 
-                             attachment.type === 'pdf' ? 'PDF' : 
-                             'Arquivo'}
-                          </Badge>
-                          
-                          <span>
-                            {attachment.size ? `${(attachment.size / 1024).toFixed(1)} KB` : 'Tamanho desconhecido'}
-                          </span>
-                        </div>
-                        
-                        {attachment.uploadedAt && (
-                          <div className="text-xs text-foreground">
-                            Enviado em: {format(new Date(attachment.uploadedAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    <AttachmentCard 
+                      key={attachment.id || index} 
+                      attachment={attachment} 
+                      orderId={order.id}
+                    />
                   ))}
                 </div>
               ) : (
@@ -1733,9 +1965,9 @@ export default function OrderDetails() {
       {/* Modal de Agendamento Cirúrgico */}
       <Dialog open={showAppointmentModal} onOpenChange={setShowAppointmentModal}>
         <DialogContent className="bg-background border-border text-foreground max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-primary-foreground text-xl">
-              <Calendar className="h-5 w-5 inline mr-2" />
+          <DialogHeader className="bg-medsync-blue text-white py-4 -mx-6 -mt-6 mb-2 rounded-t-lg">
+            <DialogTitle className="text-white text-xl font-bold text-center flex items-center justify-center gap-2">
+              <Calendar className="h-5 w-5" />
               <span id="appointment-modal-title">Agendar Cirurgia</span>
             </DialogTitle>
           </DialogHeader>

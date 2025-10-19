@@ -43,22 +43,24 @@ import {
   MapPin,
   Filter,
   X,
-  ArrowLeft,
+  User,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 // Componente para listar cirurgias por hospital
 function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
@@ -195,35 +197,35 @@ function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
         </div>
       ))}
 
-      <div className="mt-4 p-4 bg-gradient-to-r from-blue-50/80 to-cyan-50/80 rounded-lg border border-blue-200/50 shadow-sm">
+      <div className="mt-4 p-4 rounded-lg shadow-sm" style={{ background: 'linear-gradient(to right, hsl(var(--accent-light)), hsl(var(--medsync-light-blue)))' }} data-testid="hospital-summary-card">
         <div className="space-y-2">
-          <div className="flex justify-between items-center pb-2 border-b border-blue-200/30">
-            <span className="text-sm font-semibold text-blue-900">
+          <div className="flex justify-between items-center pb-2 border-b" style={{ borderColor: 'hsl(var(--medsync-dark-blue))' }}>
+            <span className="text-sm font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }}>
               Resumo Detalhado
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-blue-700">Cirurgias Realizadas:</span>
-              <span className="font-semibold text-blue-900">
+              <span style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Cirurgias Realizadas:</span>
+              <span className="font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-hospital-completed">
                 {hospitalStats?.completedCount || totalSurgeries}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-blue-700">Pedidos Incompletos:</span>
-              <span className="font-semibold text-blue-900">
+              <span style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Pedidos Incompletos:</span>
+              <span className="font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-hospital-incomplete">
                 {hospitalStats?.incompleteCount || 0}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-blue-700">Canceladas/Rejeitadas:</span>
-              <span className="font-semibold text-blue-900">
+              <span style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Canceladas/Rejeitadas:</span>
+              <span className="font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-hospital-cancelled">
                 {hospitalStats?.cancelledCount || 0}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-blue-700 font-bold">Total Geral:</span>
-              <span className="font-bold text-blue-900">
+              <span className="font-bold" style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Total Geral:</span>
+              <span className="font-bold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-hospital-total">
                 {hospitalStats?.totalCount || totalSurgeries}
               </span>
             </div>
@@ -340,32 +342,32 @@ function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
         </div>
 
         {supplierStats && supplierStats.totalCount > 0 && (
-          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h4 className="font-semibold text-blue-900 mb-3">
+          <div className="mt-4 p-4 rounded-lg shadow-sm" style={{ background: 'linear-gradient(to right, hsl(var(--accent-light)), hsl(var(--medsync-light-blue)))' }} data-testid="supplier-summary-card-empty">
+            <h4 className="font-semibold mb-3" style={{ color: 'hsl(var(--medsync-dark-blue))' }}>
               Resumo Detalhado
             </h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-blue-700">Cirurgias Realizadas:</span>
-                <span className="font-semibold text-blue-900">
+                <span style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Cirurgias Realizadas:</span>
+                <span className="font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-supplier-empty-completed">
                   {supplierStats.completedCount}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-blue-700">Pedidos Incompletos:</span>
-                <span className="font-semibold text-blue-900">
+                <span style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Pedidos Incompletos:</span>
+                <span className="font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-supplier-empty-incomplete">
                   {supplierStats.incompleteCount}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-blue-700">Canceladas/Rejeitadas:</span>
-                <span className="font-semibold text-blue-900">
+                <span style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Canceladas/Rejeitadas:</span>
+                <span className="font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-supplier-empty-cancelled">
                   {supplierStats.cancelledCount}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-blue-700 font-bold">Total Geral:</span>
-                <span className="font-bold text-blue-900">
+                <span className="font-bold" style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Total Geral:</span>
+                <span className="font-bold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-supplier-empty-total">
                   {supplierStats.totalCount}
                 </span>
               </div>
@@ -403,36 +405,36 @@ function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
         </div>
       ))}
 
-      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h4 className="font-semibold text-blue-900 mb-3">Resumo Detalhado</h4>
+      <div className="mt-4 p-4 rounded-lg shadow-sm" style={{ background: 'linear-gradient(to right, hsl(var(--accent-light)), hsl(var(--medsync-light-blue)))' }} data-testid="supplier-summary-card">
+        <h4 className="font-semibold mb-3" style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Resumo Detalhado</h4>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-blue-700">Fornecedores Distintos:</span>
-            <span className="font-semibold text-blue-900">
+            <span style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Fornecedores Distintos:</span>
+            <span className="font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-supplier-count">
               {supplierStats?.suppliersCount || supplierDistribution.length}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-blue-700">Cirurgias Realizadas:</span>
-            <span className="font-semibold text-blue-900">
+            <span style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Cirurgias Realizadas:</span>
+            <span className="font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-supplier-completed">
               {supplierStats?.completedCount || totalSurgeries}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-blue-700">Pedidos Incompletos:</span>
-            <span className="font-semibold text-blue-900">
+            <span style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Pedidos Incompletos:</span>
+            <span className="font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-supplier-incomplete">
               {supplierStats?.incompleteCount || 0}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-blue-700">Canceladas/Rejeitadas:</span>
-            <span className="font-semibold text-blue-900">
+            <span style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Canceladas/Rejeitadas:</span>
+            <span className="font-semibold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-supplier-cancelled">
               {supplierStats?.cancelledCount || 0}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-blue-700 font-bold">Total Geral:</span>
-            <span className="font-bold text-blue-900">
+            <span className="font-bold" style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Total Geral:</span>
+            <span className="font-bold" style={{ color: 'hsl(var(--medsync-dark-blue))' }} data-testid="stat-supplier-total">
               {supplierStats?.totalCount || totalSurgeries}
             </span>
           </div>
@@ -734,16 +736,15 @@ function ReceivedValuesTab({ appliedFilters }: { appliedFilters: any }) {
                 </div>
 
                 <div className="pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  <button
                     onClick={() =>
                       (window.location.href = `/order-details/${item.orderId}`)
                     }
-                    className="w-full h-7 text-xs border-border hover:bg-accent hover:text-accent-foreground"
+                    className="btn-medsync-dark w-full text-xs"
+                    data-testid={`button-view-details-${item.orderId}`}
                   >
                     Ver Detalhes
-                  </Button>
+                  </button>
                 </div>
               </CardContent>
             </Card>
@@ -791,6 +792,13 @@ export default function Reports() {
   });
   const [hospitalFilter, setHospitalFilter] = useState<string | null>(null);
   const [doctorFilter, setDoctorFilter] = useState<string | null>(null);
+
+  // Estados para controlar abertura dos popovers
+  const [openStatusCombobox, setOpenStatusCombobox] = useState(false);
+  const [openYearCombobox, setOpenYearCombobox] = useState(false);
+  const [openHospitalCombobox, setOpenHospitalCombobox] = useState(false);
+  const [openDoctorCombobox, setOpenDoctorCombobox] = useState(false);
+  const [openTimeRangeCombobox, setOpenTimeRangeCombobox] = useState(false);
 
   // Definir valores padrão mais abrangentes para demonstração
   const getDefaultDateRange = () => {
@@ -1707,24 +1715,13 @@ export default function Reports() {
     <div className="min-h-screen flex flex-col bg-background">
       <main className="flex-grow overflow-auto">
         <div className="container mx-auto px-4 py-6">
-          <div className="mb-8">
-            <div className="flex items-center gap-4 mb-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setLocation("/")}
-                className="flex items-center gap-2 border-border hover:bg-accent hover:text-accent-foreground"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Voltar
-              </Button>
+          {/* Header com banner azul MedSync */}
+          <div className="mb-8 p-10 rounded-xl bg-medsync-blue">
+            <div className="flex items-center justify-center">
+              <h1 className="text-3xl font-bold text-white text-center">
+                Relatórios e Estatísticas
+              </h1>
             </div>
-            <h2 className="text-3xl font-bold text-foreground mb-2">
-              Relatórios
-            </h2>
-            <p className="text-muted-foreground">
-              Análises e estatísticas dos procedimentos cirúrgicos
-            </p>
           </div>
 
           {isLoading ? (
@@ -1741,109 +1738,277 @@ export default function Reports() {
               {/* Removido aviso de dados carregados conforme solicitado */}
 
               {/* Filtros de relatórios */}
-              <div className="bg-card border border-border rounded-lg p-3 mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-base font-semibold text-card-foreground">
-                    Filtros de Relatório
-                  </h3>
-                  {filtersLoading && (
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2"></div>
-                      Aplicando filtros...
+              <Card className="border-gray-200 bg-gradient-to-r from-sky-50 to-sky-100/50 shadow-sm mb-6">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-sky-200 rounded-lg">
+                        <Filter className="h-5 w-5 text-sky-700" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-sky-800">Filtros de Relatório</h3>
+                        <p className="text-sm text-sky-700/80">Configure os parâmetros de análise</p>
+                      </div>
                     </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
+                    {filtersLoading && (
+                      <div className="flex items-center text-sm text-sky-700">
+                        <div className="w-4 h-4 border-2 border-sky-700 border-t-transparent rounded-full animate-spin mr-2"></div>
+                        Aplicando filtros...
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
                   {/* Filtro de Status */}
                   <div className="flex-1 min-w-[160px]">
                     <label
-                      className={`block text-xs font-medium mb-1 ${
+                      className={`block text-sm font-medium mb-1 ${
                         activeTab === "received-values" ||
                         activeTab === "distribution"
                           ? "text-muted-foreground"
-                          : "text-foreground"
+                          : "text-[hsl(var(--medsync-dark-blue))]"
                       }`}
                     >
                       Status
                     </label>
-                    <Select
-                      value={statusFilter || "all"}
-                      onValueChange={(value) =>
-                        setStatusFilter(value === "all" ? null : value)
-                      }
-                      disabled={
-                        activeTab === "received-values" ||
-                        activeTab === "distribution"
-                      }
-                    >
-                      <SelectTrigger
-                        className={`h-9 text-sm border-border ${
-                          activeTab === "received-values" ||
-                          activeTab === "distribution"
-                            ? "bg-muted text-muted-foreground cursor-not-allowed"
-                            : "bg-background"
-                        }`}
-                      >
-                        <SelectValue placeholder="Todos" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="em_preenchimento">
-                          Em preenchimento
-                        </SelectItem>
-                        <SelectItem value="em_avaliacao">
-                          Em avaliação
-                        </SelectItem>
-                        <SelectItem value="aceito">Aceito</SelectItem>
-                        <SelectItem value="recusado">Recusado</SelectItem>
-                        <SelectItem value="realizado">Realizado</SelectItem>
-                        <SelectItem value="cancelado">Cancelado</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Popover open={openStatusCombobox} onOpenChange={setOpenStatusCombobox}>
+                      <PopoverTrigger asChild>
+                        <button
+                          role="combobox"
+                          aria-expanded={openStatusCombobox}
+                          className={`combobox-medsync w-full ${
+                            activeTab === "received-values" ||
+                            activeTab === "distribution"
+                              ? "opacity-50 cursor-not-allowed"
+                              : ""
+                          }`}
+                          disabled={
+                            activeTab === "received-values" ||
+                            activeTab === "distribution"
+                          }
+                          data-testid="select-status"
+                        >
+                          <span className={statusFilter ? "combobox-value" : "combobox-placeholder"}>
+                            {statusFilter === "em_preenchimento" ? "Em preenchimento" :
+                             statusFilter === "em_avaliacao" ? "Em avaliação" :
+                             statusFilter === "aceito" ? "Aceito" :
+                             statusFilter === "recusado" ? "Recusado" :
+                             statusFilter === "realizado" ? "Realizado" :
+                             statusFilter === "cancelado" ? "Cancelado" :
+                             "Todos"}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0 bg-white border-sky-200">
+                        <Command>
+                          <CommandInput placeholder="Buscar status..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>Nenhum status encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="all"
+                                onSelect={() => {
+                                  setStatusFilter(null);
+                                  setOpenStatusCombobox(false);
+                                }}
+                              >
+                                Todos
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    statusFilter === null ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                              <CommandItem
+                                value="em_preenchimento"
+                                onSelect={() => {
+                                  setStatusFilter("em_preenchimento");
+                                  setOpenStatusCombobox(false);
+                                }}
+                              >
+                                Em preenchimento
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    statusFilter === "em_preenchimento" ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                              <CommandItem
+                                value="em_avaliacao"
+                                onSelect={() => {
+                                  setStatusFilter("em_avaliacao");
+                                  setOpenStatusCombobox(false);
+                                }}
+                              >
+                                Em avaliação
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    statusFilter === "em_avaliacao" ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                              <CommandItem
+                                value="aceito"
+                                onSelect={() => {
+                                  setStatusFilter("aceito");
+                                  setOpenStatusCombobox(false);
+                                }}
+                              >
+                                Aceito
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    statusFilter === "aceito" ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                              <CommandItem
+                                value="recusado"
+                                onSelect={() => {
+                                  setStatusFilter("recusado");
+                                  setOpenStatusCombobox(false);
+                                }}
+                              >
+                                Recusado
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    statusFilter === "recusado" ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                              <CommandItem
+                                value="realizado"
+                                onSelect={() => {
+                                  setStatusFilter("realizado");
+                                  setOpenStatusCombobox(false);
+                                }}
+                              >
+                                Realizado
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    statusFilter === "realizado" ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                              <CommandItem
+                                value="cancelado"
+                                onSelect={() => {
+                                  setStatusFilter("cancelado");
+                                  setOpenStatusCombobox(false);
+                                }}
+                              >
+                                Cancelado
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    statusFilter === "cancelado" ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   {/* Filtro de Ano */}
                   <div className="flex-1 min-w-[120px]">
-                    <label className="block text-xs font-medium text-foreground mb-1">
+                    <label className="block text-sm font-medium text-[hsl(var(--medsync-dark-blue))] mb-1">
                       Ano
                     </label>
-                    <Select
-                      value={yearFilter || "none"}
-                      onValueChange={(value) => {
-                        if (value === "none") {
-                          setYearFilter(null);
-                        } else {
-                          setYearFilter(value);
-                          setDateRange({ startDate: null, endDate: null });
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="h-9 text-sm bg-background border-border">
-                        <SelectValue placeholder="Nenhum" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Nenhum</SelectItem>
-                        <SelectItem value="2025">2025</SelectItem>
-                        <SelectItem value="2026">2026</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Popover open={openYearCombobox} onOpenChange={setOpenYearCombobox}>
+                      <PopoverTrigger asChild>
+                        <button
+                          role="combobox"
+                          aria-expanded={openYearCombobox}
+                          className="combobox-medsync w-full"
+                          data-testid="select-year"
+                        >
+                          <span className={yearFilter ? "combobox-value" : "combobox-placeholder"}>
+                            {yearFilter || "Nenhum"}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[200px] p-0 bg-white border-sky-200">
+                        <Command>
+                          <CommandInput placeholder="Buscar ano..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>Nenhum ano encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="none"
+                                onSelect={() => {
+                                  setYearFilter(null);
+                                  setOpenYearCombobox(false);
+                                }}
+                              >
+                                Nenhum
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    yearFilter === null ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                              <CommandItem
+                                value="2025"
+                                onSelect={() => {
+                                  setYearFilter("2025");
+                                  setDateRange({ startDate: null, endDate: null });
+                                  setOpenYearCombobox(false);
+                                }}
+                              >
+                                2025
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    yearFilter === "2025" ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                              <CommandItem
+                                value="2026"
+                                onSelect={() => {
+                                  setYearFilter("2026");
+                                  setDateRange({ startDate: null, endDate: null });
+                                  setOpenYearCombobox(false);
+                                }}
+                              >
+                                2026
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    yearFilter === "2026" ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   {/* Filtro de Data Inicial */}
                   <div className="flex-1 min-w-[150px]">
                     <label
-                      className={`block text-xs font-medium mb-1 ${yearFilter ? "text-muted-foreground" : "text-foreground"}`}
+                      className={`block text-sm font-medium mb-1 ${yearFilter ? "text-muted-foreground" : "text-[hsl(var(--medsync-dark-blue))]"}`}
                     >
                       Data Inicial
                     </label>
                     <input
                       type="date"
                       disabled={!!yearFilter}
-                      className={`w-full h-9 text-sm border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring ${
-                        yearFilter
-                          ? "bg-muted text-muted-foreground cursor-not-allowed"
-                          : "bg-background text-foreground"
-                      }`}
+                      className="input-date-medsync w-full"
                       value={dateRange.startDate || ""}
                       onChange={(e) => {
                         setDateRange({
@@ -1852,24 +2017,21 @@ export default function Reports() {
                         });
                         if (e.target.value) setYearFilter(null);
                       }}
+                      data-testid="input-start-date"
                     />
                   </div>
 
                   {/* Filtro de Data Final */}
                   <div className="flex-1 min-w-[150px]">
                     <label
-                      className={`block text-xs font-medium mb-1 ${yearFilter ? "text-muted-foreground" : "text-foreground"}`}
+                      className={`block text-sm font-medium mb-1 ${yearFilter ? "text-muted-foreground" : "text-[hsl(var(--medsync-dark-blue))]"}`}
                     >
                       Data Final
                     </label>
                     <input
                       type="date"
                       disabled={!!yearFilter}
-                      className={`w-full h-9 text-sm border border-border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring ${
-                        yearFilter
-                          ? "bg-muted text-muted-foreground cursor-not-allowed"
-                          : "bg-background text-foreground"
-                      }`}
+                      className="input-date-medsync w-full"
                       value={dateRange.endDate || ""}
                       onChange={(e) => {
                         setDateRange({
@@ -1878,128 +2040,201 @@ export default function Reports() {
                         });
                         if (e.target.value) setYearFilter(null);
                       }}
+                      data-testid="input-end-date"
                     />
                   </div>
 
                   {/* Filtro de Hospital */}
                   <div className="flex-1 min-w-[180px]">
-                    <label className="block text-xs font-medium text-foreground mb-1">
+                    <label className="block text-sm font-medium text-[hsl(var(--medsync-dark-blue))] mb-1">
                       Hospital
                     </label>
-                    <Select
-                      value={hospitalFilter || "all"}
-                      onValueChange={(value) =>
-                        setHospitalFilter(value === "all" ? null : value)
-                      }
-                    >
-                      <SelectTrigger className="h-9 text-sm bg-background border-border">
-                        <SelectValue placeholder="Todos" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        {hospitalsData.map((hospital) => (
-                          <SelectItem
-                            key={hospital.id}
-                            value={hospital.id.toString()}
-                          >
-                            {hospital.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={openHospitalCombobox} onOpenChange={setOpenHospitalCombobox}>
+                      <PopoverTrigger asChild>
+                        <button
+                          role="combobox"
+                          aria-expanded={openHospitalCombobox}
+                          className="combobox-medsync w-full"
+                          data-testid="select-hospital"
+                        >
+                          <span className={hospitalFilter ? "combobox-value" : "combobox-placeholder"}>
+                            {hospitalFilter
+                              ? hospitalsData.find((h) => h.id.toString() === hospitalFilter)?.name
+                              : "Todos"}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0 bg-white border-sky-200">
+                        <Command>
+                          <CommandInput placeholder="Buscar hospital..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>Nenhum hospital encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                value="all"
+                                onSelect={() => {
+                                  setHospitalFilter(null);
+                                  setOpenHospitalCombobox(false);
+                                }}
+                              >
+                                Todos
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    hospitalFilter === null ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                              {hospitalsData.map((hospital) => (
+                                <CommandItem
+                                  key={hospital.id}
+                                  value={hospital.name}
+                                  onSelect={() => {
+                                    setHospitalFilter(hospital.id.toString());
+                                    setOpenHospitalCombobox(false);
+                                  }}
+                                >
+                                  {hospital.name}
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4",
+                                      hospitalFilter === hospital.id.toString() ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   {/* Filtro de Médico (apenas para admin) */}
                   {isAdmin && (
                     <div className="flex-1 min-w-[160px]">
-                      <label className="block text-xs font-medium text-foreground mb-1">
+                      <label className="block text-sm font-medium text-[hsl(var(--medsync-dark-blue))] mb-1">
                         Médico
                       </label>
-                      <Select
-                        value={doctorFilter || "all"}
-                        onValueChange={(value) =>
-                          setDoctorFilter(value === "all" ? null : value)
-                        }
-                      >
-                        <SelectTrigger className="h-9 text-sm bg-background border-border">
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Todos</SelectItem>
-                          {doctorsData.map((doctor) => (
-                            <SelectItem
-                              key={doctor.id}
-                              value={doctor.id.toString()}
-                            >
-                              {doctor.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={openDoctorCombobox} onOpenChange={setOpenDoctorCombobox}>
+                        <PopoverTrigger asChild>
+                          <button
+                            role="combobox"
+                            aria-expanded={openDoctorCombobox}
+                            className="combobox-medsync w-full"
+                            data-testid="select-doctor"
+                          >
+                            <span className={doctorFilter ? "combobox-value" : "combobox-placeholder"}>
+                              {doctorFilter
+                                ? doctorsData.find((d) => d.id.toString() === doctorFilter)?.name
+                                : "Todos"}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[300px] p-0 bg-white border-sky-200">
+                          <Command>
+                            <CommandInput placeholder="Buscar médico..." className="h-9" />
+                            <CommandList>
+                              <CommandEmpty>Nenhum médico encontrado.</CommandEmpty>
+                              <CommandGroup>
+                                <CommandItem
+                                  value="all"
+                                  onSelect={() => {
+                                    setDoctorFilter(null);
+                                    setOpenDoctorCombobox(false);
+                                  }}
+                                >
+                                  Todos
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4",
+                                      doctorFilter === null ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                </CommandItem>
+                                {doctorsData.map((doctor) => (
+                                  <CommandItem
+                                    key={doctor.id}
+                                    value={doctor.name}
+                                    onSelect={() => {
+                                      setDoctorFilter(doctor.id.toString());
+                                      setOpenDoctorCombobox(false);
+                                    }}
+                                  >
+                                    {doctor.name}
+                                    <Check
+                                      className={cn(
+                                        "ml-auto h-4 w-4",
+                                        doctorFilter === doctor.id.toString() ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   )}
                 </div>
 
-                {/* Botões de ação */}
-                <div className="flex justify-between items-center mt-2">
-                  {/* Botões de exportação */}
-                  <div className="flex gap-2">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="h-8 text-sm bg-primary hover:bg-primary/90 text-primary-foreground"
-                        >
-                          <Download className="mr-1 h-3 w-3" />
-                          Exportar
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => exportToPDF()}>
-                          <FileText className="mr-2 h-4 w-4" />
-                          Exportar para PDF
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => exportToExcel()}>
-                          <BarChart4 className="mr-2 h-4 w-4" />
-                          Exportar para Excel
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                  {/* Botões de ação */}
+                  <div className="flex justify-between items-center mt-2">
+                    {/* Botões de exportação */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => exportToPDF()}
+                        className="btn-medsync-dark flex items-center gap-1"
+                        data-testid="button-export-pdf"
+                      >
+                        <FileText className="w-3 h-3" />
+                        Exportar PDF
+                      </button>
+                      <button
+                        onClick={() => exportToExcel()}
+                        className="btn-medsync-dark flex items-center gap-1"
+                        data-testid="button-export-excel"
+                      >
+                        <BarChart4 className="w-3 h-3" />
+                        Exportar Excel
+                      </button>
+                    </div>
 
-                  {/* Botões de filtro */}
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleApplyFilters}
-                      size="sm"
-                      className="h-8 text-sm bg-primary hover:bg-primary/90 text-primary-foreground"
-                      disabled={filtersLoading}
-                    >
-                      {filtersLoading ? (
-                        <>
-                          <span className="animate-spin mr-1">⟳</span>
-                          Aplicando...
-                        </>
-                      ) : (
-                        <>
-                          <Filter className="mr-1 h-3 w-3" />
-                          Filtrar
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleClearFilters}
-                      className="h-8 text-sm border-border hover:bg-accent hover:text-accent-foreground"
-                    >
-                      <X className="mr-1 h-3 w-3" />
-                      Limpar
-                    </Button>
+                    {/* Botões de filtro */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleApplyFilters}
+                        disabled={filtersLoading}
+                        className="btn-medsync-dark flex items-center gap-1"
+                        data-testid="button-apply-filters"
+                      >
+                        {filtersLoading ? (
+                          <>
+                            <span className="animate-spin">⟳</span>
+                            Aplicando...
+                          </>
+                        ) : (
+                          <>
+                            <Filter className="w-3 h-3" />
+                            Filtrar
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={handleClearFilters}
+                        className="btn-medsync-dark flex items-center gap-1"
+                        data-testid="button-clear-filters"
+                      >
+                        <X className="w-3 h-3" />
+                        Limpar
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </>
           )}
 
@@ -2023,21 +2258,76 @@ export default function Reports() {
                 <h3 className="text-xl font-semibold text-foreground">
                   Número total de cirurgias
                 </h3>
-                <Select
-                  value={timeRange}
-                  onValueChange={(value) =>
-                    setTimeRange(value as "weekly" | "monthly" | "annual")
-                  }
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Selecione o período" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="weekly">Semanal</SelectItem>
-                    <SelectItem value="monthly">Mensal</SelectItem>
-                    <SelectItem value="annual">Anual</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Popover open={openTimeRangeCombobox} onOpenChange={setOpenTimeRangeCombobox}>
+                  <PopoverTrigger asChild>
+                    <button
+                      role="combobox"
+                      aria-expanded={openTimeRangeCombobox}
+                      className="combobox-medsync w-[180px]"
+                      data-testid="select-time-range"
+                    >
+                      <span className="combobox-value">
+                        {timeRange === "weekly" ? "Semanal" :
+                         timeRange === "monthly" ? "Mensal" :
+                         "Anual"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-0 bg-white border-sky-200">
+                    <Command>
+                      <CommandList>
+                        <CommandGroup>
+                          <CommandItem
+                            value="weekly"
+                            onSelect={() => {
+                              setTimeRange("weekly");
+                              setOpenTimeRangeCombobox(false);
+                            }}
+                          >
+                            Semanal
+                            <Check
+                              className={cn(
+                                "ml-auto h-4 w-4",
+                                timeRange === "weekly" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                          </CommandItem>
+                          <CommandItem
+                            value="monthly"
+                            onSelect={() => {
+                              setTimeRange("monthly");
+                              setOpenTimeRangeCombobox(false);
+                            }}
+                          >
+                            Mensal
+                            <Check
+                              className={cn(
+                                "ml-auto h-4 w-4",
+                                timeRange === "monthly" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                          </CommandItem>
+                          <CommandItem
+                            value="annual"
+                            onSelect={() => {
+                              setTimeRange("annual");
+                              setOpenTimeRangeCombobox(false);
+                            }}
+                          >
+                            Anual
+                            <Check
+                              className={cn(
+                                "ml-auto h-4 w-4",
+                                timeRange === "annual" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                          </CommandItem>
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <Card className="border-border bg-card shadow-lg">

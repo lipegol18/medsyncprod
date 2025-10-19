@@ -696,6 +696,7 @@ export default function Home() {
                                                                                                         cx="50%"
                                                                                                         cy="50%"
                                                                                                         labelLine={false}
+                                                                                                        label={({ percent }) => `${(percent * 100).toFixed(1)}%`}
                                                                                                         innerRadius={60}
                                                                                                         outerRadius={120}
                                                                                                         fill="#8884d8"
@@ -703,11 +704,11 @@ export default function Home() {
                                                                                                         nameKey="name"
                                                                                                 >
                                                                                                         {statusDistribution.filter(item => item.count > 0).map((entry, index) => {
-                                                                                                                const vibrantColors = [
-                                                                                                                        '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-                                                                                                                        '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
+                                                                                                                const medsyncColors = [
+                                                                                                                        '#2ca8e0', '#36a9e1', '#124a6b', '#6e6f70', '#5bc0de',
+                                                                                                                        '#17a2b8', '#007bff', '#6c757d', '#20c997', '#17a2b8'
                                                                                                                 ];
-                                                                                                                const color = vibrantColors[index % vibrantColors.length];
+                                                                                                                const color = medsyncColors[index % medsyncColors.length];
                                                                                                                 return <Cell key={`cell-${index}`} fill={color} />;
                                                                                                         })}
                                                                                                 </Pie>
@@ -719,15 +720,20 @@ export default function Home() {
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-3">
                                                                                         {statusDistribution.filter(item => item.count > 0).map((item, index) => {
-                                                                                                const vibrantColors = [
-                                                                                                        '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-                                                                                                        '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
+                                                                                                const medsyncColors = [
+                                                                                                        '#2ca8e0', '#36a9e1', '#124a6b', '#6e6f70', '#5bc0de',
+                                                                                                        '#17a2b8', '#007bff', '#6c757d', '#20c997', '#17a2b8'
                                                                                                 ];
-                                                                                                const color = vibrantColors[index % vibrantColors.length];
+                                                                                                const color = medsyncColors[index % medsyncColors.length];
+                                                                                                const total = statusDistribution.filter(i => i.count > 0).reduce((sum, i) => sum + i.count, 0);
+                                                                                                const percentage = ((item.count / total) * 100).toFixed(1);
                                                                                                 return (
-                                                                                                        <div key={index} className="flex items-center">
-                                                                                                                <div className="w-4 h-4 rounded mr-3" style={{ backgroundColor: color }}></div>
-                                                                                                                <span className="text-sm font-medium">{item.name}</span>
+                                                                                                        <div key={index} className="flex items-center justify-between gap-4">
+                                                                                                                <div className="flex items-center">
+                                                                                                                        <div className="w-4 h-4 rounded mr-3" style={{ backgroundColor: color }}></div>
+                                                                                                                        <span className="text-sm font-medium">{item.name}</span>
+                                                                                                                </div>
+                                                                                                                <span className="text-sm font-bold text-[hsl(var(--medsync-dark-blue))]">{percentage}%</span>
                                                                                                         </div>
                                                                                                 );
                                                                                         })}

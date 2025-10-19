@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import MedSyncLogo from "../assets/medsync-logo-new.svg";
+import DownloadIcon from "../assets/icons/MedSync_Icones_Download_Sem_Borda.svg";
+import EmailIcon from "../assets/icons/MedSync_Icones_Email_Sem_Borda.svg";
 import {
   Dialog,
   DialogContent,
@@ -182,9 +184,14 @@ export default function CreateOrder() {
   const [procedureType, setProcedureType] = useState(
     PROCEDURE_TYPE_VALUES.ELETIVA,
   );
-  const [procedureQuantity, setProcedureQuantity] = useState(1);
-  const [selectedProcedure, setSelectedProcedure] =
-    useState<LocalProcedure | null>(null);
+  
+  // ❌ CÓDIGO LEGADO - Sistema de procedimento principal/secundário DESCONTINUADO
+  // Agora usamos apenas secondaryProcedures (lista unificada)
+  // O procedimento principal é determinado automaticamente pelo MAIOR PORTE
+  // const [procedureQuantity, setProcedureQuantity] = useState(1);
+  // const [selectedProcedure, setSelectedProcedure] =
+  //   useState<LocalProcedure | null>(null);
+  
   // Estados para procedimentos secundários
   const [secondaryProcedures, setSecondaryProcedures] = useState<
     SecondaryProcedure[]
@@ -376,8 +383,8 @@ export default function CreateOrder() {
       setCidDescription("");
       setSelectedCidId(null);
       setProcedureType(PROCEDURE_TYPE_VALUES.ELETIVA);
-      setSelectedProcedure(null);
-      setProcedureQuantity(1);
+      // ❌ LEGADO: setSelectedProcedure(null);
+      // ❌ LEGADO: setProcedureQuantity(1);
       setSecondaryProcedures([]);
       setOrderId(null);
       setCurrentOrderData(null);
@@ -511,8 +518,8 @@ export default function CreateOrder() {
       setExamImages([]);
       setMedicalReport(null);
       setSelectedHospital(null);
-      setSelectedProcedure(null);
-      setProcedureQuantity(1);
+      // ❌ LEGADO: setSelectedProcedure(null);
+      // ❌ LEGADO: setProcedureQuantity(1);
       setSecondaryProcedures([]);
       setMultipleCids([]);
 
@@ -592,8 +599,8 @@ export default function CreateOrder() {
       setCidDescription("");
       setSelectedCidId(null);
       setProcedureType(PROCEDURE_TYPE_VALUES.ELETIVA);
-      setSelectedProcedure(null);
-      setProcedureQuantity(1);
+      // ❌ LEGADO: setSelectedProcedure(null);
+      // ❌ LEGADO: setProcedureQuantity(1);
       setSecondaryProcedures([]);
       setOrderId(null);
       setCurrentOrderData(null);
@@ -694,31 +701,14 @@ export default function CreateOrder() {
         console.log('ℹ️ Nenhum attachment encontrado para o pedido');
       }
 
-      // **ETAPA 3: DADOS COMPLEMENTARES** - Todos os outros dados em paralelo
-      console.log('⚡ ETAPA 3: Carregando dados complementares em paralelo...');
-      const [
-        cidData,
-        surgicalApproaches,
-        procedures,
-        surgicalProcedures,
-        opmeItems,
-        suppliers
-      ] = await Promise.all([
-        apiRequest(`/api/orders/${currentOrderId}/cids`, "GET"),
-        apiRequest(`/api/medical-order-surgical-approaches/order/${currentOrderId}`, "GET"),
-        apiRequest(`/api/orders/${currentOrderId}/procedures`, "GET"),
-        apiRequest(`/api/medical-order-surgical-procedures/order/${currentOrderId}`, "GET"),
-        apiRequest(`/api/orders/${currentOrderId}/opme-items`, "GET"),
-        apiRequest(`/api/orders/${currentOrderId}/suppliers`, "GET")
-      ]);
-
-      console.log(`✅ CORRIGIDO: Dados básicos → paciente+hospital → 6 consultas complementares`);
-
-      // 1. Carregar CIDs (sem associação com condutas cirúrgicas)
-      if (cidData && cidData.length > 0) {
+      // **ETAPA 3: REUTILIZAR DADOS QUE JÁ VÊM DO orderBasicData**
+      console.log('⚡ ETAPA 3: OTIMIZAÇÃO - Reutilizando dados que já vieram carregados...');
+      
+      // 1. CIDs - JÁ VÊM no orderBasicData.cidCodes (sem chamada API extra!)
+      const cidData = orderBasicData.cidCodes || [];
+      if (cidData.length > 0) {
         const simpleCids = cidData.map((cid: any) => ({
           cid
-          // Removido: surgicalApproach - não queremos mais mostrar condutas nos CIDs
         }));
         
         setMultipleCids(simpleCids);
@@ -729,25 +719,45 @@ export default function CreateOrder() {
         setCidDescription(firstCid.description || "");
         setSelectedCidId(firstCid.id);
         
-        console.log(`✅ OTIMIZADO: ${cidData.length} CIDs carregados COM condutas cirúrgicas`);
+        console.log(`✅ REUTILIZADO: ${cidData.length} CIDs do orderBasicData (sem chamada API extra)`);
       }
 
-      // 1.5. Aplicar condutas cirúrgicas ao estado selectedSurgicalApproaches
-      if (surgicalApproaches && surgicalApproaches.length > 0) {
-        console.log(`✅ OTIMIZADO: Aplicando ${surgicalApproaches.length} condutas cirúrgicas ao estado selectedSurgicalApproaches`);
-        console.log(`✅ OTIMIZADO: Dados recebidos da API:`, surgicalApproaches);
+      // 2. Condutas Cirúrgicas - JÁ VÊM no orderBasicData.surgicalApproaches (sem chamada API extra!)
+      const surgicalApproaches = orderBasicData.surgicalApproaches || [];
+      if (surgicalApproaches.length > 0) {
+        console.log(`✅ REUTILIZADO: ${surgicalApproaches.length} condutas do orderBasicData (sem chamada API extra)`);
         
         const conductApproaches = surgicalApproaches.map((sa: any) => ({
-          surgicalProcedureId: sa.surgicalProcedureId || sa.surgical_procedure_id || 1, // Fallback para compatibilidade
-          surgicalApproachId: sa.surgicalApproachId || sa.surgical_approach_id,
-          approachName: sa.surgicalApproachName || sa.surgical_approach_name,
-          procedureName: sa.procedureName || sa.procedure_name || "Procedimento",
-          isPrimary: sa.isPrimary || sa.is_primary || false
+          surgicalProcedureId: sa.surgicalProcedureId || 1,
+          surgicalApproachId: sa.id,
+          approachName: sa.name,
+          procedureName: "Procedimento",
+          isPrimary: sa.isPrimary || false
         }));
         
         setSelectedSurgicalApproaches(conductApproaches);
-        console.log(`✅ OTIMIZADO: Estado selectedSurgicalApproaches atualizado com condutas:`, conductApproaches);
+        console.log(`✅ REUTILIZADO: Estado selectedSurgicalApproaches atualizado:`, conductApproaches);
       }
+
+      // 3. Procedimentos Cirúrgicos - JÁ VÊM no orderBasicData.surgicalProcedures (sem chamada API extra!)
+      const surgicalProcedures = orderBasicData.surgicalProcedures || [];
+      if (surgicalProcedures.length > 0) {
+        console.log(`✅ REUTILIZADO: ${surgicalProcedures.length} procedimentos cirúrgicos do orderBasicData (sem chamada API extra)`);
+      }
+
+      // **ETAPA 4: APENAS 3 CHAMADAS NECESSÁRIAS (dados detalhados)**
+      console.log('⚡ ETAPA 4: Carregando apenas dados detalhados (3 chamadas)...');
+      const [
+        procedures,
+        opmeItems,
+        suppliers
+      ] = await Promise.all([
+        apiRequest(`/api/orders/${currentOrderId}/procedures`, "GET"),
+        apiRequest(`/api/orders/${currentOrderId}/opme-items`, "GET"),
+        apiRequest(`/api/orders/${currentOrderId}/suppliers`, "GET")
+      ]);
+
+      console.log(`✅ OTIMIZADO: Reduzido de 6 para 3 chamadas API!`);
 
       // 2. Carregar procedimentos - SISTEMA UNIFICADO
       if (procedures && procedures.length > 0) {
@@ -785,9 +795,9 @@ export default function CreateOrder() {
         setSecondaryProcedures(allProceduresData);
         console.log(`✅ OTIMIZADO: ${allProceduresData.length} procedimentos carregados em lista unificada ordenada por porte`);
         
-        // Limpar procedimento principal para usar apenas a lista unificada
-        setSelectedProcedure(null);
-        setProcedureQuantity(1);
+        // ❌ LEGADO: Limpeza de estados de procedimento principal (descontinuado)
+        // setSelectedProcedure(null);
+        // setProcedureQuantity(1);
       }
 
       // 3. Carregar itens OPME
@@ -948,9 +958,9 @@ export default function CreateOrder() {
           console.log(`MODO EDIÇÃO: Carregando ${allProceduresData.length} procedimentos em lista unificada`);
           setSecondaryProcedures(allProceduresData);
           
-          // Limpar procedimento principal para usar apenas a lista unificada
-          setSelectedProcedure(null);
-          setProcedureQuantity(1);
+          // ❌ LEGADO: Limpeza de estados de procedimento principal (descontinuado)
+          // setSelectedProcedure(null);
+          // setProcedureQuantity(1);
           
           console.log(`MODO EDIÇÃO: Todos os procedimentos carregados em lista unificada`);
         } else {
@@ -1081,7 +1091,7 @@ export default function CreateOrder() {
     setClinicalIndication(order.clinicalIndication || "");
     setAdditionalNotes(order.additionalNotes || "");
     setProcedureType(order.procedureType || PROCEDURE_TYPE_VALUES.ELETIVA);
-    setProcedureQuantity((order as any).procedureCbhpmQuantity || 1);
+    // ❌ LEGADO: setProcedureQuantity((order as any).procedureCbhpmQuantity || 1);
 
     // Recuperar dados de lateralidade
     console.log("Carregando lateralidade do procedimento do banco de dados:", {
@@ -1092,7 +1102,7 @@ export default function CreateOrder() {
     // Garantir que valores nulos ou undefined sejam tratados corretamente
     // O PostgreSQL retorna null para valores nulos, então precisamos fazer essa verificação
     // Campo cidLaterality foi removido conforme solicitado
-    setCidLaterality(null);
+    // ❌ LEGADO: setCidLaterality(null);
 
     if (
       order.procedureLaterality !== null &&
@@ -1167,22 +1177,22 @@ export default function CreateOrder() {
             }));
             
             const mainProcedure = formattedProcedures.find((p: any) => p.isMain);
-            const secondaryProcedures = formattedProcedures.filter((p: any) => !p.isMain);
+            const secondaryProcs = formattedProcedures.filter((p: any) => !p.isMain);
             
             
             if (mainProcedure?.item) {
-              setSelectedProcedure(mainProcedure.item);
-              setProcedureQuantity(mainProcedure.quantity);
+              // ❌ LEGADO: setSelectedProcedure(mainProcedure.item);
+              // ❌ LEGADO: setProcedureQuantity(mainProcedure.quantity);
               console.log(`Procedimento principal carregado: ${mainProcedure.item.code} - Quantidade: ${mainProcedure.quantity}`);
             }
             
-            if (secondaryProcedures.length > 0) {
-              const secondaryData = secondaryProcedures.map((p: any) => ({
+            if (secondaryProcs.length > 0) {
+              const secondaryData = secondaryProcs.map((p: any) => ({
                 procedure: p.item,
                 quantity: p.quantity
               }));
               setSecondaryProcedures(secondaryData);
-              console.log(`Procedimentos secundários carregados: ${secondaryProcedures.length} procedimentos`);
+              console.log(`Procedimentos secundários carregados: ${secondaryProcs.length} procedimentos`);
             }
           }
         } catch (error) {
@@ -1646,16 +1656,17 @@ export default function CreateOrder() {
         try {
           const procedures = [];
           
-          // Adicionar procedimento principal se selecionado
-          if (selectedProcedure?.id) {
-            procedures.push({
-              procedureId: selectedProcedure.id,
-              quantityRequested: procedureQuantity || 1,
-              isMain: true
-            });
-          }
+          // ❌ CÓDIGO LEGADO - Sistema de procedimento principal descontinuado
+          // O procedimento principal agora é determinado automaticamente pelo MAIOR PORTE no backend
+          // if (selectedProcedure?.id) {
+          //   procedures.push({
+          //     procedureId: selectedProcedure.id,
+          //     quantityRequested: procedureQuantity || 1,
+          //     isMain: true
+          //   });
+          // }
           
-          // Adicionar procedimentos secundários
+          // Adicionar procedimentos da lista unificada (backend determina qual é o principal)
           secondaryProcedures.forEach((proc) => {
             if (proc.procedure?.id) {
               procedures.push({
@@ -2181,7 +2192,7 @@ export default function CreateOrder() {
         },
         patientData: selectedPatient,
         hospitalData: selectedHospital,
-        procedureData: selectedProcedure,
+        procedureData: secondaryProcedures?.[0] || null, // ✅ CORRIGIDO: Usa primeiro procedimento da lista (principal determinado por porte)
         cidData: freshMultipleCids && freshMultipleCids.length > 0 ? freshMultipleCids : [{ cid: { code: cidCode, description: cidDescription } }],
         secondaryProcedures: secondaryProcedures || [],
         opmeItems: selectedOpmeItems || [],
@@ -2193,7 +2204,7 @@ export default function CreateOrder() {
         orderId: pdfData.orderData.id,
         patientName: pdfData.patientData?.fullName,
         hospitalName: pdfData.hospitalData?.name,
-        procedureName: pdfData.procedureData?.name,
+        procedureName: pdfData.procedureData?.procedure?.name || 'N/A', // ✅ CORRIGIDO: Estrutura do SecondaryProcedure
         justificationLength: pdfData.orderData?.clinicalJustification?.length || 0,
         secondaryProceduresCount: pdfData.secondaryProcedures?.length || 0,
         opmeItemsCount: pdfData.opmeItems?.length || 0,
@@ -2882,8 +2893,10 @@ export default function CreateOrder() {
                   clinicalIndication !== "A ser preenchido");
       
       case 3:
+        // ❌ VALIDAÇÃO LEGADA COMENTADA - selectedProcedure não existe mais
+        // Agora validamos secondaryProcedures.length > 0
         const step3Valid = validateStep(2) && 
-               !!(selectedProcedure?.id && 
+               !!(secondaryProcedures.length > 0 &&  // ✅ CORRIGIDO
                   (multipleCids && multipleCids.length > 0) && 
                   clinicalJustification && 
                   clinicalJustification.trim() !== "" &&
@@ -3138,19 +3151,21 @@ export default function CreateOrder() {
         }, 50);
       } else if (currentStep === 3) {
         // Validação do passo 3 (Dados da Cirurgia)
-        console.log("🔍 VALIDAÇÃO STEP 3 - Dados atuais:", {
-          selectedProcedureId: selectedProcedure?.id,
-          selectedProcedureExists: !!selectedProcedure,
-          secondaryProceduresLength: secondaryProcedures?.length,
-          totalProcedures: (selectedProcedure ? 1 : 0) + (secondaryProcedures?.length || 0),
-          multipleCidsLength: multipleCids?.length,
-          multipleCidsData: multipleCids,
-          clinicalJustificationLength: clinicalJustification?.length,
-          clinicalJustification: clinicalJustification?.substring(0, 100) + "..."
-        });
         
-        // Validação atualizada para sistema unificado de procedimentos
-        const totalProcedures = (selectedProcedure ? 1 : 0) + secondaryProcedures.length;
+        // ❌ LOG LEGADO COMENTADO - selectedProcedure não existe mais
+        // console.log("🔍 VALIDAÇÃO STEP 3 - Dados atuais:", {
+        //   selectedProcedureId: selectedProcedure?.id,
+        //   selectedProcedureExists: !!selectedProcedure,
+        //   secondaryProceduresLength: secondaryProcedures?.length,
+        //   totalProcedures: (selectedProcedure ? 1 : 0) + (secondaryProcedures?.length || 0),
+        //   multipleCidsLength: multipleCids?.length,
+        //   multipleCidsData: multipleCids,
+        //   clinicalJustificationLength: clinicalJustification?.length,
+        //   clinicalJustification: clinicalJustification?.substring(0, 100) + "..."
+        // });
+        
+        // ✅ Validação atualizada para sistema unificado de procedimentos
+        const totalProcedures = secondaryProcedures.length;  // ✅ CORRIGIDO
         if (totalProcedures === 0) {
           toast({
             title: "Procedimento obrigatório",
@@ -3423,10 +3438,6 @@ export default function CreateOrder() {
                   setProcedureLaterality={setProcedureLaterality}
                   procedureType={procedureType}
                   setProcedureType={setProcedureType}
-                  procedureQuantity={procedureQuantity}
-                  setProcedureQuantity={setProcedureQuantity}
-                  selectedProcedure={selectedProcedure}
-                  setSelectedProcedure={setSelectedProcedure}
                   secondaryProcedures={secondaryProcedures}
                   setSecondaryProcedures={setSecondaryProcedures}
                   clinicalJustification={clinicalJustification}
@@ -3446,6 +3457,7 @@ export default function CreateOrder() {
                   selectedSurgicalApproaches={selectedSurgicalApproaches}
                   setSelectedSurgicalApproaches={updateSelectedSurgicalApproaches}
                   isEditMode={!!editOrderId}
+                  selectedAnatomicalRegion={selectedAnatomicalRegion}
                 />
               </div>
             )}
@@ -3560,9 +3572,6 @@ export default function CreateOrder() {
                                         return (
                                           <p key={id || index}>
                                             {code} - {description}
-                                            {(cidItem as any).isAutoAdded && (
-                                              <span className="ml-2 text-green-600 text-xs font-medium">(Automático)</span>
-                                            )}
                                           </p>
                                         );
                                       })
@@ -3748,15 +3757,15 @@ export default function CreateOrder() {
                 </div>
 
                 <div className="flex justify-center gap-4 mt-6">
-                  <Button
-                    className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
+                  <button
+                    className="btn-medsync-dark h-10 flex items-center"
                     onClick={downloadExistingPDF}
                   >
-                    <FileText className="mr-2 h-4 w-4" />
+                    <img src={DownloadIcon} alt="Download" className="mr-2 h-5 w-5" />
                     Download
-                  </Button>
-                  <Button
-                    className="bg-medsync-blue hover:bg-medsync-blue-dark text-white transition-colors duration-200 h-10"
+                  </button>
+                  <button
+                    className="btn-medsync-dark h-10 flex items-center"
                     onClick={() => {
                       toast({
                         title: "Funcionalidade em desenvolvimento",
@@ -3765,8 +3774,9 @@ export default function CreateOrder() {
                       });
                     }}
                   >
-                    📧 Enviar por Email
-                  </Button>
+                    <img src={EmailIcon} alt="Email" className="mr-2 h-5 w-5" />
+                    Enviar por Email
+                  </button>
                   <Button
                     variant="outline"
                     className="border-border text-muted-foreground hover:bg-muted/30 h-10 cursor-not-allowed"
