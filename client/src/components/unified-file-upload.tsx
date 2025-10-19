@@ -19,6 +19,7 @@ export interface UnifiedAttachment {
   type: 'image' | 'pdf';
   size?: number;
   uploadedAt?: string;
+  source?: 'initial_registration' | 'order_details'; // Origem do anexo
 }
 
 interface UnifiedFileUploadProps {
@@ -109,7 +110,8 @@ export function UnifiedFileUpload({
             url: result.url,
             type: file.type.startsWith('image/') ? 'image' : 'pdf',
             size: file.size,
-            uploadedAt: new Date().toISOString()
+            uploadedAt: new Date().toISOString(),
+            source: 'initial_registration' // Marcando como anexo do cadastro inicial
           });
         } catch (error) {
           console.error(`Erro no upload de ${file.name}:`, error);
@@ -120,7 +122,8 @@ export function UnifiedFileUpload({
             url: URL.createObjectURL(file),
             type: file.type.startsWith('image/') ? 'image' : 'pdf',
             size: file.size,
-            uploadedAt: new Date().toISOString()
+            uploadedAt: new Date().toISOString(),
+            source: 'initial_registration' // Marcando como anexo do cadastro inicial
           });
         }
       }

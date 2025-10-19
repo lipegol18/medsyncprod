@@ -3,8 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Calendar, Clock, Building, User, Stethoscope, AlertCircle, Save, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Calendar, Clock, Building, User, Stethoscope, AlertCircle, Save, X, Lock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -335,28 +334,27 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
   return (
     <div className="max-h-[80vh] overflow-y-auto">
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-1.5">
 
           {/* Seleção do pedido médico e hospital - Layout ultra compacto */}
           {mode === 'create' && (
-            <Card className="border-blue-200">
-              <CardHeader className="pb-1">
-                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <Card className="border-border">
+              <CardHeader className="bg-medsync-blue text-white pb-3 pt-3 rounded-t-lg">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                   <Stethoscope className="h-4 w-4" />
-                  Selecionar Pedido Médico
+                  Informações do Pedido Médico
                 </CardTitle>
-                <CardDescription className="text-xs">
-                  Escolha o pedido médico para o qual deseja agendar a cirurgia
-                </CardDescription>
               </CardHeader>
-              <CardContent className="pt-1 pb-2">
-                <div className="grid grid-cols-2 gap-1">
+              <CardContent className="pt-4 pb-4">
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="medicalOrderId"
                     render={({ field }) => (
                       <FormItem className="space-y-0">
-                        <FormLabel className="text-xs font-medium">Pedido Médico</FormLabel>
+                        <FormLabel className="text-xs font-medium">
+                          Paciente
+                        </FormLabel>
                         <Select 
                           onValueChange={(value) => {
                             const orderId = parseInt(value);
@@ -369,10 +367,10 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                             }
                           }}
                           value={field.value ? field.value.toString() : ''}
-                          disabled={isLoadingOrders}
+                          disabled={isLoadingOrders || !!preSelectedOrderId}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-7">
+                            <SelectTrigger className={`h-7 text-xs ${!!preSelectedOrderId ? 'bg-gray-50 dark:bg-gray-900 disabled:opacity-100 disabled:text-foreground' : 'focus:border-medsync-blue focus:ring-medsync-blue'}`}>
                               <SelectValue placeholder="Selecione um pedido" />
                             </SelectTrigger>
                           </FormControl>
@@ -400,13 +398,12 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                   />
                   
                   <div className="space-y-0">
-                    <FormLabel className="text-xs font-medium">Hospital</FormLabel>
-                    <div className="flex items-center gap-2 p-1 border rounded-md bg-muted/10 h-7">
+                    <FormLabel className="text-xs font-medium">
+                      Hospital
+                    </FormLabel>
+                    <div className="flex items-center gap-2 p-1 border rounded-md bg-gray-50 dark:bg-gray-900 h-7 mt-0.5">
                       {selectedOrder ? (
-                        <>
-                          <span className="text-xs">🏥</span>
-                          <span className="font-medium text-xs truncate">{selectedOrder.hospitalName}</span>
-                        </>
+                        <span className="font-medium text-xs truncate text-foreground">{selectedOrder.hospitalName}</span>
                       ) : (
                         <span className="text-muted-foreground text-xs">Selecione pedido primeiro</span>
                       )}
@@ -418,18 +415,18 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
           )}
 
           {/* Layout principal - Informações do Agendamento */}
-          <div className="space-y-4">
+          <div className="space-y-1.5">
             {/* Coluna 1: Informações do Agendamento */}
-            <Card>
-              <CardHeader className="pb-1">
-                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <Card className="border-border">
+              <CardHeader className="bg-medsync-blue text-white pb-3 pt-3 rounded-t-lg">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                   <Calendar className="h-4 w-4" />
                   Informações do Agendamento
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-1 pt-0 pb-2">
+              <CardContent className="p-6 space-y-2 pt-4 pb-4">
                 {/* Data e Horário */}
-                <div className="grid grid-cols-2 gap-1">
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="scheduledDate"
@@ -438,10 +435,10 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                         <FormLabel className="text-xs font-medium">Data da Cirurgia</FormLabel>
                         <FormControl>
                           <BrazilianDateInput 
-                            className="h-7 text-xs" 
+                            className="h-7 text-xs focus:border-medsync-blue focus:ring-medsync-blue" 
                             value={field.value}
                             onChange={field.onChange}
-                            placeholder="dd/mm/aaaa"
+                            placeholder="DD/MM/AAAA"
                           />
                         </FormControl>
                         <FormMessage />
@@ -459,7 +456,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                             value={field.value}
                             onChange={field.onChange}
                             placeholder="HH:MM"
-                            className="h-7 text-xs"
+                            className="h-7 text-xs focus:border-medsync-blue focus:ring-medsync-blue"
                           />
                         </FormControl>
                         <FormMessage />
@@ -469,7 +466,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                 </div>
 
                 {/* Duração, Tipo e Status */}
-                <div className="grid grid-cols-3 gap-1">
+                <div className="grid grid-cols-3 gap-3">
                   <FormField
                     control={form.control}
                     name="estimatedDuration"
@@ -482,10 +479,9 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                             min={15}
                             max={720}
                             step={15}
-                            className="h-7 text-xs"
+                            className="h-7 text-xs focus:border-medsync-blue focus:ring-medsync-blue"
                             {...field}
                             onChange={(e) => field.onChange(parseInt(e.target.value))}
-                            disabled={!!selectedOrder}
                           />
                         </FormControl>
                         <FormMessage />
@@ -497,10 +493,12 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                     name="surgeryType"
                     render={({ field }) => (
                       <FormItem className="space-y-0">
-                        <FormLabel className="text-xs font-medium">Tipo</FormLabel>
+                        <FormLabel className="text-xs font-medium">
+                          Tipo
+                        </FormLabel>
                         <Select onValueChange={field.onChange} value={field.value} disabled={!!selectedOrder}>
                           <FormControl>
-                            <SelectTrigger className="h-7">
+                            <SelectTrigger className={`h-7 text-xs ${!!selectedOrder ? 'bg-gray-50 dark:bg-gray-900 disabled:opacity-100 disabled:text-foreground' : 'focus:border-medsync-blue focus:ring-medsync-blue'}`}>
                               <SelectValue placeholder="Eletiva" />
                             </SelectTrigger>
                           </FormControl>
@@ -519,9 +517,9 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                     render={({ field }) => (
                       <FormItem className="space-y-0">
                         <FormLabel className="text-xs font-medium">Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled>
                           <FormControl>
-                            <SelectTrigger className="h-7">
+                            <SelectTrigger className="h-7 text-xs bg-gray-50 dark:bg-gray-900 disabled:opacity-100 disabled:text-foreground">
                               <SelectValue placeholder="Agendado" />
                             </SelectTrigger>
                           </FormControl>
@@ -539,43 +537,18 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                     )}
                   />
                 </div>
-
-                {/* Prioridade e Sala */}
-                <div className="grid grid-cols-2 gap-1">
-                  <FormField
-                    control={form.control}
-                    name="priority"
-                    render={({ field }) => (
-                      <FormItem className="space-y-0">
-                        <FormLabel className="text-xs font-medium">Prioridade</FormLabel>
-                        <Select 
-                          onValueChange={(value) => field.onChange(parseInt(value))} 
-                          value={field.value?.toString() || '1'}
-                          disabled={!!selectedOrder}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-7">
-                              <SelectValue placeholder="Baixa" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="1">Baixa</SelectItem>
-                            <SelectItem value="2">Média</SelectItem>
-                            <SelectItem value="3">Alta</SelectItem>
-                            <SelectItem value="4">Crítica</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
               </CardContent>
             </Card>
 
           
             {/* Seção de Observações - Largura Completa */}
-            <Card>
+            <Card className="border-border">
+              <CardHeader className="bg-medsync-blue text-white pb-3 pt-3 rounded-t-lg">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <AlertCircle className="h-4 w-4" />
+                  Observações
+                </CardTitle>
+              </CardHeader>
               <CardContent className="space-y-4 pt-4 pb-4">
                 <FormField
                   control={form.control}
@@ -586,7 +559,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                       <FormControl>
                         <Textarea 
                           placeholder="Instruções, preparativos..."
-                          className="min-h-[100px] resize-vertical text-sm"
+                          className="min-h-[100px] resize-vertical text-sm focus:border-medsync-blue focus:ring-medsync-blue"
                           {...field}
                         />
                       </FormControl>
@@ -604,7 +577,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                       <FormControl>
                         <Textarea 
                           placeholder="Informações adicionais..."
-                          className="min-h-[100px] resize-vertical text-sm"
+                          className="min-h-[100px] resize-vertical text-sm focus:border-medsync-blue focus:ring-medsync-blue"
                           {...field}
                         />
                       </FormControl>
@@ -624,7 +597,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                         <FormControl>
                           <Textarea 
                             placeholder="Descreva o motivo do cancelamento..."
-                            className="min-h-[80px] resize-vertical text-sm"
+                            className="min-h-[80px] resize-vertical text-sm focus:border-medsync-blue focus:ring-medsync-blue"
                             {...field}
                           />
                         </FormControl>
@@ -638,24 +611,27 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
           </div>
 
           {/* Botões de ação - Compactos */}
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
+          <div className="flex justify-center gap-12 pt-4">
+            <button
               type="button"
-              variant="outline"
               onClick={onClose}
               disabled={isLoading}
-              size="sm"
+              className="btn-medsync-dark disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
               <X className="h-4 w-4 mr-1" />
               Cancelar
-            </Button>
-            <Button type="submit" disabled={isLoading} size="sm">
+            </button>
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              className="btn-medsync-dark disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            >
               <Save className="h-4 w-4 mr-1" />
               {isLoading 
-                ? (mode === 'create' ? 'Criando...' : 'Atualizando...')
-                : (mode === 'create' ? 'Criar Agendamento' : 'Atualizar Agendamento')
+                ? (actualMode === 'create' ? 'Criando...' : 'Atualizando...')
+                : (actualMode === 'create' ? 'Criar Agendamento' : 'Atualizar Agendamento')
               }
-            </Button>
+            </button>
           </div>
         </form>
       </Form>

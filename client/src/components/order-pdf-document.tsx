@@ -530,8 +530,8 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
           </Text>
         </View>
 
-        {/* Códigos CID-10 */}
-        <View style={styles.clinicalSection}>
+        {/* Códigos CID-10 - NUNCA QUEBRAR */}
+        <View style={styles.clinicalSection} wrap={false}>
           <Text style={styles.sectionHeader}>Códigos CID-10:</Text>
           <View style={styles.clinicalContent}>
             {cidData && Array.isArray(cidData) && cidData.length > 0 ? (
@@ -541,9 +541,6 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
                 return (
                   <Text key={index} style={styles.clinicalText}>
                     {code} - {description}
-                    {(cidItem.isAutoAdded || cidItem.cid?.isAutoAdded) && (
-                      <Text style={styles.autoAddedText}> (Automático)</Text>
-                    )}
                   </Text>
                 );
               })
@@ -553,9 +550,9 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
           </View>
         </View>
 
-        {/* Condutas Cirúrgicas */}
+        {/* Condutas Cirúrgicas - NUNCA QUEBRAR */}
         {cidData && Array.isArray(cidData) && cidData.some(cidItem => cidItem.surgicalApproach) && (
-          <View style={styles.clinicalSection}>
+          <View style={styles.clinicalSection} wrap={false}>
             <Text style={styles.sectionHeader}>Condutas Cirúrgicas:</Text>
             <View style={styles.clinicalContent}>
               {(() => {
@@ -580,9 +577,9 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
           </View>
         )}
 
-        {/* Procedimentos Cirúrgicos Necessários (igual à prévia) */}
+        {/* Procedimentos Cirúrgicos Necessários - NUNCA QUEBRAR */}
         {secondaryProcedures?.length > 0 && (
-          <View style={styles.clinicalSection}>
+          <View style={styles.clinicalSection} wrap={false}>
             <Text style={styles.sectionHeader}>Procedimentos Cirúrgicos Necessários:</Text>
             <View style={styles.clinicalContent}>
               {(() => {
@@ -649,84 +646,86 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
           </View>
         </View>
 
-        {/* Materiais OPME */}
-        {opmeItems?.length > 0 && (
-          <View style={styles.clinicalSection}>
-            <Text style={styles.sectionHeader}>Lista de Materiais Necessários:</Text>
-            <View style={styles.clinicalContent}>
-              {opmeItems.map((opmeItem, index) => {
-                // Detectar se o item tem estrutura {item: any, quantity: number} ou é direto
-                const item = opmeItem.item || opmeItem;
-                const quantity = opmeItem.quantity || orderData?.opmeItemQuantities?.[index] || 1;
-                
-                return (
-                  <Text key={index} style={styles.clinicalText}>
-                    {quantity} x {item.technicalName || item.commercialName || item.name || 'Material não especificado'}
-                    {item.anvisaRegistrationNumber && ` (ANVISA: ${item.anvisaRegistrationNumber})`}
-                    {item.manufacturerName && ` - Fabricante: ${item.manufacturerName}`}
-                  </Text>
-                );
-              })}
+        {/* BLOCO UNIFICADO: Materiais + Fornecedores + Assinatura - SEMPRE JUNTOS NA MESMA PÁGINA */}
+        <View wrap={false}>
+          {/* Materiais OPME */}
+          {opmeItems?.length > 0 && (
+            <View style={styles.clinicalSection}>
+              <Text style={styles.sectionHeader}>Lista de Materiais Necessários:</Text>
+              <View style={styles.clinicalContent}>
+                {opmeItems.map((opmeItem, index) => {
+                  // Detectar se o item tem estrutura {item: any, quantity: number} ou é direto
+                  const item = opmeItem.item || opmeItem;
+                  const quantity = opmeItem.quantity || orderData?.opmeItemQuantities?.[index] || 1;
+                  
+                  return (
+                    <Text key={index} style={styles.clinicalText}>
+                      {quantity} x {item.technicalName || item.commercialName || item.name || 'Material não especificado'}
+                      {item.anvisaRegistrationNumber && ` (ANVISA: ${item.anvisaRegistrationNumber})`}
+                    </Text>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Fornecedores */}
-        {suppliers?.length > 0 && (
-          <View style={styles.clinicalSection}>
-            <Text style={styles.sectionHeader}>Fornecedores Indicados:</Text>
-            <View style={styles.clinicalContent}>
-              <Text style={styles.clinicalText}>
-                {suppliers
-                  .map(supplier => {
-                    // Novo formato com fabricantes: "Trade Name (Manufacturer Name)"
-                    if (supplier.supplierName && supplier.manufacturerName) {
-                      return `${supplier.supplierName} (${supplier.manufacturerName})`;
-                    }
-                    // Fallback para sistema antigo
-                    return supplier.tradeName || supplier.companyName || supplier.name || supplier.supplierName || 'Fornecedor não especificado';
-                  })
-                  .join('   •   ')
-                }
+          {/* Fornecedores */}
+          {suppliers?.length > 0 && (
+            <View style={styles.clinicalSection}>
+              <Text style={styles.sectionHeader}>Fornecedores Indicados:</Text>
+              <View style={styles.clinicalContent}>
+                <Text style={styles.clinicalText}>
+                  {suppliers
+                    .map(supplier => {
+                      // Novo formato com fabricantes: "Trade Name (Manufacturer Name)"
+                      if (supplier.supplierName && supplier.manufacturerName) {
+                        return `${supplier.supplierName} (${supplier.manufacturerName})`;
+                      }
+                      // Fallback para sistema antigo
+                      return supplier.tradeName || supplier.companyName || supplier.name || supplier.supplierName || 'Fornecedor não especificado';
+                    })
+                    .join('   •   ')
+                  }
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Seção de assinatura */}
+          <View style={styles.signatureSection}>
+            {/* Data */}
+            <View style={styles.dateSection}>
+              <Text style={styles.dateText}>
+                {hospitalData?.name?.includes('Niterói') ? 'Niterói' : 'Rio de Janeiro'}, {formatDate(new Date())}
               </Text>
             </View>
-          </View>
-        )}
 
-        {/* Seção de assinatura (igual à prévia) */}
-        <View style={styles.signatureSection}>
-          {/* Data */}
-          <View style={styles.dateSection}>
-            <Text style={styles.dateText}>
-              {hospitalData?.name?.includes('Niterói') ? 'Niterói' : 'Rio de Janeiro'}, {formatDate(new Date())}
-            </Text>
-          </View>
+            {/* Espaço para assinatura */}
+            <View style={styles.signatureSpace}>
+              {orderData?.doctorSignature ? (
+                <Image 
+                  style={styles.signatureImage} 
+                  src={orderData.doctorSignature} 
+                />
+              ) : (
+                <Text style={styles.signaturePlaceholder}>
+                  Assinatura não cadastrada
+                </Text>
+              )}
+            </View>
 
-          {/* Espaço para assinatura */}
-          <View style={styles.signatureSpace}>
-            {orderData?.doctorSignature ? (
-              <Image 
-                style={styles.signatureImage} 
-                src={orderData.doctorSignature} 
-              />
-            ) : (
-              <Text style={styles.signaturePlaceholder}>
-                Assinatura não cadastrada
-              </Text>
-            )}
-          </View>
+            {/* Dados do médico */}
+            <View style={styles.doctorInfo}>
+              <View style={styles.signatureLine} />
+              <Text style={styles.doctorName}>{orderData?.doctorName?.toUpperCase() || 'NOME DO MÉDICO'}</Text>
+              <Text style={styles.doctorSpecialty}>ORTOPEDIA E TRAUMATOLOGIA</Text>
+              <Text style={styles.doctorCrm}>CRM {orderData?.doctorCRM || 'XXXX'}</Text>
+            </View>
 
-          {/* Dados do médico */}
-          <View style={styles.doctorInfo}>
-            <View style={styles.signatureLine} />
-            <Text style={styles.doctorName}>{orderData?.doctorName?.toUpperCase() || 'NOME DO MÉDICO'}</Text>
-            <Text style={styles.doctorSpecialty}>ORTOPEDIA E TRAUMATOLOGIA</Text>
-            <Text style={styles.doctorCrm}>CRM {orderData?.doctorCRM || 'XXXX'}</Text>
-          </View>
-
-          {/* Rodapé */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Documento gerado por MedSync v2.5.3</Text>
+            {/* Rodapé */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Documento gerado por MedSync v2.5.3</Text>
+            </View>
           </View>
         </View>
       </Page>
