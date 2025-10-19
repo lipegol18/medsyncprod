@@ -280,7 +280,7 @@ interface SurgeryDataProps {
   ) => void;
   // Campo para lateralidade da cirurgia
   procedureLaterality: string | null;
-  setProcedureLaterality: (laterality: string | null) => void;
+  emsetProcedureLaterality: (laterality: string | null) => void;
   procedureType: string;
   setProcedureType: (type: string) => void;
   selectedProcedure: Procedure | null;
@@ -366,6 +366,8 @@ interface SurgeryDataProps {
   onManufacturersReady?: () => void;
   // Flag para detectar modo de edição e desabilitar auto-preenchimento
   isEditMode?: boolean;
+  // Região anatômica selecionada para o webhook de IA
+  selectedAnatomicalRegion?: AnatomicalRegion | null;
 }
 
 // Componente para selecionar conduta clínica para um procedimento
@@ -647,8 +649,14 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
         if (cbhpmResponse.ok) {
           const cbhpmProcedures = await cbhpmResponse.json();
           console.log('🏥 Procedimentos CBHPM encontrados:', cbhpmProcedures);
+          console.log('🔍 Verificando callbacks:', {
+            hasSetSelectedProcedure: !!setSelectedProcedure,
+            hasSetSecondaryProcedures: !!setSecondaryProcedures,
+            cbhpmLength: cbhpmProcedures.length
+          });
           
-          if (cbhpmProcedures.length > 0 && setSelectedProcedure && setSecondaryProcedures) {
+          // Permitir auto-preenchimento se pelo menos setSecondaryProcedures estiver disponível
+          if (cbhpmProcedures.length > 0 && setSecondaryProcedures) {
             // 🔄 MERGE INTELIGENTE: Sempre combinar procedimentos CBHPM (soma quantidades)
             const formattedProcedures = cbhpmProcedures.map((proc: any) => ({
               procedure: {
@@ -944,7 +952,7 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
       {/* Conduta selecionada - apenas para visualização */}
       {selectedConduct && (
         <div className="mb-2">
-          <span className="inline-flex items-center px-2 py-1 bg-accent-light text-accent text-xs rounded-full border border-accent/50">
+          <span className="inline-flex items-center px-2 py-1 bg-medsync-dark-blue text-white text-xs rounded-full border border-medsync-blue">
             {selectedConduct.approachName}
             {selectedConduct.isPreferred && " (Preferencial)"}
           </span>
@@ -1082,6 +1090,8 @@ export function SurgeryData({
   additionalNotes = "",
   // Anexos do pedido
   attachments = null,
+  // Região anatômica selecionada para o webhook de IA
+  selectedAnatomicalRegion = null,
 }: SurgeryDataProps) {
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
@@ -1156,8 +1166,8 @@ export function SurgeryData({
         sexo_paciente: selectedPatient?.gender || "",
         idade: selectedPatient?.birthDate ? calculateAge(selectedPatient.birthDate) : 0,
         indicacao_clinica: clinicalIndication || "",
-        regiao_anatomica: selectedSurgicalProcedures?.[0]?.name || "",
-        procedimento_cirurgico: selectedSurgicalProcedures?.[0]?.name || "",
+        regiao_anatomica: selectedAnatomicalRegion?.name || "",
+        procedimento_cirurgico: selectedSurgicalProcedures?.map(proc => proc.name).join(", ") || "",
         
         // Campos opcionais
         observacoes_adicionais: additionalNotes || "",
@@ -1171,7 +1181,7 @@ export function SurgeryData({
         ],
         itens_opme: selectedOpmeItems?.map(item => item.item.technicalName || item.item.commercialName) || [],
         fornecedores: supplierDetails?.map(supplier => supplier.companyName || supplier.tradeName) || [],
-        justificativa_clinica_atual: clinicalJustification || "", // Campo atual da justificativa clínica
+        justificativa_proposta: clinicalJustification || "", // Justificativa clínica proposta pelo médico
         anexos: attachments?.map(attachment => ({
           nome: attachment.filename,
           url: `${window.location.origin}${attachment.url}`
@@ -1197,6 +1207,7 @@ export function SurgeryData({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer f9a2b8e3-c1d5-4e7f-a6b0-9c8d7e6f5a4b',
         },
         body: JSON.stringify(webhookData)
       });
@@ -1388,6 +1399,25 @@ export function SurgeryData({
   const [manufacturer1, setManufacturer1] = useState<string>("");
   const [manufacturer2, setManufacturer2] = useState<string>("");
   const [manufacturer3, setManufacturer3] = useState<string>("");
+
+  // Limpar fornecedores quando não houver itens OPME (apenas quando itens OPME mudam)
+  useEffect(() => {
+    const hasOpmeItems = selectedOpmeItems && selectedOpmeItems.length > 0;
+    
+    if (!hasOpmeItems) {
+      // Limpar todos os fornecedores incondicionalmente
+      setSelectedSupplier1(null);
+      setSelectedSupplier2(null);
+      setSelectedSupplier3(null);
+      
+      // Limpar todos os fabricantes incondicionalmente
+      setManufacturer1("");
+      setManufacturer2("");
+      setManufacturer3("");
+      
+      console.log("🗑️ Fornecedores e fabricantes limpos - sem itens OPME");
+    }
+  }, [selectedOpmeItems]);
 
   // Atualizar o componente pai quando um fornecedor é selecionado
   useEffect(() => {
@@ -3195,8 +3225,8 @@ export function SurgeryData({
                                 
                                 // Verificar se o procedimento principal deve ser removido (apenas se exclusivo)
                                 if (selectedProcedure && exclusiveCbhpmToRemove.includes(selectedProcedure.code)) {
-                                  setSelectedProcedure(null);
-                                  setProcedureQuantity(1);
+                                  if (setSelectedProcedure) setSelectedProcedure(null);
+                                  if (setProcedureQuantity) setProcedureQuantity(1);
                                   console.log(`🗑️ Procedimento principal removido (exclusivo): ${selectedProcedure.code}`);
                                 } else if (selectedProcedure && procedureCbhpmCodes.includes(selectedProcedure.code)) {
                                   console.log(`✅ Procedimento principal preservado (compartilhado): ${selectedProcedure.code}`);
@@ -3226,9 +3256,9 @@ export function SurgeryData({
                                 );
                               } else {
                                 // Se não há procedimentos restantes, remover todos os CBHPMs
-                                setSelectedProcedure(null);
-                                setProcedureQuantity(1);
-                                setSecondaryProcedures([]);
+                                if (setSelectedProcedure) setSelectedProcedure(null);
+                                if (setProcedureQuantity) setProcedureQuantity(1);
+                                if (setSecondaryProcedures) setSecondaryProcedures([]);
                                 console.log(`🗑️ Todos os CBHPMs removidos - nenhum procedimento restante`);
                               }
                               
@@ -3248,27 +3278,29 @@ export function SurgeryData({
                                 
                                 console.log(`🔍 OPMEs que devem ser preservados (outros procedimentos):`, Array.from(remainingOpmeIds));
                                 
-                                setSelectedOpmeItems(prev => {
-                                  const procedureOpmeIds = procedureOpme.map((item: any) => item.opme?.id || item.id);
-                                  const exclusiveOpmeToRemove = procedureOpmeIds.filter(id => 
-                                    !remainingOpmeIds.has(id)
-                                  );
-                                  
-                                  const filteredOpme = prev.filter(opmeItem => {
-                                    const opmeId = opmeItem.item?.id || opmeItem.id;
-                                    return !exclusiveOpmeToRemove.includes(opmeId);
+                                if (setSelectedOpmeItems) {
+                                  setSelectedOpmeItems(prev => {
+                                    const procedureOpmeIds = procedureOpme.map((item: any) => item.opme?.id || item.id);
+                                    const exclusiveOpmeToRemove = procedureOpmeIds.filter(id => 
+                                      !remainingOpmeIds.has(id)
+                                    );
+                                    
+                                    const filteredOpme = prev.filter(opmeItem => {
+                                      const opmeId = opmeItem.item?.id || opmeItem.id;
+                                      return !exclusiveOpmeToRemove.includes(opmeId);
+                                    });
+                                    
+                                    console.log(`🗑️ Itens OPME exclusivos removidos:`, exclusiveOpmeToRemove);
+                                    console.log(`✅ Itens OPME preservados (compartilhados):`, 
+                                      procedureOpmeIds.filter(id => remainingOpmeIds.has(id))
+                                    );
+                                    
+                                    return filteredOpme;
                                   });
-                                  
-                                  console.log(`🗑️ Itens OPME exclusivos removidos:`, exclusiveOpmeToRemove);
-                                  console.log(`✅ Itens OPME preservados (compartilhados):`, 
-                                    procedureOpmeIds.filter(id => remainingOpmeIds.has(id))
-                                  );
-                                  
-                                  return filteredOpme;
-                                });
+                                }
                               } else {
                                 // Se não há procedimentos restantes, remover todos os OPMEs
-                                setSelectedOpmeItems([]);
+                                if (setSelectedOpmeItems) setSelectedOpmeItems([]);
                                 console.log(`🗑️ Todos os itens OPME removidos - nenhum procedimento restante`);
                               }
                               
@@ -3295,21 +3327,21 @@ export function SurgeryData({
                                 
                                 // Verificar e remover fornecedores específicos mantendo os de outros procedimentos
                                 if (selectedSupplier1 && exclusiveSuppliersToRemove.includes(selectedSupplier1.id)) {
-                                  setSelectedSupplier1(null);
+                                  if (setSelectedSupplier1) setSelectedSupplier1(null);
                                   console.log(`🗑️ Fornecedor 1 removido (exclusivo): ${selectedSupplier1.companyName || selectedSupplier1.company_name}`);
                                 } else if (selectedSupplier1 && procedureSupplierIds.includes(selectedSupplier1.id)) {
                                   console.log(`✅ Fornecedor 1 preservado (compartilhado): ${selectedSupplier1.companyName || selectedSupplier1.company_name}`);
                                 }
                                 
                                 if (selectedSupplier2 && exclusiveSuppliersToRemove.includes(selectedSupplier2.id)) {
-                                  setSelectedSupplier2(null);
+                                  if (setSelectedSupplier2) setSelectedSupplier2(null);
                                   console.log(`🗑️ Fornecedor 2 removido (exclusivo): ${selectedSupplier2.companyName || selectedSupplier2.company_name}`);
                                 } else if (selectedSupplier2 && procedureSupplierIds.includes(selectedSupplier2.id)) {
                                   console.log(`✅ Fornecedor 2 preservado (compartilhado): ${selectedSupplier2.companyName || selectedSupplier2.company_name}`);
                                 }
                                 
                                 if (selectedSupplier3 && exclusiveSuppliersToRemove.includes(selectedSupplier3.id)) {
-                                  setSelectedSupplier3(null);
+                                  if (setSelectedSupplier3) setSelectedSupplier3(null);
                                   console.log(`🗑️ Fornecedor 3 removido (exclusivo): ${selectedSupplier3.companyName || selectedSupplier3.company_name}`);
                                 } else if (selectedSupplier3 && procedureSupplierIds.includes(selectedSupplier3.id)) {
                                   console.log(`✅ Fornecedor 3 preservado (compartilhado): ${selectedSupplier3.companyName || selectedSupplier3.company_name}`);
@@ -3320,15 +3352,15 @@ export function SurgeryData({
                                 );
                               } else {
                                 // Se não há procedimentos restantes, remover todos os fornecedores
-                                setSelectedSupplier1(null);
-                                setSelectedSupplier2(null);
-                                setSelectedSupplier3(null);
+                                if (setSelectedSupplier1) setSelectedSupplier1(null);
+                                if (setSelectedSupplier2) setSelectedSupplier2(null);
+                                if (setSelectedSupplier3) setSelectedSupplier3(null);
                                 console.log(`🗑️ Todos os fornecedores removidos - nenhum procedimento restante`);
                               }
                               
                               // 8. Se não há mais procedimentos, limpar justificativa
                               if (remainingProcedures.length === 0) {
-                                setClinicalJustification("");
+                                if (setClinicalJustification) setClinicalJustification("");
                                 console.log(`🗑️ Justificativa clínica limpa - nenhum procedimento restante`);
                               }
                               
@@ -3625,8 +3657,8 @@ export function SurgeryData({
                 className={`
                   px-4 py-3 rounded-lg font-medium text-sm transition-all duration-200 border-2
                   ${cirurgiaLateralidade === "bilateral"
-                    ? "bg-primary border-primary text-foreground shadow-lg shadow-primary/30"
-                    : "bg-accent/30 border-border text-muted-foreground hover:bg-accent-light hover:border-border"
+                    ? "bg-medsync-blue border-medsync-light-gray text-white shadow-lg shadow-primary/30 scale-[1.02]"
+                    : "bg-accent/30 border-medsync-light-gray text-muted-foreground hover:bg-accent-light hover:border-border"
                   }
                 `}
               >
@@ -3642,8 +3674,8 @@ export function SurgeryData({
                 className={`
                   px-4 py-3 rounded-lg font-medium text-sm transition-all duration-200 border-2
                   ${cirurgiaLateralidade === "direito"
-                    ? "bg-primary border-primary text-foreground shadow-lg shadow-primary/30"
-                    : "bg-accent/30 border-border text-muted-foreground hover:bg-accent-light hover:border-border"
+                    ? "bg-medsync-blue border-medsync-light-gray text-white shadow-lg shadow-primary/30 scale-[1.02]"
+                    : "bg-accent/30 border-medsync-light-gray text-muted-foreground hover:bg-accent-light hover:border-border"
                   }
                 `}
               >
@@ -3659,8 +3691,8 @@ export function SurgeryData({
                 className={`
                   px-4 py-3 rounded-lg font-medium text-sm transition-all duration-200 border-2
                   ${cirurgiaLateralidade === "esquerdo"
-                    ? "bg-primary border-primary text-foreground shadow-lg shadow-primary/30"
-                    : "bg-accent/30 border-border text-muted-foreground hover:bg-accent-light hover:border-border"
+                    ? "bg-medsync-blue border-medsync-light-gray text-white shadow-lg shadow-primary/30 scale-[1.02]"
+                    : "bg-accent/30 border-medsync-light-gray text-muted-foreground hover:bg-accent-light hover:border-border"
                   }
                 `}
               >
@@ -3676,8 +3708,8 @@ export function SurgeryData({
                 className={`
                   px-4 py-3 rounded-lg font-medium text-sm transition-all duration-200 border-2
                   ${cirurgiaLateralidade === "nao_se_aplica"
-                    ? "bg-primary border-primary text-foreground shadow-lg shadow-primary/30"
-                    : "bg-accent/30 border-border text-muted-foreground hover:bg-accent-light hover:border-border"
+                    ? "bg-medsync-blue border-medsync-light-gray text-white shadow-lg shadow-primary/30 scale-[1.02]"
+                    : "bg-accent/30 border-medsync-light-gray text-muted-foreground hover:bg-accent-light hover:border-border"
                   }
                 `}
               >
@@ -3719,8 +3751,8 @@ export function SurgeryData({
                 className={`
                   px-4 py-3 rounded-lg font-medium text-sm transition-all duration-200 border-2
                   ${procedureType === PROCEDURE_TYPE_VALUES.ELETIVA
-                    ? "bg-primary border-primary text-foreground shadow-lg shadow-primary/30"
-                    : "bg-accent/30 border-border text-muted-foreground hover:bg-accent-light hover:border-border"
+                    ? "bg-medsync-blue border-medsync-light-gray text-white shadow-lg shadow-primary/30 scale-[1.02]"
+                    : "bg-accent/30 border-medsync-light-gray text-muted-foreground hover:bg-accent-light hover:border-border"
                   }
                 `}
               >
@@ -3733,8 +3765,8 @@ export function SurgeryData({
                 className={`
                   px-4 py-3 rounded-lg font-medium text-sm transition-all duration-200 border-2
                   ${procedureType === PROCEDURE_TYPE_VALUES.URGENCIA
-                    ? "bg-primary border-primary text-foreground shadow-lg shadow-primary/30"
-                    : "bg-accent/30 border-border text-muted-foreground hover:bg-accent-light hover:border-border"
+                    ? "bg-medsync-blue border-medsync-light-gray text-white shadow-lg shadow-primary/30 scale-[1.02]"
+                    : "bg-accent/30 border-medsync-light-gray text-muted-foreground hover:bg-accent-light hover:border-border"
                   }
                 `}
               >
@@ -3753,11 +3785,11 @@ export function SurgeryData({
           <div className="mb-6 text-foreground mt-6">
             <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
               {/* Cabeçalho com fundo azul claro */}
-              <div className="bg-accent-light px-4 py-3">
+              <div className="bg-medsync-blue px-4 py-3">
                 <div className="flex items-center">
-                  <FileText className="mr-2 h-5 w-5 text-muted-foreground" />
+                  <FileText className="mr-2 h-5 w-5 text-white" />
                   <div>
-                    <h3 className="text-lg font-semibold text-muted-foreground">
+                    <h3 className="text-lg font-semibold text-white">
                       Procedimentos Cirúrgicos Necessários
                     </h3>
                   </div>
@@ -3865,15 +3897,8 @@ export function SurgeryData({
 
                                       const updatedProcedures = [...secondaryProcedures, newProcedure];
                                       
-                                      // Reorganizar procedimentos por porte após adição
-                                      const { newSelectedProcedure, newSecondaryProcedures } = reorganizeProceduresByPorte(
-                                        selectedProcedure,
-                                        updatedProcedures
-                                      );
-                                      
-                                      // Aplicar reorganização
-                                      setSelectedProcedure(newSelectedProcedure);
-                                      setSecondaryProcedures(newSecondaryProcedures);
+                                      // Atualizar lista de procedimentos
+                                      setSecondaryProcedures(updatedProcedures);
 
                                       // Salvar todos os procedimentos no banco de dados imediatamente
                                       saveAllProceduresToDatabase().then(saveSuccess => {
@@ -4315,6 +4340,7 @@ export function SurgeryData({
                         role="combobox"
                         aria-expanded={supplier1Open}
                         className="combobox-medsync"
+                        disabled={!selectedOpmeItems || selectedOpmeItems.length === 0}
                       >
                         <span className={selectedSupplier1 ? "combobox-value" : "combobox-placeholder"}>
                           {supplierLoading ? (
@@ -4419,6 +4445,7 @@ export function SurgeryData({
                         onChange={(e) => handleManufacturerChange(e.target.value, 1)}
                         className="w-full bg-card text-foreground border-border placeholder:text-muted-foreground text-sm"
                         maxLength={255}
+                        disabled={!selectedOpmeItems || selectedOpmeItems.length === 0}
                       />
                     </div>
                   )}
@@ -4442,6 +4469,7 @@ export function SurgeryData({
                         role="combobox"
                         aria-expanded={supplier2Open}
                         className="combobox-medsync"
+                        disabled={!selectedOpmeItems || selectedOpmeItems.length === 0}
                       >
                         <span className={selectedSupplier2 ? "combobox-value" : "combobox-placeholder"}>
                           {supplierLoading ? (
@@ -4569,6 +4597,7 @@ export function SurgeryData({
                         role="combobox"
                         aria-expanded={supplier3Open}
                         className="combobox-medsync"
+                        disabled={!selectedOpmeItems || selectedOpmeItems.length === 0}
                       >
                         <span className={selectedSupplier3 ? "combobox-value" : "combobox-placeholder"}>
                           {supplierLoading ? (
@@ -4714,6 +4743,14 @@ export function SurgeryData({
                       onChange={(e) => setClinicalJustification(e.target.value)}
                       className="min-h-48 bg-card text-foreground border-border resize-y"
                     />
+                    
+                    {/* Nota Informativa sobre a IA */}
+                    <div className="mt-2">
+                      <p className="text-xs text-medsync-dark-blue dark:text-medsync-dark-blue">
+                        * Possuímos uma IA própria treinada por médicos especialistas. Porém poderá conter imprecisões. Sempre valide o pedido antes de submeter.
+                      </p>
+                    </div>
+                    
                     <div className="mt-3 flex justify-end">
                       <button
                         type="button"
