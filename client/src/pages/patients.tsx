@@ -336,7 +336,7 @@ export default function Patients() {
           </div>
           
           {/* Seção de Filtros Moderna */}
-          {!isLoading && !error && patients && patients.length > 0 && (
+          {!isLoading && !error && patients && (
             <Card className="border-gray-200 bg-gradient-to-r from-sky-50 to-sky-100/50 shadow-sm mb-6">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
