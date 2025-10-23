@@ -2239,17 +2239,12 @@ export default function Reports() {
           )}
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-            <TabsList
-              className={`grid ${isAdmin ? "grid-cols-4" : "grid-cols-3"} mb-6`}
-            >
+            <TabsList className="grid grid-cols-3 mb-6">
               <TabsTrigger value="volume">Volume de Cirurgias</TabsTrigger>
               <TabsTrigger value="distribution">Distribuição</TabsTrigger>
               <TabsTrigger value="received-values">
                 Valores Recebidos
               </TabsTrigger>
-              {isAdmin && (
-                <TabsTrigger value="admin">Dados Gerenciais</TabsTrigger>
-              )}
             </TabsList>
 
             {/* Aba de Volume de Cirurgias */}
@@ -2946,177 +2941,6 @@ export default function Reports() {
               <ReceivedValuesTab appliedFilters={appliedFilters} />
             </TabsContent>
 
-            {/* Aba de Complexidade foi removida conforme solicitado */}
-
-            {/* Seção de Faturamento Médico removida conforme solicitado */}
-
-            {/* Aba de Dados Gerenciais (apenas para administradores) */}
-            {isAdmin && (
-              <TabsContent value="admin" className="space-y-6">
-                <Card className="border-border bg-card shadow-lg">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-card-foreground">
-                      Desempenho por Médico
-                    </CardTitle>
-                    <CardDescription className="text-muted-foreground">
-                      Comparativo de volume de cirurgias por profissional
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="h-80 bg-card rounded-b-lg">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={doctorStats}
-                        layout="vertical"
-                        margin={{ top: 20, right: 30, left: 150, bottom: 20 }}
-                      >
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="rgba(59, 130, 246, 0.2)"
-                        />
-                        <XAxis type="number" stroke="#93c5fd" />
-                        <YAxis
-                          type="category"
-                          dataKey="name"
-                          tick={{ fontSize: 12, fill: "#93c5fd" }}
-                          width={150}
-                          stroke="#93c5fd"
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "#1e3a8a",
-                            border: "1px solid #3b82f6",
-                            color: "#fff",
-                          }}
-                          formatter={(value) => [
-                            `${value} cirurgias`,
-                            "Volume",
-                          ]}
-                        />
-                        <Bar
-                          dataKey="value"
-                          fill="#3b82f6"
-                          radius={[0, 4, 4, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card className="border-border bg-card shadow-lg">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-card-foreground">
-                        Desempenho por Hospital
-                      </CardTitle>
-                      <CardDescription className="text-muted-foreground">
-                        Volume de cirurgias por instituição
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="h-80 bg-card rounded-b-lg">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={[
-                              { name: "Hospital São Lucas", value: 75 },
-                              { name: "Hospital Santa Teresa", value: 55 },
-                              { name: "Hospital Central", value: 45 },
-                              { name: "Hospital Universitário", value: 40 },
-                              { name: "Outros", value: 35 },
-                            ]}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) =>
-                              `${name}: ${(percent * 100).toFixed(0)}%`
-                            }
-                            outerRadius={120}
-                            fill="#8884d8"
-                            dataKey="value"
-                          >
-                            {procedureTypeData.map((entry, index) => (
-                              <Cell
-                                key={`cell-${index}`}
-                                fill={COLORS[index % COLORS.length]}
-                              />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            contentStyle={{
-                              backgroundColor: "#1e3a8a",
-                              border: "1px solid #3b82f6",
-                              color: "#fff",
-                            }}
-                            formatter={(value, name) => [
-                              `${value} cirurgias`,
-                              name,
-                            ]}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-border bg-card shadow-lg">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-card-foreground">
-                        Indicadores Financeiros
-                      </CardTitle>
-                      <CardDescription className="text-muted-foreground">
-                        Resumo financeiro do período
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-muted p-4 rounded-lg">
-                          <div className="text-muted-foreground text-sm mb-1">
-                            Faturamento Total
-                          </div>
-                          <div className="text-2xl font-bold text-foreground">
-                            R$ 1.578.950
-                          </div>
-                          <div className="text-muted-foreground text-xs mt-2">
-                            +12% em relação ao período anterior
-                          </div>
-                        </div>
-                        <div className="bg-muted p-4 rounded-lg">
-                          <div className="text-muted-foreground text-sm mb-1">
-                            Ticket Médio
-                          </div>
-                          <div className="text-2xl font-bold text-foreground">
-                            R$ 6.240
-                          </div>
-                          <div className="text-muted-foreground text-xs mt-2">
-                            +5% em relação ao período anterior
-                          </div>
-                        </div>
-                        <div className="bg-muted p-4 rounded-lg">
-                          <div className="text-muted-foreground text-sm mb-1">
-                            Glosas
-                          </div>
-                          <div className="text-2xl font-bold text-foreground">
-                            R$ 48.350
-                          </div>
-                          <div className="text-muted-foreground text-xs mt-2">
-                            3.1% do faturamento total
-                          </div>
-                        </div>
-                        <div className="bg-muted p-4 rounded-lg">
-                          <div className="text-muted-foreground text-sm mb-1">
-                            Pendente
-                          </div>
-                          <div className="text-2xl font-bold text-foreground">
-                            R$ 325.780
-                          </div>
-                          <div className="text-muted-foreground text-xs mt-2">
-                            20.6% do faturamento total
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </TabsContent>
-            )}
           </Tabs>
         </div>
       </main>
