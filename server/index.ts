@@ -6,6 +6,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { addStaticRoutes } from "./static-routes";
 import { accessMonitorMiddleware } from "./middlewares/access-monitor";
+import { getBaseUrl, isReplit, isDevelopment } from "./utils/environment";
 
 const app = express();
 app.use(express.json());
@@ -13,47 +14,71 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 // Configure CORS para permitir chamadas de aplicações mobile e domínio público
-app.use(cors({
-  origin: [
-    "http://localhost:5000", 
-    "http://localhost:3000",
-    "https://medsync.replit.app",
-    "https://*.replit.app"
-  ],
-  credentials: true, // Permitir credenciais (cookies, session)
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "Accept", "Cookie"] 
-}));
+const getCorsOrigins = () => {
+  const origins = [
+    getBaseUrl(), // Always include the configured base URL
+  ];
+
+  // Only allow localhost in development environment for security
+  if (isDevelopment()) {
+    origins.push("http://localhost:5000");
+    origins.push("http://localhost:3000");
+  }
+
+  // Add Replit-specific origins if running on Replit
+  if (isReplit()) {
+    origins.push("https://*.replit.app");
+  }
+
+  // Add custom origins from environment variable if provided
+  if (process.env.CORS_ORIGINS) {
+    const customOrigins = process.env.CORS_ORIGINS.split(",").map((o) =>
+      o.trim(),
+    );
+    origins.push(...customOrigins);
+  }
+
+  return origins;
+};
+
+app.use(
+  cors({
+    origin: getCorsOrigins(),
+    credentials: true, // Permitir credenciais (cookies, session)
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept", "Cookie"],
+  }),
+);
 
 // Adicionar middleware para garantir que as requisições API retornem JSON
 app.use((req, res, next) => {
-    if (req.path.startsWith('/api/') && !req.is('multipart/form-data')) {
+  if (req.path.startsWith("/api/") && !req.is("multipart/form-data")) {
     // Forçar o tipo de conteúdo para JSON em todas as rotas da API
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
   }
   next();
 });
 
 // Servir arquivos estáticos organizados por pedido
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Adicionar middleware para monitorar acesso à API e enviar para webhook
 app.use(accessMonitorMiddleware);
 
 app.use((req, res, next) => {
   // Log especial para uploads de imagem e validação de CRM
-  if (req.path === '/api/uploads/exam-image') {
-    console.log('🚨 UPLOAD REQUEST INTERCEPTED:', req.method, req.path);
+  if (req.path === "/api/uploads/exam-image") {
+    console.log("🚨 UPLOAD REQUEST INTERCEPTED:", req.method, req.path);
   }
-  
+
   // Log detalhado para requisições de validação de CRM
-  if (req.path === '/api/validate-crm') {
-    console.log('🔍 CRM VALIDATION REQUEST:', req.method, req.path, req.query);
+  if (req.path === "/api/validate-crm") {
+    console.log("🔍 CRM VALIDATION REQUEST:", req.method, req.path, req.query);
   }
-  
+
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
@@ -85,36 +110,33 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
-  
+
   // Add unified upload routes
   const unifiedUploadRoutes = await import("./unified-upload-routes");
   app.use("/api", unifiedUploadRoutes.default);
-  
+
   // Add validation routes
   const validationRoutes = await import("./routes/validation");
   app.use("/api/validate", validationRoutes.default);
-  
+
   // Add medical specialties routes
   const medicalSpecialtiesRoutes = await import("./routes/medical-specialties");
   app.use("/api/medical-specialties", medicalSpecialtiesRoutes.default);
-  
+
   // Add subscription plans routes
   const subscriptionPlansRoutes = await import("./routes/subscription-plans");
   app.use("/api/subscription-plans", subscriptionPlansRoutes.default);
-  
+
   // Add subscriptions routes
   const subscriptionsRoutes = await import("./routes/subscriptions");
   app.use("/api/subscriptions", subscriptionsRoutes.default);
-  
+
   // Add discount codes routes
   const discountCodesRoutes = await import("./routes/discount-codes");
   app.use("/api/discount-codes", discountCodesRoutes.default);
-  
+
   // Adicionar rotas para arquivos estáticos (mockups, etc)
   addStaticRoutes(app);
-  
-  // Servir arquivos estáticos da pasta public (ícones de anatomia, etc.) antes do Vite
-  app.use('/assets', express.static(path.join(process.cwd(), 'public/assets')));
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -126,23 +148,23 @@ app.use((req, res, next) => {
 
   // Servir arquivos especiais ANTES do Vite para evitar interceptação
   // Add favicon to prevent 503 errors
-  app.get('/favicon.ico', (req, res) => {
+  app.get("/favicon.ico", (req, res) => {
     res.status(204).end();
   });
-  
+
   // Servir o style-guide.html diretamente
-  app.get('/style-guide', (req, res) => {
-    res.sendFile(path.join(process.cwd(), 'style-guide.html'));
+  app.get("/style-guide", (req, res) => {
+    res.sendFile(path.join(process.cwd(), "style-guide.html"));
   });
 
   // Middleware de fallback para API - capturar rotas /api/* não encontradas
   // DEVE vir ANTES do setupVite para evitar que Vite sirva HTML para APIs
   app.use("/api", (req, res) => {
     if (!res.headersSent) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: "API route not found",
         path: req.path,
-        method: req.method
+        method: req.method,
       });
     }
   });
@@ -155,25 +177,25 @@ app.use((req, res, next) => {
   } else {
     serveStatic(app);
   }
-  
+
   // Force fresh assets with robust headers
-  app.use('/assets/*', (req, res, next) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  app.use("/assets/*", (req, res, next) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
     next();
   });
-  
+
   // Create working app with inline styles and script to bypass cache completely
-  app.get('/live', (req, res) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('Last-Modified', new Date().toUTCString());
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    
+  app.get("/live", (req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Last-Modified", new Date().toUTCString());
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
     // Self-contained working app
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -274,18 +296,18 @@ app.use((req, res, next) => {
     </script>
   </body>
 </html>`;
-    
+
     res.send(html);
   });
-  
+
   // Redirect root to live app
-  app.get('/', (req, res) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('Last-Modified', new Date().toUTCString());
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    
+  app.get("/", (req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Last-Modified", new Date().toUTCString());
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
     // Use the cached asset names that Google Frontend expects
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -311,7 +333,7 @@ app.use((req, res, next) => {
     </script>
   </body>
 </html>`;
-    
+
     res.send(html);
   });
 
@@ -319,11 +341,14 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
+  server.listen(
+    {
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    },
+    () => {
+      log(`serving on port ${port}`);
+    },
+  );
 })();
