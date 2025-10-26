@@ -64,6 +64,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { AnatomicalRegion, SurgicalProcedure } from "@shared/schema";
 import { ManufacturerManager } from "@/components/ManufacturerManager";
 import { LoadingLogo } from "@/components/loading-logo";
+import { getAnatomicalRegionIcon } from "@/components/AnatomicalRegionIcons";
 
 interface CidCode {
   id: number;
@@ -5230,15 +5231,10 @@ export const AnatomicalRegionSelector: React.FC<AnatomicalRegionSelectorProps> =
                 className={`body-region-icon group ${selectedRegion?.id === region.id ? 'selected' : ''}`}
                 title={region.name}
               >
-                {region.iconUrl && (
-                  <img
-                    src={selectedRegion?.id === region.id 
-                      ? region.iconUrl.replace('_gray.svg', '_blue.svg')
-                      : region.iconUrl
-                    }
-                    alt={region.name}
-                  />
-                )}
+                <img
+                  src={getAnatomicalRegionIcon(region.id, selectedRegion?.id === region.id) || ''}
+                  alt={region.name}
+                />
                 
                 {/* Tooltip personalizado com posicionamento inteligente */}
                 <div className={`body-region-tooltip ${tooltipPosition}`}>
