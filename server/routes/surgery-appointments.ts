@@ -236,7 +236,7 @@ router.get('/available-orders', isAuthenticated, async (req, res) => {
     console.log('✅ Buscando pedidos disponíveis para usuário:', userId);
 
     // Buscar pedidos médicos do usuário logado que estão em status apropriado para agendamento
-    // Status adequados: aguardando_envio (8), aceito (3)
+    // Status adequado: autorizado parcial (4)
     // Excluir pedidos que já possuem agendamentos ativos (não cancelados)
     const orders = await db
       .select({
@@ -258,7 +258,7 @@ router.get('/available-orders', isAuthenticated, async (req, res) => {
       .leftJoin(surgeryAppointments, eq(medicalOrders.id, surgeryAppointments.medicalOrderId))
       .where(and(
         eq(medicalOrders.userId, userId),
-        inArray(medicalOrders.statusId, [3, 8]), // aceito ou aguardando_envio
+        inArray(medicalOrders.statusId, [4]), // autorizado parcial
         isNull(surgeryAppointments.id) // pedido NÃO possui agendamento
       ))
       .orderBy(desc(medicalOrders.createdAt));
