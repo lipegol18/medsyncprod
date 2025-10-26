@@ -29,7 +29,6 @@ export type InsertMedicalSpecialty = z.infer<typeof insertMedicalSpecialtySchema
 export const anatomicalRegions = pgTable("anatomical_regions", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(), // Ex: "Ombro", "Joelho", "Coluna", etc.
-  iconUrl: text("icon_url"), // URL do ícone da região anatômica
   title: text("title"), // Título associado à região do corpo
   description: text("description"), // Breve descrição sobre a região
 });
