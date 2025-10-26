@@ -64,7 +64,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { AnatomicalRegion, SurgicalProcedure } from "@shared/schema";
 import { ManufacturerManager } from "@/components/ManufacturerManager";
 import { LoadingLogo } from "@/components/loading-logo";
-import { getAnatomicalRegionIcon } from "@/components/AnatomicalRegionIcons";
+import { getAnatomicalRegionIcon } from "@/components/AnatomicalRegionIcons.tsx";
 
 interface CidCode {
   id: number;
