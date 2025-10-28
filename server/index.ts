@@ -9,6 +9,18 @@ import { accessMonitorMiddleware } from "./middlewares/access-monitor";
 import { getBaseUrl, isReplit, isDevelopment } from "./utils/environment";
 
 const app = express();
+
+// IMPORTANTE: Aplicar express.raw() APENAS para a rota do webhook Stripe
+// O Stripe precisa do corpo bruto (raw body) para verificar a assinatura
+// Esta condição DEVE vir ANTES do express.json()
+app.use((req, res, next) => {
+  if (req.path === '/api/webhooks/stripe') {
+    express.raw({ type: 'application/json' })(req, res, next);
+  } else {
+    next();
+  }
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
