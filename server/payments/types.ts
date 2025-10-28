@@ -57,6 +57,7 @@ export interface CustomerResult {
 export interface CheckoutInput {
   priceId: string;
   customerId?: string;
+  customerData?: CustomerInput; // Dados para criar Customer automaticamente
   mode: 'subscription' | 'payment';
   successUrl: string;
   cancelUrl: string;

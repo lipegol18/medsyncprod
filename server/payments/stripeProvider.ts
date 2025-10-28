@@ -161,7 +161,30 @@ export class StripeProvider implements PaymentProvider {
 
   async createCheckoutSession(input: CheckoutInput): Promise<CheckoutResult> {
     try {
-      console.log(`🚀 [Stripe] Criando sessão de checkout: ${input.priceId}`);
+      console.log('\n🎯 [StripeProvider] ========== INÍCIO: createCheckoutSession ==========');
+      console.log('📥 Input recebido:', JSON.stringify({
+        priceId: input.priceId,
+        mode: input.mode,
+        successUrl: input.successUrl,
+        cancelUrl: input.cancelUrl,
+        couponId: input.couponId,
+        hasCustomerId: !!input.customerId,
+        hasCustomerData: !!input.customerData,
+        customerEmail: input.customerData?.email,
+        metadata: input.metadata
+      }, null, 2));
+      
+      let customerId = input.customerId;
+      
+      // Criar Customer automaticamente se dados fornecidos e customerId não existir
+      if (!customerId && input.customerData) {
+        console.log(`👤 [Stripe] Criando Customer com dados completos para ${input.customerData.email}`);
+        
+        const customerResult = await this.createOrUpdateCustomer(input.customerData);
+        customerId = customerResult.id;
+        
+        console.log(`✅ [Stripe] Customer criado automaticamente: ${customerId}`);
+      }
       
       const sessionData: Stripe.Checkout.SessionCreateParams = {
         mode: input.mode,
@@ -180,36 +203,69 @@ export class StripeProvider implements PaymentProvider {
         }
       };
 
-      // Nota: automatic_tax removido pois nem todas as contas Stripe suportam
-      // Para compliance fiscal brasileiro, usamos CPF como tax_id no Customer
-
-      // Adicionar cliente se fornecido
-      if (input.customerId) {
-        sessionData.customer = input.customerId;
+      // Adicionar cliente se disponível
+      if (customerId) {
+        sessionData.customer = customerId;
+        console.log(`👤 [Stripe] Usando Customer: ${customerId}`);
       }
 
-      // Adicionar cupons se fornecido
+      // Aplicar cupom automático se fornecido OU permitir códigos promocionais
       if (input.couponId) {
         sessionData.discounts = [{
           coupon: input.couponId
         }];
+        console.log(`🎫 [Stripe] Aplicando cupom automático: ${input.couponId}`);
+      } else {
+        // Se não há cupom automático, permitir códigos promocionais
+        sessionData.allow_promotion_codes = true;
+        console.log(`🎫 [Stripe] Habilitando códigos promocionais manuais`);
       }
 
-      // Habilitar códigos promocionais se solicitado
-      if (input.allowPromotionCodes) {
-        sessionData.allow_promotion_codes = true;
+      // Para compliance fiscal brasileiro - CPF já adicionado como tax_id no Customer
+      // Custom fields removidos temporariamente devido a incompatibilidade da API
+      // O CPF já está disponível no Customer como tax_id para compliance fiscal
+      if (input.customerData?.cpf) {
+        console.log(`🇧🇷 [Stripe] Compliance fiscal brasileiro: CPF adicionado como tax_id no Customer`);
       }
 
       const session = await this.stripe.checkout.sessions.create(sessionData);
       
-      console.log(`✅ [Stripe] Sessão criada: ${session.id}`);
+      console.log('\n✅ [StripeProvider] Sessão de Checkout criada:');
+      console.log('🆔 Session ID:', session.id);
+      console.log('🔗 URL:', session.url);
+      console.log('💵 Valor:', session.amount_total ? `${session.amount_total / 100} ${session.currency?.toUpperCase()}` : 'N/A');
+      console.log('👤 Customer:', session.customer || 'Não definido');
+      console.log('🎫 Desconto aplicado:', session.total_details?.amount_discount ? 'Sim' : 'Não');
+      console.log('========== FIM: createCheckoutSession ==========\n');
       
       return {
         id: session.id,
         url: session.url || undefined
       };
     } catch (error: any) {
-      console.error('❌ [Stripe] Erro ao criar checkout:', error);
+      console.error('\n💥 [StripeProvider] ========== ERRO NO CHECKOUT ==========');
+      console.error('🚨 Tipo:', error.constructor?.name || 'Unknown');
+      console.error('📝 Mensagem:', error.message);
+      console.error('📊 Código:', error.code || 'N/A');
+      console.error('🔍 Type:', error.type || 'N/A');
+      
+      // Dados específicos do Stripe
+      if (error.raw) {
+        console.error('📦 Raw Error:', JSON.stringify(error.raw, null, 2));
+      }
+      
+      if (error.statusCode) {
+        console.error('🌐 HTTP Status:', error.statusCode);
+      }
+      
+      if (error.param) {
+        console.error('⚙️ Parâmetro com erro:', error.param);
+      }
+      
+      // Stack trace completo
+      console.error('📚 Stack trace:', error.stack);
+      console.error('========== FIM: ERRO NO CHECKOUT ==========\n');
+      
       throw new PaymentError('CHECKOUT_CREATION_FAILED', `Falha ao criar checkout: ${error.message}`);
     }
   }
@@ -266,8 +322,8 @@ export class StripeProvider implements PaymentProvider {
         status: subscription.status,
         customerId: subscription.customer as string,
         priceId: subscription.items.data[0]?.price.id,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+        currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
         metadata: subscription.metadata
       };
     } catch (error: any) {
@@ -289,8 +345,8 @@ export class StripeProvider implements PaymentProvider {
         status: subscription.status,
         customerId: subscription.customer as string,
         priceId: subscription.items.data[0]?.price.id,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
+        currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
         metadata: subscription.metadata
       };
     } catch (error: any) {
@@ -337,7 +393,7 @@ export class StripeProvider implements PaymentProvider {
       console.log(`🔍 Buscando checkout session: ${sessionId}`);
       
       const session = await this.stripe.checkout.sessions.retrieve(sessionId, {
-        expand: ['customer', 'subscription', 'line_items']
+        expand: ['customer', 'subscription', 'line_items', 'total_details', 'discounts']
       });
 
       console.log(`✅ Session encontrada: ${session.id} - Status: ${session.status}`);
@@ -370,6 +426,147 @@ export class StripeProvider implements PaymentProvider {
     } catch (error: any) {
       console.error('❌ Erro ao processar webhook:', error.message);
       throw new Error(`Webhook inválido: ${error.message}`);
+    }
+  }
+
+  // === MÉTODOS PARA GESTÃO DE CUPONS DE DESCONTO ===
+
+  /**
+   * Criar cupom de desconto no Stripe
+   */
+  async createCoupon(couponData: Stripe.CouponCreateParams): Promise<Stripe.Coupon> {
+    try {
+      console.log(`🎫 [Stripe] Criando cupom: ${couponData.id || 'auto-generated'}`);
+      
+      const coupon = await this.stripe.coupons.create(couponData);
+      
+      console.log(`✅ [Stripe] Cupom criado: ${coupon.id}`);
+      return coupon;
+    } catch (error: any) {
+      console.error('❌ [Stripe] Erro ao criar cupom:', error);
+      throw new PaymentError('COUPON_CREATION_FAILED', `Falha ao criar cupom: ${error.message}`);
+    }
+  }
+
+  /**
+   * Buscar cupom por ID
+   */
+  async getCoupon(couponId: string): Promise<Stripe.Coupon> {
+    try {
+      console.log(`🔍 [Stripe] Buscando cupom: ${couponId}`);
+      
+      const coupon = await this.stripe.coupons.retrieve(couponId);
+      
+      console.log(`✅ [Stripe] Cupom encontrado: ${coupon.id} - Válido: ${coupon.valid}`);
+      return coupon;
+    } catch (error: any) {
+      console.error('❌ [Stripe] Erro ao buscar cupom:', error);
+      throw new PaymentError('COUPON_RETRIEVAL_FAILED', `Falha ao buscar cupom: ${error.message}`);
+    }
+  }
+
+  /**
+   * Atualizar metadados do cupom (Stripe só permite atualizar metadata)
+   */
+  async updateCoupon(couponId: string, updates: Stripe.CouponUpdateParams): Promise<Stripe.Coupon> {
+    try {
+      console.log(`📝 [Stripe] Atualizando cupom: ${couponId}`);
+      
+      const coupon = await this.stripe.coupons.update(couponId, updates);
+      
+      console.log(`✅ [Stripe] Cupom atualizado: ${coupon.id}`);
+      return coupon;
+    } catch (error: any) {
+      console.error('❌ [Stripe] Erro ao atualizar cupom:', error);
+      throw new PaymentError('COUPON_UPDATE_FAILED', `Falha ao atualizar cupom: ${error.message}`);
+    }
+  }
+
+  /**
+   * Excluir/desativar cupom no Stripe
+   */
+  async deleteCoupon(couponId: string): Promise<Stripe.DeletedCoupon> {
+    try {
+      console.log(`🗑️ [Stripe] Excluindo cupom: ${couponId}`);
+      
+      const deleted = await this.stripe.coupons.del(couponId);
+      
+      console.log(`✅ [Stripe] Cupom excluído: ${deleted.id}`);
+      return deleted;
+    } catch (error: any) {
+      console.error('❌ [Stripe] Erro ao excluir cupom:', error);
+      throw new PaymentError('COUPON_DELETION_FAILED', `Falha ao excluir cupom: ${error.message}`);
+    }
+  }
+
+  /**
+   * Listar todos os cupons
+   */
+  async listCoupons(params?: Stripe.CouponListParams): Promise<Stripe.ApiList<Stripe.Coupon>> {
+    try {
+      console.log('📋 [Stripe] Listando cupons');
+      
+      const coupons = await this.stripe.coupons.list(params);
+      
+      console.log(`✅ [Stripe] ${coupons.data.length} cupons encontrados`);
+      return coupons;
+    } catch (error: any) {
+      console.error('❌ [Stripe] Erro ao listar cupons:', error);
+      throw new PaymentError('COUPON_LIST_FAILED', `Falha ao listar cupons: ${error.message}`);
+    }
+  }
+
+  /**
+   * Criar código promocional (promotion code) baseado em um cupom
+   */
+  async createPromotionCode(couponId: string, codeData: Omit<Stripe.PromotionCodeCreateParams, 'coupon'>): Promise<Stripe.PromotionCode> {
+    try {
+      console.log(`🎟️ [Stripe] Criando código promocional para cupom: ${couponId}`);
+      
+      const promotionCode = await this.stripe.promotionCodes.create({
+        coupon: couponId,
+        ...codeData
+      });
+      
+      console.log(`✅ [Stripe] Código promocional criado: ${promotionCode.id} - Código: ${promotionCode.code}`);
+      return promotionCode;
+    } catch (error: any) {
+      console.error('❌ [Stripe] Erro ao criar código promocional:', error);
+      throw new PaymentError('PROMOTION_CODE_CREATION_FAILED', `Falha ao criar código promocional: ${error.message}`);
+    }
+  }
+
+  /**
+   * Buscar código promocional por ID
+   */
+  async getPromotionCode(promotionCodeId: string): Promise<Stripe.PromotionCode> {
+    try {
+      console.log(`🔍 [Stripe] Buscando código promocional: ${promotionCodeId}`);
+      
+      const promotionCode = await this.stripe.promotionCodes.retrieve(promotionCodeId);
+      
+      console.log(`✅ [Stripe] Código promocional encontrado: ${promotionCode.id} - Ativo: ${promotionCode.active}`);
+      return promotionCode;
+    } catch (error: any) {
+      console.error('❌ [Stripe] Erro ao buscar código promocional:', error);
+      throw new PaymentError('PROMOTION_CODE_RETRIEVAL_FAILED', `Falha ao buscar código promocional: ${error.message}`);
+    }
+  }
+
+  /**
+   * Atualizar código promocional
+   */
+  async updatePromotionCode(promotionCodeId: string, updates: Stripe.PromotionCodeUpdateParams): Promise<Stripe.PromotionCode> {
+    try {
+      console.log(`📝 [Stripe] Atualizando código promocional: ${promotionCodeId}`);
+      
+      const promotionCode = await this.stripe.promotionCodes.update(promotionCodeId, updates);
+      
+      console.log(`✅ [Stripe] Código promocional atualizado: ${promotionCode.id}`);
+      return promotionCode;
+    } catch (error: any) {
+      console.error('❌ [Stripe] Erro ao atualizar código promocional:', error);
+      throw new PaymentError('PROMOTION_CODE_UPDATE_FAILED', `Falha ao atualizar código promocional: ${error.message}`);
     }
   }
 }

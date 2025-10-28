@@ -1,21 +1,17 @@
 /**
- * Factory para provedores de pagamento
- * Permite trocar entre Stripe, PagSeguro, Mercado Pago, etc. via configuração
+ * Ponto de entrada principal para o sistema de pagamentos
+ * Integra a nova factory extensível com a API antiga para compatibilidade
  */
 
 import { PaymentProvider } from './provider';
-import { StripeProvider } from './stripeProvider';
+import { PaymentProviderFactory, createDefaultPaymentProvider, PaymentProviderType } from './factory';
 
-// Singleton instance
+// Instância cached para compatibilidade com API antiga
 let cachedProvider: PaymentProvider | null = null;
 
 /**
- * Tipos de provedor suportados
- */
-export type PaymentProviderType = 'stripe' | 'pagSeguro' | 'mercadoPago';
-
-/**
  * Factory principal - cria o provedor baseado na configuração do ambiente
+ * Mantém compatibilidade com a API antiga
  */
 export function getPaymentProvider(): PaymentProvider {
   // Retornar instância cached se já existe
@@ -23,34 +19,15 @@ export function getPaymentProvider(): PaymentProvider {
     return cachedProvider;
   }
 
-  // Ler configuração do ambiente (default: stripe)
-  const providerType = (process.env.PAYMENT_PROVIDER || 'stripe') as PaymentProviderType;
-  
-  console.log(`🏭 [PaymentFactory] Inicializando provedor: ${providerType}`);
-
-  switch (providerType) {
-    case 'stripe':
-      const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-      if (!stripeSecretKey) {
-        throw new Error('STRIPE_SECRET_KEY environment variable is required when using Stripe provider');
-      }
-      cachedProvider = new StripeProvider(stripeSecretKey);
-      break;
-
-    case 'pagSeguro':
-      // TODO: Implementar PagSeguroProvider no futuro
-      throw new Error('PagSeguro provider not implemented yet');
-
-    case 'mercadoPago':
-      // TODO: Implementar MercadoPagoProvider no futuro
-      throw new Error('Mercado Pago provider not implemented yet');
-
-    default:
-      throw new Error(`Unsupported payment provider: ${providerType}`);
+  // Usar a nova factory para criar o provider padrão
+  try {
+    cachedProvider = createDefaultPaymentProvider();
+    console.log(`✅ [PaymentFactory] Provedor inicializado: ${cachedProvider.getProviderName()}`);
+    return cachedProvider;
+  } catch (error: any) {
+    console.error('❌ [PaymentFactory] Erro ao inicializar provedor:', error.message);
+    throw error;
   }
-
-  console.log(`✅ [PaymentFactory] Provedor ${providerType} inicializado com sucesso`);
-  return cachedProvider;
 }
 
 /**
@@ -66,10 +43,12 @@ export function setPaymentProvider(provider: PaymentProvider): void {
  */
 export function clearPaymentProvider(): void {
   cachedProvider = null;
+  PaymentProviderFactory.clearCache();
   console.log(`🧹 [PaymentFactory] Cache do provedor limpo`);
 }
 
 // Exportar tipos para uso externo
 export * from './types';
 export * from './provider';
+export * from './factory';
 export * from './stripeProvider';

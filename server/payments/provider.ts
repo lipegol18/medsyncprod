@@ -69,4 +69,46 @@ export interface PaymentProvider {
    * Nome do provedor para logging/debug
    */
   getProviderName(): string;
+
+  // === MÉTODOS PARA GESTÃO DE CUPONS DE DESCONTO ===
+
+  /**
+   * Criar cupom de desconto no provedor
+   */
+  createCoupon(couponData: any): Promise<any>;
+
+  /**
+   * Buscar cupom por ID
+   */
+  getCoupon(couponId: string): Promise<any>;
+
+  /**
+   * Atualizar cupom (limitado pelo que o provedor permite)
+   */
+  updateCoupon(couponId: string, updates: any): Promise<any>;
+
+  /**
+   * Excluir/desativar cupom
+   */
+  deleteCoupon(couponId: string): Promise<any>;
+
+  /**
+   * Listar cupons do provedor
+   */
+  listCoupons(params?: any): Promise<any>;
+
+  /**
+   * Criar código promocional baseado em cupom
+   */
+  createPromotionCode(couponId: string, codeData: any): Promise<any>;
+
+  /**
+   * Buscar código promocional por ID
+   */
+  getPromotionCode(promotionCodeId: string): Promise<any>;
+
+  /**
+   * Atualizar código promocional
+   */
+  updatePromotionCode(promotionCodeId: string, updates: any): Promise<any>;
 }
