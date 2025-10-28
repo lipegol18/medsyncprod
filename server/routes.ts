@@ -14047,20 +14047,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/webhooks/stripe - Webhook para eventos do Stripe (sem autenticação)
-  app.post('/api/webhooks/stripe', (req: any, res: any, next: any) => {
-    if (req.headers['content-type'] === 'application/json') {
-      req.setEncoding('utf8');
-      req.rawBody = '';
-      req.on('data', (chunk: any) => {
-        req.rawBody += chunk;
-      });
-      req.on('end', () => {
-        next();
-      });
-    } else {
-      next();
-    }
-  }, async (req: Request, res: Response) => {
+  // NOTA: O express.raw() já foi aplicado em server/index.ts para esta rota
+  // então req.body já vem como Buffer, que é o que o Stripe precisa
+  app.post('/api/webhooks/stripe', async (req: Request, res: Response) => {
     try {
       const paymentProvider = getPaymentProvider();
       if (!paymentProvider) {
@@ -14072,9 +14061,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Assinatura do webhook não encontrada" });
       }
 
-      // Verificar e parsear o evento do Stripe
-      const rawBody = (req as any).rawBody || req.body;
-      const event = await paymentProvider.processWebhook(rawBody, signature);
+      // req.body já é um Buffer graças ao express.raw() aplicado em server/index.ts
+      const event = await paymentProvider.processWebhook(req.body, signature);
       
       console.log(`🎯 Webhook recebido: ${event.type} - ${event.id}`);
 
