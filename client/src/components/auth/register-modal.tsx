@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-// Stripe imports removidos - agora usamos redirecionamento para Checkout Session
 import { RegisterForm } from './register-form';
 import { PricingSection } from './pricing-section';
 import { type RegisterForm as RegisterFormType } from '@/schemas/auth-schemas';
@@ -10,8 +9,6 @@ import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useSupportContact } from '@/lib/support-contact';
 import { ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
-
-// Stripe configuração removida - agora usamos redirecionamento para Checkout Session
 
 interface RegisterModalProps {
   onSubmit: (data: RegisterFormType) => void;
@@ -33,7 +30,6 @@ export function RegisterModal({
   // Dados do formulário começam vazios para o usuário preencher
   const [formData, setFormData] = useState<RegisterFormType | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
-  // clientSecret removido - agora usamos redirecionamento para Checkout Session
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('yearly');
   // Estado para dados pré-carregados quando voltar ao formulário
   const [preloadedFormData, setPreloadedFormData] = useState<Partial<RegisterFormType> | null>(null);
@@ -81,9 +77,7 @@ export function RegisterModal({
     return originalPrice * getDiscountMultiplier();
   };
 
-  // useEffect para pagamento removido - agora redirecionamos diretamente para Checkout Session
-
-  // Mutation para registro com plano (novo sistema)
+  // Mutation para registro com plano
   const registerWithPlanMutation = useMutation({
     mutationFn: async (planId: number) => {
       if (!formData) throw new Error("Dados do formulário não encontrados");
@@ -110,20 +104,21 @@ export function RegisterModal({
         console.log('🎯 Trial ativo - indo para tela de boas-vindas');
         setCurrentStep('trial-welcome');
       } else if (data.checkoutUrl) {
-        // Se já tem URL de checkout (com desconto automático aplicado), redirecionar diretamente
-        console.log('🔗 Redirecionando para checkout com desconto:', data.checkoutUrl);
+        // Redirecionar para checkout do Stripe
+        console.log('🔗 Redirecionando para checkout:', data.checkoutUrl);
         toast({
           title: "Dados salvos!",
           description: data.discountApplied ? "Redirecionando para pagamento com desconto..." : "Redirecionando para pagamento...",
         });
         window.location.href = data.checkoutUrl;
       } else {
-        // Para planos pagos sem checkout direto - usar método antigo
+        // Erro: deveria ter recebido checkoutUrl mas não recebeu
+        console.error('❌ Erro: checkoutUrl não retornado pelo servidor');
         toast({
-          title: "Dados salvos!",
-          description: "Complete o pagamento para ativar sua conta.",
+          title: "Erro no Pagamento",
+          description: "Não foi possível criar a sessão de pagamento. Tente novamente.",
+          variant: "destructive",
         });
-        createCheckoutSessionMutation.mutate(data.planId);
       }
     },
     onError: (error: any) => {
@@ -163,43 +158,6 @@ export function RegisterModal({
       toast({
         title: "Erro na Validação",
         description: "Não foi possível validar o CRM. Tente novamente.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Mutation para criar Checkout Session e redirecionar
-  const createCheckoutSessionMutation = useMutation({
-    mutationFn: async (planId: number) => {
-      if (!formData) throw new Error("Dados do formulário não encontrados");
-      
-      console.log('🛒 Criando Checkout Session:', { planId, userData: formData });
-      
-      const data = await apiRequest('/api/payments/checkout-session-for-registration', 'POST', { 
-        planId, 
-        userData: formData,
-        billingInterval: billingInterval // Usar seleção real do usuário
-      });
-      
-      console.log('✅ Checkout Session criado:', data);
-      return data;
-    },
-    onSuccess: (data) => {
-      console.log('🎉 Sucesso! Redirecionando para Stripe Checkout...');
-      
-      if (data.url) {
-        console.log('🔄 URL do checkout:', data.url);
-        // Redirecionar para a URL do Checkout Session
-        window.location.href = data.url;
-      } else {
-        throw new Error('URL do checkout não recebida');
-      }
-    },
-    onError: (error: any) => {
-      console.error('💥 Erro na mutation:', error);
-      toast({
-        title: "Erro",
-        description: error.message || "Erro ao criar checkout",
         variant: "destructive",
       });
     },
