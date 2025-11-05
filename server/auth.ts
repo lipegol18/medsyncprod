@@ -24,7 +24,7 @@ declare global {
 }
 
 export function setupAuth(app: Express) {
-  const isProduction = process.env.NODE_ENV === 'development';
+  const isProduction = process.env.NODE_ENV === 'production';
   console.log("🔐 Configurando autenticação - Ambiente:", isProduction ? 'production' : 'development');
   
   const sessionSettings: session.SessionOptions = {
@@ -254,6 +254,21 @@ export function setupAuth(app: Express) {
       
       // Notificar o webhook sobre o novo usuário criado (de forma assíncrona)
       WebhookService.notifyNewUser(user);
+      
+      // Enviar para webhook N8N (validar-crm) em background (não bloqueia a resposta)
+      // Somente se for médico (roleId = 2) e tiver CRM
+      if (req.body.roleId === 2 && req.body.crm) {
+        const { sendToN8NWebhook } = await import("../shared/config.js");
+        sendToN8NWebhook("validateCRM", {
+          name: req.body.name.toUpperCase(),
+          email: req.body.email,
+          crm: req.body.crm,
+          crm_estado: req.body.crmState || req.body.crm_estado || "",
+          message: req.body.message || "Solicitação de cadastro de novo médico"
+        })
+          .then(() => console.log("✅ Webhook N8N (validar-crm) enviado com sucesso"))
+          .catch((error) => console.warn("⚠️ Falha ao enviar webhook N8N:", error.message));
+      }
       
       // Não fazemos login automático para contas inativas
       // Não enviar a senha no retorno
@@ -741,18 +756,30 @@ export function setupAuth(app: Express) {
       const emailSent = await sendPasswordResetEmail(email, resetToken, user.name || user.username);
       console.log(`${emailSent ? '✅' : '❌'} [RECUPERAÇÃO DE SENHA] Email ${emailSent ? 'enviado' : 'não enviado'}`);
       
+      // Enviar para webhook N8N em background (não bloqueia a resposta)
+      const resetUrl = `${req.protocol}://${req.get('host')}/auth?reset=${resetToken}`;
+      const { sendToN8NWebhook } = await import("../shared/config.js");
+      sendToN8NWebhook("passwordReset", {
+        name: user.name || user.username,
+        email: email,
+        reset_link: resetUrl
+      })
+        .then(() => console.log("✅ Webhook N8N (resposta-usuario) enviado com sucesso"))
+        .catch((error) => console.warn("⚠️ Falha ao enviar webhook N8N:", error.message));
+      
       // Em desenvolvimento, fornecer token diretamente se email falhar
       const response: any = { 
         message: emailSent 
           ? "Se este email estiver cadastrado, você receberá instruções de recuperação."
           : "Email de recuperação falhou. Token de desenvolvimento fornecido abaixo.",
-        success: emailSent
+        success: emailSent,
+        userName: user.name || user.username // Incluir nome do usuário para webhook N8N
       };
       
       // Adicionar token em desenvolvimento quando email falha
       if (!emailSent && (process.env.NODE_ENV === 'development' || !process.env.SENDGRID_API_KEY)) {
         response.token = resetToken;
-        response.resetUrl = `${req.protocol}://${req.get('host')}/auth?reset=${resetToken}`;
+        response.resetUrl = resetUrl;
         console.log(`🔗 [RECUPERAÇÃO DE SENHA] URL de reset para desenvolvimento: ${response.resetUrl}`);
       }
       
