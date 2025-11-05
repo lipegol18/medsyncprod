@@ -64,7 +64,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { AnatomicalRegion, SurgicalProcedure } from "@shared/schema";
 import { ManufacturerManager } from "@/components/ManufacturerManager";
 import { LoadingLogo } from "@/components/loading-logo";
-import { getAnatomicalRegionIcon } from "@/components/AnatomicalRegionIcons.tsx";
+import { getAnatomicalRegionIcon } from "@/components/AnatomicalRegionIcons";
 
 interface CidCode {
   id: number;
@@ -1097,6 +1097,7 @@ export function SurgeryData({
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [originalClinicalJustification, setOriginalClinicalJustification] = useState<string>("");
   
   // Estados para a adição de múltiplos CIDs
   const [currentCid, setCurrentCid] = useState<CidCode | null>(null);
@@ -1156,8 +1157,25 @@ export function SurgeryData({
     return age;
   };
 
+  // Função para restaurar justificativa clínica original
+  const handleRestoreOriginal = () => {
+    if (setClinicalJustification && originalClinicalJustification) {
+      setClinicalJustification(originalClinicalJustification);
+      setOriginalClinicalJustification(""); // Limpar texto original após restaurar
+      toast({
+        title: "Texto original restaurado",
+        description: "A justificativa clínica foi restaurada para o texto anterior.",
+      });
+    }
+  };
+
   // Função para gerar justificativa clínica com IA
   const handleGenerateAIJustification = async () => {
+    // Salvar texto original antes de gerar com IA (se ainda não foi salvo)
+    if (!originalClinicalJustification && clinicalJustification) {
+      setOriginalClinicalJustification(clinicalJustification);
+    }
+    
     setIsGeneratingAI(true);
     
     try {
@@ -4752,12 +4770,30 @@ export function SurgeryData({
                       </p>
                     </div>
                     
-                    <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex justify-end gap-2">
+                      {/* Botão para restaurar texto original */}
+                      {originalClinicalJustification && (
+                        <button
+                          type="button"
+                          disabled={isGeneratingAI}
+                          className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md transition-colors disabled:opacity-50 flex items-center gap-2"
+                          onClick={handleRestoreOriginal}
+                          data-testid="button-restore-original"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                          </svg>
+                          Restaurar Original
+                        </button>
+                      )}
+                      
+                      {/* Botão para gerar com IA */}
                       <button
                         type="button"
                         disabled={isGeneratingAI}
                         className="btn-medsync-dark disabled:opacity-50"
                         onClick={handleGenerateAIJustification}
+                        data-testid="button-generate-ai"
                       >
                         {isGeneratingAI ? (
                           <>
