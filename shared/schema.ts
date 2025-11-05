@@ -361,6 +361,7 @@ export const surgicalApproachOpmeItems = pgTable("surgical_approach_opme_items",
   surgicalProcedureId: integer("surgical_procedure_id").references(() => surgicalProcedures.id, { onDelete: 'cascade' }), // Procedimento cirúrgico associado
   isRequired: boolean("is_required").default(false), // Indica se este item é obrigatório para esta conduta
   quantity: integer("quantity").default(1), // Quantidade padrão do item para esta conduta
+  displayOrder: integer("display_order").default(0), // Ordem de apresentação do item (números menores aparecem primeiro)
   alternativeItems: text("alternative_items"), // IDs de itens alternativos separados por vírgula
   notes: text("notes"), // Observações específicas para esta associação
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -386,6 +387,7 @@ export const insertSurgicalApproachOpmeItemSchema = createInsertSchema(surgicalA
   opmeItemId: true,
   isRequired: true,
   quantity: true,
+  displayOrder: true,
   alternativeItems: true,
   notes: true,
 });
