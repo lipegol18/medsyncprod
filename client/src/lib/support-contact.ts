@@ -21,7 +21,7 @@ export interface SupportContactConfig {
 const SUPPORT_CONFIG_QUERY_KEY = ['support-config'];
 
 // Fallback em caso de erro ou offline
-const FALLBACK_SUPPORT_NUMBER = "5521997364870";
+const FALLBACK_SUPPORT_NUMBER = "5521999991905";
 
 /**
  * Hook para buscar configuração de suporte do backend
