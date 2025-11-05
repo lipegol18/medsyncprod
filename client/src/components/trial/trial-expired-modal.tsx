@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Zap, Star, Building2, CheckCircle, Clock, CreditCard } from 'lucide-react';
+import { CheckCircle, CreditCard, Clock } from 'lucide-react';
 import { type SubscriptionPlan } from '@/types/subscription';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import medSyncLogo from '@/assets/medsync-logo-new.svg';
 
 interface TrialExpiredModalProps {
   isOpen: boolean;
@@ -15,141 +16,258 @@ interface TrialExpiredModalProps {
 
 export function TrialExpiredModal({ isOpen, trialEndDate }: TrialExpiredModalProps) {
   const [, setLocation] = useLocation();
-  const [selectedPlanId, setSelectedPlanId] = useState<number>(2); // Default to PRO
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
 
   // Buscar planos de assinatura
   const { data: plans } = useQuery<SubscriptionPlan[]>({
     queryKey: ["/api/subscriptions/plans"],
   });
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(price);
-  };
+  // Buscar desconto automático ativo
+  const { data: automaticDiscountResponse } = useQuery({
+    queryKey: ['/api/discount-codes/automatic'],
+  });
+
+  const automaticDiscount = automaticDiscountResponse?.data;
 
   const formatTrialEndDate = (dateString?: string) => {
     if (!dateString) return '';
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
-  const handleUpgrade = () => {
-    // Redirecionar para página de pagamento com plano selecionado
-    setLocation(`/checkout?plan=${selectedPlanId}`);
+  // Funções auxiliares para cálculo de desconto
+  const getDiscountPercentage = () => {
+    if (!automaticDiscount || automaticDiscount.discountType !== 'percentage') {
+      return 50;
+    }
+    return automaticDiscount.discountValue;
   };
 
-  const paidPlans = plans?.filter(plan => plan.id !== 1) || [];
+  const calculateDiscountedPrice = (originalPrice: number) => {
+    if (!automaticDiscount || automaticDiscount.discountType !== 'percentage') {
+      return originalPrice * 0.5;
+    }
+    const percentage = getDiscountPercentage();
+    return originalPrice * ((100 - percentage) / 100);
+  };
+
+  const getDiscountText = () => {
+    const percentage = getDiscountPercentage();
+    if (billingInterval === 'yearly') {
+      return `${percentage}% OFF + 2 MESES GRÁTIS`;
+    }
+    return `${percentage}% OFF`;
+  };
+
+  // Filtrar apenas plano PRO
+  const proPlan = plans?.find(plan => plan.name === 'PRO');
+
+  const handleUpgrade = () => {
+    if (proPlan) {
+      setLocation(`/upgrade?plan=${proPlan.id}&billing=${billingInterval}`);
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={() => {}}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="text-center pb-6">
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900 rounded-full flex items-center justify-center">
-              <Clock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
-            </div>
-          </div>
-          <DialogTitle className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            Seu período gratuito expirou
-          </DialogTitle>
-          <DialogDescription className="text-lg text-gray-600 dark:text-gray-400">
-            {trialEndDate && (
-              <>Seu trial de 15 dias terminou em {formatTrialEndDate(trialEndDate)}.</>
-            )}
-            <br />
-            Escolha um plano para continuar usando o MedSync.
+      <DialogContent className="max-w-2xl max-h-[95vh] p-0 overflow-y-auto border-none">
+        <VisuallyHidden>
+          <DialogTitle>Período Gratuito Expirado</DialogTitle>
+          <DialogDescription>
+            Seu trial de 15 dias expirou. Escolha um plano para continuar usando o MedSync.
           </DialogDescription>
-        </DialogHeader>
+        </VisuallyHidden>
+        
+        {/* Header com gradiente */}
+        <div className="relative bg-gradient-to-br from-sky-50 via-blue-50 to-sky-100 dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 px-6 py-6 text-center">
+          <div className="absolute inset-0 bg-white/40 dark:bg-black/20"></div>
+          <div className="relative z-10">
+            <div className="flex justify-center mb-3">
+              <img src={medSyncLogo} alt="MedSync" className="h-16 object-contain" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1" style={{ fontFamily: 'Nunito, sans-serif' }}>
+              Seu período gratuito expirou
+            </h2>
+            {trialEndDate && (
+              <p className="text-xs text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
+                <Clock className="w-3 h-3" />
+                Trial de 15 dias encerrado em {formatTrialEndDate(trialEndDate)}
+              </p>
+            )}
+          </div>
+        </div>
 
-        <div className="space-y-6">
-          {/* Grid de planos */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {paidPlans.map((plan) => (
-              <Card 
-                key={plan.id} 
-                className={`relative cursor-pointer transition-all duration-200 hover:shadow-lg ${
-                  selectedPlanId === plan.id 
-                    ? 'ring-2 ring-accent border-accent' 
-                    : 'border-gray-200 dark:border-gray-700'
-                }`}
-                onClick={() => setSelectedPlanId(plan.id)}
-              >
-                {plan.id === 2 && (
-                  <Badge 
-                    variant="default" 
-                    className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-accent text-white"
-                  >
-                    Mais Popular
-                  </Badge>
-                )}
-                
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      {plan.id === 2 ? (
-                        <Zap className="w-6 h-6 text-accent" />
-                      ) : plan.id === 3 ? (
-                        <Building2 className="w-6 h-6 text-blue-600" />
-                      ) : (
-                        <Star className="w-6 h-6 text-yellow-500" />
-                      )}
-                      <h3 className="text-xl font-bold">{plan.name}</h3>
-                    </div>
-                    {selectedPlanId === plan.id && (
-                      <CheckCircle className="w-6 h-6 text-accent" />
-                    )}
-                  </div>
-                  
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
-                    {plan.description}
-                  </p>
-                  
-                  <div className="mb-4">
-                    <div className="flex items-baseline">
-                      <span className="text-3xl font-bold">
-                        {formatPrice(plan.priceMonthly)}
-                      </span>
-                      <span className="text-gray-500 ml-2">/mês</span>
-                    </div>
-                  </div>
-
-                  {/* Features resumidas */}
-                  <div className="space-y-2">
-                    {plan.features?.slice(0, 3).map((feature, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          {feature}
-                        </span>
-                      </div>
-                    ))}
-                    {plan.features && plan.features.length > 3 && (
-                      <div className="text-sm text-gray-500">
-                        +{plan.features.length - 3} recursos adicionais
-                      </div>
-                    )}
+        {/* Conteúdo principal */}
+        <div className="px-6 py-6">
+          {proPlan && (
+            <>
+              {/* Toggle de período */}
+              <div className="flex justify-center mb-6">
+                <div className="flex items-center bg-gradient-to-r from-blue-50 to-sky-50 border border-blue-200 rounded-xl p-1.5 shadow-sm">
+                  <div className="relative flex bg-white rounded-lg shadow-sm">
+                    {/* Indicador deslizante */}
+                    <div 
+                      className={`absolute top-0 bottom-0 bg-gradient-to-r from-blue-600 to-sky-600 rounded-lg transition-all duration-300 ease-in-out shadow-sm ${
+                        billingInterval === 'monthly' 
+                          ? 'left-0 w-1/2' 
+                          : 'left-1/2 w-1/2'
+                      }`}
+                    />
+                    
+                    <button
+                      type="button"
+                      className={`relative z-10 text-sm font-semibold px-5 py-2 rounded-lg transition-all duration-300 hover:bg-transparent hover:text-current ${
+                        billingInterval === 'monthly' 
+                          ? 'text-white' 
+                          : 'text-gray-700 hover:text-gray-900'
+                      }`}
+                      onClick={() => setBillingInterval('monthly')}
+                      data-testid="toggle-monthly"
+                    >
+                      Mensal
+                    </button>
+                    <button
+                      type="button"
+                      className={`relative z-10 text-sm font-semibold px-5 py-2 rounded-lg transition-all duration-300 hover:bg-transparent hover:text-current ${
+                        billingInterval === 'yearly' 
+                          ? 'text-white' 
+                          : 'text-gray-700 hover:text-gray-900'
+                      }`}
+                      onClick={() => setBillingInterval('yearly')}
+                      data-testid="toggle-yearly"
+                    >
+                      Anual
+                    </button>
                   </div>
                 </div>
-              </Card>
-            ))}
-          </div>
+              </div>
 
-          {/* Botão de upgrade */}
-          <div className="flex flex-col items-center space-y-4 pt-6">
-            <Button 
-              onClick={handleUpgrade}
-              size="lg"
-              className="w-full max-w-md bg-accent hover:bg-accent/90 text-white font-semibold py-3"
-            >
-              <CreditCard className="w-5 h-5 mr-2" />
-              Fazer Upgrade Agora
-            </Button>
-            
-            <p className="text-sm text-gray-500 text-center">
-              Procesamento seguro via Stripe • Cancele a qualquer momento
-            </p>
-          </div>
+              {/* Card de preço centralizado */}
+              <div className="bg-gradient-to-br from-white to-sky-50 dark:from-gray-800 dark:to-gray-900 rounded-2xl border-2 border-sky-200 dark:border-sky-800 shadow-xl p-6 mb-4">
+                {/* Título do plano */}
+                <div className="text-center mb-4">
+                  <h3 className="text-xl font-black mb-1" style={{ color: '#2ca8e0', fontFamily: 'Nunito, sans-serif' }}>
+                    Plano PRO
+                  </h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-400" style={{ fontFamily: 'Nunito, sans-serif' }}>
+                    Plano completo para médicos independentes
+                  </p>
+                </div>
+
+                {/* Seção de preço */}
+                {(() => {
+                  const monthlyPrice = (proPlan.priceMonthly / 100);
+                  const yearlyPrice = (proPlan.priceYearly / 100);
+                  const displayPrice = billingInterval === 'yearly' ? yearlyPrice : monthlyPrice;
+                  const displayParts = displayPrice.toFixed(2).split('.');
+                  const discountedPrice = calculateDiscountedPrice(displayPrice);
+                  const discountedParts = discountedPrice.toFixed(2).split('.');
+                  
+                  return (
+                    <div className="text-center mb-6">
+                      {/* Label do período */}
+                      <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-2" style={{ fontFamily: 'Nunito, sans-serif' }}>
+                        {billingInterval === 'yearly' ? 'INVESTIMENTO ANUAL' : 'INVESTIMENTO MENSAL'}
+                      </div>
+
+                      {/* Preço original */}
+                      <div className="flex items-baseline justify-center gap-1 mb-1">
+                        <span className="text-sm font-bold text-gray-400 line-through" style={{ fontFamily: 'Nunito, sans-serif' }}>R$</span>
+                        <span className="text-2xl font-bold text-gray-400 line-through">{displayParts[0]}</span>
+                        <sup className="text-sm font-medium text-gray-400 line-through" style={{ fontFamily: 'Nunito, sans-serif' }}>,{displayParts[1]}</sup>
+                      </div>
+
+                      {/* Badge de desconto */}
+                      <div className="inline-block px-3 py-0.5 bg-red-500 text-white text-xs font-black rounded-full mb-2 shadow-md" style={{ fontFamily: 'Nunito, sans-serif' }}>
+                        {getDiscountText()}
+                      </div>
+
+                      {/* Preço com desconto - destaque */}
+                      <div className="flex items-baseline justify-center gap-1 mb-1">
+                        <span className="text-xl font-bold" style={{ color: '#2ca8e0', fontFamily: 'Nunito, sans-serif' }}>R$</span>
+                        <span className="text-5xl font-black" style={{ color: '#2ca8e0' }}>
+                          {discountedParts[0]}
+                        </span>
+                        <sup className="text-xl font-bold" style={{ color: '#2ca8e0', fontFamily: 'Nunito, sans-serif' }}>
+                          ,{discountedParts[1]}
+                        </sup>
+                      </div>
+
+                      {/* Economia mensal para plano anual */}
+                      {billingInterval === 'yearly' && (
+                        <p className="text-xs text-gray-600 dark:text-gray-400" style={{ fontFamily: 'Nunito, sans-serif' }}>
+                          equivalente a <span className="font-bold" style={{ color: '#2ca8e0' }}>R$ {(discountedPrice / 12).toFixed(2)}/mês</span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Features - Grid 2 colunas */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">Laudos automatizados</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">Redução de glosas</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">OCR para pacientes</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">Relatórios detalhados</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">Controle financeiro</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">Suporte especializado</span>
+                  </div>
+                </div>
+
+                {/* Divisor */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-3"></div>
+
+                {/* Informação de médicos */}
+                <div className="text-center">
+                  <span className="text-xs font-semibold text-gray-600 dark:text-gray-400" style={{ fontFamily: 'Nunito, sans-serif' }}>
+                    👨‍⚕️ Plano para 1 médico
+                  </span>
+                </div>
+              </div>
+
+              {/* Botão de ação */}
+              <Button 
+                onClick={handleUpgrade}
+                size="lg"
+                className="w-full text-base font-bold py-5 shadow-lg hover:shadow-xl transition-all duration-200 text-white"
+                style={{ 
+                  background: 'linear-gradient(135deg, #2ca8e0 0%, #36a9e1 100%)',
+                  fontFamily: 'Nunito, sans-serif'
+                }}
+                data-testid="button-upgrade-now"
+              >
+                <CreditCard className="w-5 h-5 mr-2" />
+                Continuar com Plano PRO
+              </Button>
+
+              {/* Informações de segurança */}
+              <div className="text-center mt-3 space-y-0.5">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  🔒 Pagamento seguro processado via Stripe
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Cancele a qualquer momento • Sem taxas de cancelamento
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
