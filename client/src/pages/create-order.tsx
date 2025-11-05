@@ -743,6 +743,17 @@ export default function CreateOrder() {
       const surgicalProcedures = orderBasicData.surgicalProcedures || [];
       if (surgicalProcedures.length > 0) {
         console.log(`✅ REUTILIZADO: ${surgicalProcedures.length} procedimentos cirúrgicos do orderBasicData (sem chamada API extra)`);
+        
+        const proceduresData = surgicalProcedures.map((sp: any) => ({
+          id: sp.id,
+          surgicalProcedureId: sp.surgicalProcedureId,
+          name: sp.procedureName,
+          description: sp.procedureDescription || '',
+          isMain: sp.isMain || false
+        }));
+        
+        setSelectedSurgicalProcedures(proceduresData);
+        console.log(`✅ REUTILIZADO: Estado selectedSurgicalProcedures atualizado:`, proceduresData);
       }
 
       // **ETAPA 4: APENAS 3 CHAMADAS NECESSÁRIAS (dados detalhados)**
