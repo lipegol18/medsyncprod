@@ -2,6 +2,8 @@ import { Express, Request, Response, NextFunction } from "express";
 import { createServer, Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, hasPermission, isAuthenticated, checkTrialStatus } from "./auth";
+import Stripe from "stripe";
+import { WHATSAPP_CONFIG } from "../shared/config";
 
 // Middleware personalizado para relatórios que funciona com autenticação
 function reportAuth(req: any, res: any, next: any) {
@@ -45,7 +47,7 @@ import { relationalOrderService } from "./relational-services";
 import { randomUUID } from "crypto";
 import { getPaymentProvider } from "./payments";
 import { db, pool } from "./db";
-import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans, medicalSpecialties, userSubscriptions, discountCodes, insertDiscountCodeSchema } from "../shared/schema";
+import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans, medicalSpecialties, userSubscriptions, discountCodes, insertDiscountCodeSchema, webhookEvents } from "../shared/schema";
 import { eq, and, or, isNull, sql, desc, asc, not, ne, count, isNotNull } from "drizzle-orm";
 import { normalizeText } from "./utils/normalize";
 import { extractTextFromImage, processIdentityDocument, processInsuranceCard } from "./services/google-vision";
@@ -1019,6 +1021,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const totalOrders = receivedValues.length;
       const averageValue = totalOrders > 0 ? totalValue / totalOrders : 0;
       
+      // Buscar estatísticas de cirurgias realizadas (status_id = 6)
+      const surgeriesStatsQuery = `
+        SELECT 
+          COUNT(*) as total_surgeries,
+          COUNT(CASE WHEN mo.received_value > 0 THEN 1 END) as surgeries_with_payment,
+          COUNT(CASE WHEN mo.received_value IS NULL OR mo.received_value = 0 THEN 1 END) as surgeries_pending_payment
+        FROM medical_orders mo
+        WHERE mo.user_id = $1
+          AND mo.status_id = 6
+      `;
+      const surgeriesStatsResult = await pool.query(surgeriesStatsQuery, [userId]);
+      const totalSurgeries = parseInt(surgeriesStatsResult.rows[0]?.total_surgeries || 0);
+      const surgeriesWithPayment = parseInt(surgeriesStatsResult.rows[0]?.surgeries_with_payment || 0);
+      const surgeriesPendingPayment = parseInt(surgeriesStatsResult.rows[0]?.surgeries_pending_payment || 0);
+      
+      // Calcular taxa de recebimento
+      const paymentRate = totalSurgeries > 0 ? (surgeriesWithPayment / totalSurgeries) * 100 : 0;
+      
+      // Buscar lista detalhada de cirurgias pendentes de pagamento
+      const pendingSurgeriesQuery = `
+        SELECT 
+          mo.id as order_id,
+          p.full_name as patient_name,
+          h.name as hospital_name,
+          mo.procedure_date,
+          COALESCE(
+            (SELECT STRING_AGG(sp.name, ', ')
+             FROM medical_order_surgical_procedures mosp
+             INNER JOIN surgical_procedures sp ON mosp.surgical_procedure_id = sp.id
+             WHERE mosp.medical_order_id = mo.id),
+            'Procedimento não especificado'
+          ) as procedures,
+          mo.received_value
+        FROM medical_orders mo
+        LEFT JOIN patients p ON mo.patient_id = p.id
+        LEFT JOIN hospitals h ON mo.hospital_id = h.id
+        WHERE mo.user_id = $1
+          AND mo.status_id = 6
+          AND (mo.received_value IS NULL OR mo.received_value = 0)
+        ORDER BY mo.procedure_date DESC NULLS LAST, mo.id DESC
+      `;
+      const pendingSurgeriesResult = await pool.query(pendingSurgeriesQuery, [userId]);
+      const pendingSurgeries = pendingSurgeriesResult.rows.map(row => ({
+        orderId: row.order_id,
+        patientName: row.patient_name || 'Não informado',
+        hospitalName: row.hospital_name || 'Não informado',
+        procedureDate: row.procedure_date,
+        procedures: row.procedures,
+        expectedValue: 0 // Valor esperado pode ser calculado se necessário
+      }));
+      
       const monthlyData = receivedValues.reduce((acc: any, item) => {
         const month = item.orderDate ? new Date(item.orderDate).toISOString().slice(0, 7) : 'Não informado';
         if (!acc[month]) {
@@ -1035,8 +1088,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalValue,
           totalOrders,
           averageValue,
+          totalSurgeries,
+          surgeriesWithPayment,
+          surgeriesPendingPayment,
+          paymentRate,
           monthlyData: Object.values(monthlyData)
-        }
+        },
+        pendingSurgeries
       };
       
       console.log("✅ Dados de valores recebidos enviados com sucesso");
@@ -2405,9 +2463,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             let orderProcedures = [];
             try {
               const procedureData = await db.select({
-                id: surgicalProcedures.id,
-                name: surgicalProcedures.name,
-                description: surgicalProcedures.description,
+                id: medicalOrderSurgicalProcedures.id,
+                surgicalProcedureId: surgicalProcedures.id,
+                procedureName: surgicalProcedures.name,
+                procedureDescription: surgicalProcedures.description,
                 isMain: medicalOrderSurgicalProcedures.isMain
               })
               .from(medicalOrderSurgicalProcedures)
@@ -2445,7 +2504,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               patientPhone: patient ? patient.phone : null,
               hospitalId: order.hospitalId,
               hospitalName: hospital ? hospital.name : "Hospital não especificado",
-              procedureName: orderProcedures && orderProcedures.length > 0 ? orderProcedures[0].name : "Procedimento não informado",
+              procedureName: orderProcedures && orderProcedures.length > 0 ? orderProcedures[0].procedureName : "Procedimento não informado",
               procedureDate: order.procedureDate || "Data não agendada",
               procedureType: order.procedureType,
               procedureLaterality: order.procedureLaterality,
@@ -2569,9 +2628,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let orderProcedures: any[] = [];
         try {
           const procedureData = await db.select({
-            id: surgicalProcedures.id,
-            name: surgicalProcedures.name,
-            description: surgicalProcedures.description,
+            id: medicalOrderSurgicalProcedures.id,
+            surgicalProcedureId: surgicalProcedures.id,
+            procedureName: surgicalProcedures.name,
+            procedureDescription: surgicalProcedures.description,
             isMain: medicalOrderSurgicalProcedures.isMain
           })
           .from(medicalOrderSurgicalProcedures)
@@ -2608,7 +2668,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           patientPhone: patientData ? patientData.phone : null,
           hospitalId: order.hospitalId,
           hospitalName: hospitalData ? hospitalData.name : "Hospital não especificado",
-          procedureName: orderProcedures && orderProcedures.length > 0 ? orderProcedures[0].name : "Procedimento não informado",
+          procedureName: orderProcedures && orderProcedures.length > 0 ? orderProcedures[0].procedureName : "Procedimento não informado",
           procedureDate: order.procedureDate || "Data não agendada",
           procedureType: order.procedureType,
           procedureLaterality: order.procedureLaterality,
@@ -4889,6 +4949,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         res.status(200).json(subscription);
+      } catch (error) {
+        console.error("Erro ao buscar assinatura do usuário:", error);
+        res
+          .status(500)
+          .json({ message: "Erro ao buscar assinatura do usuário" });
+      }
+    },
+  );
+
+  // API para obter dados de assinatura do usuário logado
+  app.get(
+    "/api/user/subscription",
+    
+    async (req: Request, res: Response) => {
+      try {
+        // Buscar userId do usuário autenticado na sessão
+        const userId = req.user?.id;
+
+        if (!userId) {
+          return res.status(401).json({ message: "Usuário não autenticado" });
+        }
+
+        // Buscar assinatura do usuário com JOIN para incluir dados do plano
+        const [subscriptionData] = await db
+          .select({
+            id: userSubscriptions.id,
+            userId: userSubscriptions.userId,
+            planId: userSubscriptions.planId,
+            status: userSubscriptions.status,
+            startedAt: userSubscriptions.startedAt,
+            expiresAt: userSubscriptions.expiresAt,
+            trialEndsAt: userSubscriptions.trialEndsAt,
+            paymentProviderCustomerId: userSubscriptions.paymentProviderCustomerId,
+            paymentProviderSubscriptionId: userSubscriptions.paymentProviderSubscriptionId,
+            paymentProvider: userSubscriptions.paymentProvider,
+            originalPrice: userSubscriptions.originalPrice,
+            discountPercent: userSubscriptions.discountPercent,
+            discountAmount: userSubscriptions.discountAmount,
+            finalPrice: userSubscriptions.finalPrice,
+            discountCode: userSubscriptions.discountCode,
+            discountDescription: userSubscriptions.discountDescription,
+            promotionalPrice: userSubscriptions.promotionalPrice,
+            promotionalEndsAt: userSubscriptions.promotionalEndsAt,
+            promotionalDescription: userSubscriptions.promotionalDescription,
+            createdAt: userSubscriptions.createdAt,
+            updatedAt: userSubscriptions.updatedAt,
+            plan: {
+              id: subscriptionPlans.id,
+              name: subscriptionPlans.name,
+              description: subscriptionPlans.description,
+              priceMonthly: subscriptionPlans.priceMonthly,
+              priceYearly: subscriptionPlans.priceYearly,
+            }
+          })
+          .from(userSubscriptions)
+          .leftJoin(subscriptionPlans, eq(userSubscriptions.planId, subscriptionPlans.id))
+          .where(eq(userSubscriptions.userId, userId))
+          .limit(1);
+
+        if (!subscriptionData) {
+          return res.status(404).json({ message: "Assinatura não encontrada" });
+        }
+
+        res.status(200).json(subscriptionData);
       } catch (error) {
         console.error("Erro ao buscar assinatura do usuário:", error);
         res
@@ -7905,6 +8029,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`Nova mensagem de contato criada: ID ${contactMessage.id}`);
 
+      // Enviar para webhook N8N em background (não bloqueia a resposta)
+      const { sendToN8NWebhook } = await import("../shared/config.js");
+      sendToN8NWebhook("contact", { name, email, subject, message })
+        .then(() => console.log("✅ Webhook N8N (fale-conosco) enviado com sucesso"))
+        .catch((error) => console.warn("⚠️ Falha ao enviar webhook N8N:", error.message));
+
       res.status(201).json({ 
         message: "Mensagem enviada com sucesso",
         id: contactMessage.id
@@ -8728,6 +8858,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         opmeItemId: surgicalApproachOpmeItems.opmeItemId,
         isRequired: surgicalApproachOpmeItems.isRequired,
         quantity: surgicalApproachOpmeItems.quantity,
+        displayOrder: surgicalApproachOpmeItems.displayOrder,
         alternativeItems: surgicalApproachOpmeItems.alternativeItems,
         notes: surgicalApproachOpmeItems.notes,
         surgicalApproachName: surgicalApproaches.name,
@@ -8738,7 +8869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .from(surgicalApproachOpmeItems)
       .leftJoin(surgicalApproaches, eq(surgicalApproachOpmeItems.surgicalApproachId, surgicalApproaches.id))
       .leftJoin(opmeItems, eq(surgicalApproachOpmeItems.opmeItemId, opmeItems.id))
-      .orderBy(surgicalApproachOpmeItems.surgicalApproachId, surgicalApproachOpmeItems.isRequired);
+      .orderBy(surgicalApproachOpmeItems.surgicalApproachId, asc(surgicalApproachOpmeItems.displayOrder), surgicalApproachOpmeItems.isRequired);
 
       console.log(`Retornando ${associations.length} associações conduta-OPME`);
       res.json(associations);
@@ -8762,6 +8893,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         opmeItemId: surgicalApproachOpmeItems.opmeItemId,
         isRequired: surgicalApproachOpmeItems.isRequired,
         quantity: surgicalApproachOpmeItems.quantity,
+        displayOrder: surgicalApproachOpmeItems.displayOrder,
         alternativeItems: surgicalApproachOpmeItems.alternativeItems,
         notes: surgicalApproachOpmeItems.notes,
         opmeCommercialName: opmeItems.commercialName,
@@ -8771,7 +8903,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .from(surgicalApproachOpmeItems)
       .leftJoin(opmeItems, eq(surgicalApproachOpmeItems.opmeItemId, opmeItems.id))
       .where(eq(surgicalApproachOpmeItems.surgicalApproachId, approachId))
-      .orderBy(surgicalApproachOpmeItems.isRequired);
+      .orderBy(asc(surgicalApproachOpmeItems.displayOrder), surgicalApproachOpmeItems.isRequired);
 
       console.log(`Encontrados ${associations.length} itens OPME para conduta cirúrgica ID ${approachId}`);
       res.json(associations);
@@ -8795,6 +8927,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         surgicalApproachId: surgicalApproachOpmeItems.surgicalApproachId,
         isRequired: surgicalApproachOpmeItems.isRequired,
         quantity: surgicalApproachOpmeItems.quantity,
+        displayOrder: surgicalApproachOpmeItems.displayOrder,
         alternativeItems: surgicalApproachOpmeItems.alternativeItems,
         notes: surgicalApproachOpmeItems.notes,
         surgicalApproachName: surgicalApproaches.name,
@@ -8803,7 +8936,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .from(surgicalApproachOpmeItems)
       .leftJoin(surgicalApproaches, eq(surgicalApproachOpmeItems.surgicalApproachId, surgicalApproaches.id))
       .where(eq(surgicalApproachOpmeItems.opmeItemId, opmeId))
-      .orderBy(surgicalApproachOpmeItems.isRequired);
+      .orderBy(asc(surgicalApproachOpmeItems.displayOrder), surgicalApproachOpmeItems.isRequired);
 
       console.log(`Encontradas ${associations.length} condutas para item OPME ID ${opmeId}`);
       res.json(associations);
@@ -10334,13 +10467,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           registrationHolder: opmeItems.registrationHolder,
           isRequired: surgicalApproachOpmeItems.isRequired,
           quantity: surgicalApproachOpmeItems.quantity,
+          displayOrder: surgicalApproachOpmeItems.displayOrder,
           alternativeItems: surgicalApproachOpmeItems.alternativeItems,
           notes: surgicalApproachOpmeItems.notes
         })
         .from(surgicalApproachOpmeItems)
         .innerJoin(opmeItems, eq(surgicalApproachOpmeItems.opmeItemId, opmeItems.id))
         .where(and(...opmeWhereConditions))
-        .orderBy(surgicalApproachOpmeItems.isRequired);
+        .orderBy(asc(surgicalApproachOpmeItems.displayOrder), surgicalApproachOpmeItems.isRequired);
 
       // Buscar fornecedores associados (nova arquitetura: Procedimento + Conduta)
       // Filtrando por conduta cirúrgica E procedimento cirúrgico quando disponível
@@ -12215,6 +12349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           riskClass: opmeItems.riskClass,
           manufacturerName: opmeItems.manufacturerName,
           quantity: surgicalApproachOpmeItems.quantity,
+          displayOrder: surgicalApproachOpmeItems.displayOrder,
           isRequired: surgicalApproachOpmeItems.isRequired,
           notes: surgicalApproachOpmeItems.notes,
           alternativeItems: surgicalApproachOpmeItems.alternativeItems,
@@ -12225,7 +12360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(surgicalApproachOpmeItems.surgicalApproachId, approachId),
           eq(surgicalApproachOpmeItems.surgicalProcedureId, procedureId)
         ))
-        .orderBy(opmeItems.technicalName, opmeItems.commercialName);
+        .orderBy(asc(surgicalApproachOpmeItems.displayOrder), surgicalApproachOpmeItems.isRequired);
 
       // Buscar Fornecedores associados ao procedimento + conduta específicos
       const suppliersList = await db
@@ -13059,6 +13194,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/admin/approach-opme/{procedureId}/{approachId}/{opmeId}/display-order - Atualizar ordem de apresentação do OPME
+  app.patch("/api/admin/approach-opme/:procedureId/:approachId/:opmeId/display-order", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const procedureId = parseInt(req.params.procedureId);
+      const approachId = parseInt(req.params.approachId);
+      const opmeId = parseInt(req.params.opmeId);
+      const { displayOrder } = req.body;
+      
+      if (displayOrder === undefined || displayOrder === null) {
+        return res.status(400).json({ message: "Ordem de apresentação é obrigatória" });
+      }
+
+      const displayOrderNum = parseInt(displayOrder);
+      if (isNaN(displayOrderNum) || displayOrderNum < 0) {
+        return res.status(400).json({ message: "Ordem de apresentação deve ser um número válido maior ou igual a 0" });
+      }
+      
+      console.log(`🔄 Atualizando ordem de apresentação do OPME ${opmeId} na conduta ${approachId} para ${displayOrderNum}`);
+
+      // Atualizar a ordem de apresentação
+      const result = await db
+        .update(surgicalApproachOpmeItems)
+        .set({ 
+          displayOrder: displayOrderNum,
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(surgicalApproachOpmeItems.surgicalProcedureId, procedureId),
+          eq(surgicalApproachOpmeItems.surgicalApproachId, approachId),
+          eq(surgicalApproachOpmeItems.opmeItemId, opmeId)
+        ));
+
+      console.log(`✅ Ordem de apresentação do OPME ${opmeId} atualizada para ${displayOrderNum}`);
+      res.json({ message: "Ordem de apresentação atualizada com sucesso", displayOrder: displayOrderNum });
+    } catch (error) {
+      console.error("Erro ao atualizar ordem de apresentação do OPME:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
   // === APIs para gerenciar Fornecedores nas condutas ===
   
   // POST /api/admin/approach-suppliers - Adicionar fornecedor a uma conduta
@@ -13307,9 +13482,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/config/support - Retorna números de WhatsApp para suporte
   app.get('/api/config/support', (req: any, res: any) => {
     try {
-      // Importar configurações do arquivo centralizado
-      const { WHATSAPP_CONFIG } = require("../shared/config");
-      
       const supportConfig = {
         default: WHATSAPP_CONFIG.default,
         contexts: WHATSAPP_CONFIG.contexts
@@ -13321,11 +13493,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: "Erro interno do servidor",
         // Fallback em caso de erro
-        default: "5521997364870",
+        default: "5521999991905",
         contexts: {
-          br: "5521997364870",
-          pt: "5521997364870", 
-          sales: "5521997364870"
+          br: "5521999991905",
+          pt: "5521999991905", 
+          sales: "5521999991905"
         }
       });
     }
@@ -13343,6 +13515,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // NOVO FLUXO: Detectar registro via regToken (FASE 2)
       if (metadata?.regToken && metadata?.registrationId) {
         return await handleRegTokenBasedRegistration(session);
+      }
+
+      // FLUXO DE UPGRADE: Converter trial para plano pago
+      if (metadata?.flow === 'upgrade') {
+        return await handleUpgradeFlow(session);
       }
 
       // FLUXO ANTIGO: Manter compatibilidade 
@@ -13364,6 +13541,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
+  // Handler para processar upgrade de trial para plano pago
+  async function handleUpgradeFlow(session: any): Promise<boolean> {
+    try {
+      const { customer, subscription, metadata, amount_total } = session;
+      const userId = parseInt(metadata.userId);
+      const planId = parseInt(metadata.planId);
+      const billingInterval = metadata.billingInterval;
+      
+      console.log(`🚀 [UPGRADE] Processando upgrade para usuário ${userId}, plano ${planId}`);
+
+      // 1. IDEMPOTÊNCIA: Verificar se já existe subscription ativa para o usuário
+      const existingSubs = await db
+        .select()
+        .from(userSubscriptions)
+        .where(
+          and(
+            eq(userSubscriptions.userId, userId),
+            eq(userSubscriptions.status, 'active')
+          )
+        )
+        .limit(1);
+
+      if (existingSubs.length > 0 && existingSubs[0].paymentProviderSubscriptionId === subscription) {
+        console.log(`✅ [IDEMPOTENTE] Upgrade já processado para subscription ${subscription}`);
+        return true;
+      }
+
+      // 2. Buscar plano
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.id, planId))
+        .limit(1);
+
+      if (!plan) {
+        console.error(`❌ [UPGRADE] Plano não encontrado: ${planId}`);
+        return false;
+      }
+
+      // 3. Extrair informações de preço e desconto
+      const finalPrice = amount_total || 0;
+      const originalPrice = session.amount_subtotal || finalPrice;
+      const discountAmount = session.total_details?.amount_discount || 0;
+      
+      let discountPercent = 0;
+      if (originalPrice > 0 && discountAmount > 0) {
+        discountPercent = Math.round((discountAmount / originalPrice) * 100);
+      }
+      
+      let discountCode = null;
+      let discountDescription = null;
+      
+      if (session.discounts && session.discounts.length > 0) {
+        const firstDiscount = session.discounts[0];
+        discountCode = firstDiscount.coupon || null;
+        
+        if (discountPercent > 0) {
+          discountDescription = `${discountPercent}% de desconto`;
+        } else {
+          discountDescription = 'Desconto aplicado';
+        }
+      }
+
+      console.log(`💰 [UPGRADE] Preço: Original ${originalPrice}, Final ${finalPrice}, Desconto ${discountAmount} (${discountPercent}%)`);
+
+      // 4. Buscar subscription existente (trial) do usuário
+      const [existingSubscription] = await db
+        .select()
+        .from(userSubscriptions)
+        .where(eq(userSubscriptions.userId, userId))
+        .orderBy(desc(userSubscriptions.id))
+        .limit(1);
+
+      const now = new Date();
+      const expiresAt = new Date(
+        now.getTime() + (billingInterval === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000
+      );
+
+      if (existingSubscription) {
+        // Atualizar subscription existente
+        await db
+          .update(userSubscriptions)
+          .set({
+            planId: planId,
+            status: 'active',
+            paymentProviderSubscriptionId: subscription,
+            paymentProviderCustomerId: customer,
+            paymentProvider: 'stripe',
+            startedAt: now,
+            expiresAt: expiresAt,
+            finalPrice: finalPrice,
+            originalPrice: originalPrice,
+            discountAmount: discountAmount,
+            discountPercent: discountPercent,
+            discountCode: discountCode,
+            discountDescription: discountDescription
+          })
+          .where(eq(userSubscriptions.id, existingSubscription.id));
+
+        console.log(`✅ [UPGRADE] Subscription ${existingSubscription.id} atualizada com sucesso`);
+      } else {
+        // Criar nova subscription
+        const subscriptionData = {
+          userId: userId,
+          planId: planId,
+          status: 'active',
+          paymentProviderSubscriptionId: subscription,
+          paymentProviderCustomerId: customer,
+          paymentProvider: 'stripe',
+          startedAt: now,
+          expiresAt: expiresAt,
+          finalPrice: finalPrice,
+          originalPrice: originalPrice,
+          discountAmount: discountAmount,
+          discountPercent: discountPercent,
+          discountCode: discountCode,
+          discountDescription: discountDescription
+        };
+        
+        await storage.createUserSubscription(subscriptionData);
+        console.log(`✅ [UPGRADE] Nova subscription criada para usuário ${userId}`);
+      }
+
+      console.log(`🎉 [UPGRADE] Upgrade concluído com sucesso para usuário ${userId}`);
+      return true;
+    } catch (error: any) {
+      console.error(`❌ [UPGRADE] Erro ao processar upgrade:`, error);
+      return false;
+    }
+  }
+
   // FASE 3: Handler para materialização idempotente com regToken
   async function handleRegTokenBasedRegistration(session: any): Promise<boolean> {
     try {
@@ -13372,15 +13680,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`🎯 [MATERIALIZAÇÃO] Iniciando para regToken: ${regToken}`);
 
-      // 1. IDEMPOTÊNCIA: Verificar se já foi processado
-      const existingUser = await db
-        .select()
-        .from(users)
-        .where(sql`metadata_json->>'stripe_session_id' = ${session.id}`)
-        .limit(1);
+      // 1. IDEMPOTÊNCIA: Verificar se já foi processado via regToken
+      const existingUser = await storage.getUserByRegToken(regToken);
 
-      if (existingUser.length > 0) {
-        console.log(`✅ [IDEMPOTENTE] Usuário já materializado para session ${session.id}`);
+      if (existingUser) {
+        console.log(`✅ [IDEMPOTENTE] Usuário já materializado para regToken ${regToken}`);
         return true;
       }
 
@@ -13421,14 +13725,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         crmUf: registration.crmUf,
         medicalSpecialtyId: registration.medicalSpecialtyId,
         active: true, // Ativar imediatamente após pagamento
-        consentAccepted: new Date(),
-        // Metadados para tracking
-        metadataJson: {
-          stripe_session_id: session.id,
-          stripe_customer_id: customer,
-          registration_id: registration.id,
-          materialized_at: new Date().toISOString()
-        }
+        consentAccepted: new Date()
       };
 
       const user = await storage.createUser(userData);
@@ -14663,6 +14960,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ❌ ROTA DUPLICADA REMOVIDA - JÁ EXISTE EM routes/discount-codes.ts
+
+  // =================== UPGRADE ENDPOINT FOR EXISTING USERS ===================
+  
+  // Endpoint para criar sessão Stripe Checkout para upgrade de usuários existentes
+  app.post('/api/create-upgrade-checkout', async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Usuário não autenticado' 
+      });
+    }
+
+    try {
+      const { planId, billingInterval } = req.body;
+
+      if (!planId || !billingInterval) {
+        return res.status(400).json({
+          success: false,
+          message: 'planId e billingInterval são obrigatórios'
+        });
+      }
+
+      // Verificar se Stripe está configurado
+      const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeSecretKey) {
+        return res.status(500).json({
+          success: false,
+          message: 'Stripe não configurado'
+        });
+      }
+
+      // Inicializar Stripe
+      const stripe = new Stripe(stripeSecretKey, {
+        apiVersion: '2025-08-27.basil',
+      });
+
+      const userId = req.user!.id;
+
+      // Buscar plano no banco
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.id, planId))
+        .limit(1);
+
+      if (!plan) {
+        return res.status(404).json({
+          success: false,
+          message: 'Plano não encontrado'
+        });
+      }
+
+      // Buscar desconto automático ativo
+      const activeDiscount = await db
+        .select()
+        .from(discountCodes)
+        .where(
+          and(
+            eq(discountCodes.isActive, true),
+            eq(discountCodes.isAutomatic, true)
+          )
+        )
+        .limit(1);
+
+      const discount = activeDiscount.length > 0 ? activeDiscount[0] : null;
+
+      // Determinar preço base
+      const basePrice = billingInterval === 'yearly' ? plan.priceYearly : plan.priceMonthly;
+      
+      // Aplicar desconto se disponível
+      let finalPrice = basePrice;
+      if (discount && discount.discountType === 'percentage') {
+        const discountMultiplier = (100 - discount.discountValue) / 100;
+        finalPrice = Math.round(basePrice * discountMultiplier);
+      }
+
+      // URLs de sucesso e cancelamento
+      const baseUrl = `${process.env.APP_PROTOCOL || 'https'}://${process.env.APP_DOMAIN || req.get('host')}`;
+
+      // Criar sessão Stripe Checkout
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        customer_email: req.user!.email,
+        line_items: [
+          {
+            price_data: {
+              currency: 'brl',
+              unit_amount: finalPrice,
+              recurring: {
+                interval: billingInterval === 'yearly' ? 'year' : 'month',
+              },
+              product_data: {
+                name: `Plano ${plan.name}`,
+                description: plan.description || undefined,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        metadata: {
+          userId: userId.toString(),
+          planId: planId.toString(),
+          billingInterval,
+          flow: 'upgrade',
+          discountCodeId: discount?.id.toString() || '',
+        },
+        success_url: `${baseUrl}/welcome?upgrade=success`,
+        cancel_url: `${baseUrl}/upgrade?canceled=true`,
+        allow_promotion_codes: true,
+      });
+
+      console.log(`✅ [UPGRADE] Sessão Stripe criada para usuário ${userId}: ${session.id}`);
+
+      res.json({
+        success: true,
+        checkoutUrl: session.url
+      });
+
+    } catch (error: any) {
+      console.error('❌ [UPGRADE] Erro ao criar sessão de checkout:', error);
+      res.status(500).json({
+        success: false,
+        message: `Erro ao criar sessão de checkout: ${error.message}`
+      });
+    }
+  });
 
   // Health check endpoint para Docker
   app.get('/api/health', async (req, res) => {
