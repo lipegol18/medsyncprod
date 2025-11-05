@@ -678,6 +678,35 @@ export default function ProcedureAssociationsPage() {
     },
   });
 
+  const updateOpmeDisplayOrderMutation = useMutation({
+    mutationFn: async (data: { procedureId: number; approachId: number; opmeId: number; displayOrder: number }) => {
+      const response = await fetch(`/api/admin/approach-opme/${data.procedureId}/${data.approachId}/${data.opmeId}/display-order`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayOrder: data.displayOrder }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao atualizar ordem de apresentação OPME');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/approach-details", selectedApproach, selectedProcedure] });
+      toast({
+        title: "Sucesso",
+        description: "Ordem de apresentação OPME atualizada com sucesso!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // === FUNÇÕES DE BUSCA COM DEBOUNCE ===
   
   // Função para formatar automaticamente o código CID-10
@@ -1914,6 +1943,35 @@ export default function ProcedureAssociationsPage() {
                                           disabled={updateOpmeQuantityMutation.isPending}
                                         />
                                       </div>
+
+                                      {/* Campo editável de ordem de apresentação OPME */}
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-xs text-orange-800">Ordem:</span>
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          className="w-16 h-6 text-xs"
+                                          defaultValue={opme.displayOrder || 0}
+                                          onBlur={(e) => {
+                                            const newDisplayOrder = parseInt(e.target.value) || 0;
+                                            if (newDisplayOrder !== (opme.displayOrder || 0) && selectedApproach && selectedProcedure) {
+                                              updateOpmeDisplayOrderMutation.mutate({
+                                                procedureId: selectedProcedure,
+                                                approachId: selectedApproach,
+                                                opmeId: opme.id,
+                                                displayOrder: newDisplayOrder
+                                              });
+                                            }
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.currentTarget.blur();
+                                            }
+                                          }}
+                                          disabled={updateOpmeDisplayOrderMutation.isPending}
+                                        />
+                                      </div>
+
                                       {opme.isRequired && (
                                         <span className="inline-block px-2 py-1 bg-red-100 text-red-800 text-xs rounded">
                                           Obrigatório
