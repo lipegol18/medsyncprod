@@ -183,20 +183,21 @@ export default function AuthPage() {
       // Enviar para a API interna primeiro
       const result = await apiRequest("/api/register", "POST", backendData);
 
-      // Enviar dados para o webhook do n8n em background (não bloqueia o registro)
-      fetch("https://lipegol18.app.n8n.cloud/webhook/validar-crm", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      })
-        .then((response) => {
-          console.log("Webhook n8n executado:", response.status);
-        })
-        .catch((error) => {
-          console.warn("Webhook n8n falhou:", error);
-        });
+      // WEBHOOK COMENTADO: Não está na documentação oficial N8N
+      // Se precisar ser reativado, adicionar na configuração shared/config.ts
+      // fetch("https://lipegol18.app.n8n.cloud/webhook/validar-crm", {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      //   body: JSON.stringify(data),
+      // })
+      //   .then((response) => {
+      //     console.log("Webhook n8n executado:", response.status);
+      //   })
+      //   .catch((error) => {
+      //     console.warn("Webhook n8n falhou:", error);
+      //   });
 
       return result;
     },
@@ -216,37 +217,9 @@ export default function AuthPage() {
   const forgotPasswordMutation = useMutation({
     mutationFn: async (data: ForgotPasswordForm) => {
       // Fazer a chamada para a API interna
+      // O webhook N8N é enviado automaticamente pelo backend com autenticação Bearer
+      // Ver: server/auth.ts (endpoint /api/forgot-password)
       const result = await apiRequest("/api/forgot-password", "POST", data);
-
-      // Enviar dados para o webhook do n8n em background (não bloqueia a recuperação)
-      const webhookData = {
-        email: data.email,
-        timestamp: new Date().toISOString(),
-        action: "forgot_password_request",
-        origin: window.location.origin,
-        token: result.token || null,
-        reset_link: result.token
-          ? `${window.location.origin}/auth?reset=${result.token}`
-          : null,
-      };
-
-      fetch("https://lipegol18.app.n8n.cloud/webhook/EsqueciASenha", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(webhookData),
-      })
-        .then((response) => {
-          console.log(
-            "Webhook n8n executado para recuperação de senha:",
-            response.status,
-          );
-          console.log("Dados enviados para webhook:", webhookData);
-        })
-        .catch((error) => {
-          console.warn("Webhook n8n falhou para recuperação de senha:", error);
-        });
 
       return result;
     },
