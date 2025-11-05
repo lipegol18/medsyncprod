@@ -63,16 +63,8 @@ export function ContactForm() {
 
   async function onSubmit(data: ContactFormValues) {
     try {
+      // Enviar para API do backend (que cuida de salvar no DB e enviar para webhook N8N)
       await apiRequest("/api/contact", "POST", data);
-
-      // Envia os dados também para o webhook do n8n
-      await fetch("https://lipegol18.app.n8n.cloud/webhook/Fale conosco", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
 
       toast({
         title: t("contact.success"),
