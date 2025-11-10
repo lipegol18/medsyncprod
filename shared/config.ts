@@ -81,6 +81,13 @@ export const N8N_WEBHOOKS = {
         "cids",
         "materiais"
       ] as const
+    },
+    
+    // Geração de Recurso de Glosa com IA
+    generateGlossAppeal: {
+      path: "/resposta-glosa",
+      token: "f9a2b8e3-c1d5-4e7f-a6b0-9c8d7e6f5a4b",
+      requiredFields: ["motivo_glosa"] as const
     }
   }
 } as const;
