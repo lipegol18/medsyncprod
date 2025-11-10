@@ -30,7 +30,7 @@ export function RegisterModal({
   // Dados do formulário começam vazios para o usuário preencher
   const [formData, setFormData] = useState<RegisterFormType | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
-  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('yearly');
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
   // Estado para dados pré-carregados quando voltar ao formulário
   const [preloadedFormData, setPreloadedFormData] = useState<Partial<RegisterFormType> | null>(null);
   const [, setLocation] = useLocation();
@@ -561,6 +561,13 @@ export function RegisterModal({
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Cupom Promocional Disponível */}
+          {automaticDiscount && (
+            <p className="text-sm font-bold text-blue-900">
+              Ativar o desconto de {getDiscountPercentage()}% com o código {automaticDiscount.code} na próxima tela de pagamento.
+            </p>
           )}
 
           {/* Botões de Ação */}
