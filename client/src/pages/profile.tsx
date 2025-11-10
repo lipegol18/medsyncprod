@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, User, Shield, Calendar, Mail, Key, IdCard, Sun, Moon, Laptop, Building2 as BuildingHospital, Pencil as PencilIcon, Check, X, Upload, Image as ImageIcon, Trash2, ArrowLeft } from "lucide-react";
+import { Loader2, User, Shield, Calendar, Mail, Key, IdCard, Sun, Moon, Laptop, Building2 as BuildingHospital, Pencil as PencilIcon, Check, X, Upload, Image as ImageIcon, Trash2, ArrowLeft, CreditCard, Clock, BadgeCheck, DollarSign, Package } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { t } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
@@ -123,6 +123,16 @@ const Profile = () => {
       return await apiRequest(`/api/doctors/${user.id}/patients`, "GET");
     },
     enabled: !!user?.id && user?.roleId === 2,
+  });
+  
+  // Buscar dados da subscription do usuário
+  const { data: userSubscription, isLoading: isSubscriptionLoading } = useQuery({
+    queryKey: ['/api/user/subscription'],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      return await apiRequest('/api/user/subscription', "GET");
+    },
+    enabled: !!user?.id,
   });
 
   useEffect(() => {
@@ -1383,6 +1393,7 @@ const Profile = () => {
           <TabsTrigger value="info">Informações Pessoais</TabsTrigger>
           <TabsTrigger value="security">Segurança</TabsTrigger>
           <TabsTrigger value="privacy">Privacidade</TabsTrigger>
+          <TabsTrigger value="subscription">Subscrição</TabsTrigger>
         </TabsList>
         
         <TabsContent value="info">
@@ -2053,6 +2064,189 @@ const Profile = () => {
                 )}
               </CardContent>
             </Card>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="subscription">
+          <div className="grid gap-6 md:grid-cols-2">
+            {isSubscriptionLoading ? (
+              <Card className="w-full shadow-lg">
+                <CardContent className="p-8">
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="ml-3 text-sm text-muted-foreground">Carregando dados da subscrição...</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : userSubscription ? (
+              <>
+                <Card className="w-full shadow-lg">
+                  <CardHeader className="bg-medsync-blue text-white flex flex-col rounded-t-lg p-6 pb-3 pt-3 border-b space-y-0">
+                    <CardTitle className="text-2xl font-bold">
+                      Plano Atual
+                    </CardTitle>
+                    <CardDescription className="text-white">
+                      Informações sobre sua assinatura ativa
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-5 p-6 rounded-b-lg">
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Nome do Plano</p>
+                      <div className="flex items-center space-x-2">
+                        <Package className="text-primary w-5 h-5" />
+                        <p className="text-base font-semibold text-medsync-blue">{userSubscription.plan?.name || 'N/A'}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Status</p>
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-3 h-3 rounded-full ${
+                          userSubscription.status === 'active' ? 'bg-green-500' :
+                          userSubscription.status === 'trial' ? 'bg-blue-500' :
+                          userSubscription.status === 'expired' ? 'bg-red-500' :
+                          userSubscription.status === 'cancelled' ? 'bg-gray-500' :
+                          'bg-yellow-500'
+                        }`}></div>
+                        <p className="text-base capitalize">
+                          {userSubscription.status === 'active' ? 'Ativo' :
+                           userSubscription.status === 'trial' ? 'Trial' :
+                           userSubscription.status === 'expired' ? 'Expirado' :
+                           userSubscription.status === 'cancelled' ? 'Cancelado' :
+                           'Pendente'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {(userSubscription.plan?.priceMonthly || userSubscription.plan?.priceYearly) && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Tipo de Cobrança</p>
+                        <div className="flex items-center space-x-2">
+                          <Clock className="text-primary w-5 h-5" />
+                          <p className="text-base">
+                            {userSubscription.finalPrice && userSubscription.plan.priceYearly && 
+                             Math.abs(userSubscription.finalPrice - userSubscription.plan.priceYearly) < 1000
+                              ? 'Anual' 
+                              : 'Mensal'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {userSubscription.finalPrice && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Valor</p>
+                        <div className="flex items-center space-x-2">
+                          <DollarSign className="text-primary w-5 h-5" />
+                          <div>
+                            <p className="text-lg font-bold text-medsync-blue">
+                              R$ {(userSubscription.finalPrice / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                            {userSubscription.originalPrice && userSubscription.originalPrice > userSubscription.finalPrice && (
+                              <p className="text-xs text-muted-foreground line-through">
+                                R$ {(userSubscription.originalPrice / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                            )}
+                            {userSubscription.discountPercent > 0 && (
+                              <p className="text-xs text-green-600 font-medium">
+                                {userSubscription.discountPercent}% de desconto aplicado
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                
+                <Card className="w-full shadow-lg">
+                  <CardHeader className="bg-medsync-blue text-white flex flex-col rounded-t-lg p-6 pb-3 pt-3 border-b space-y-0">
+                    <CardTitle className="text-2xl font-bold">
+                      Datas e Período
+                    </CardTitle>
+                    <CardDescription className="text-white">
+                      Informações sobre o período da sua assinatura
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-5 p-6 rounded-b-lg">
+                    {userSubscription.startedAt && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Data de Início</p>
+                        <div className="flex items-center space-x-2">
+                          <Calendar className="text-primary w-5 h-5" />
+                          <p className="text-base">
+                            {format(new Date(userSubscription.startedAt), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {userSubscription.expiresAt && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">
+                          {userSubscription.status === 'active' ? 'Próxima Cobrança' : 'Data de Expiração'}
+                        </p>
+                        <div className="flex items-center space-x-2">
+                          <Clock className="text-primary w-5 h-5" />
+                          <p className="text-base">
+                            {format(new Date(userSubscription.expiresAt), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {userSubscription.trialEndsAt && userSubscription.status === 'trial' && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Trial Expira em</p>
+                        <div className="flex items-center space-x-2">
+                          <Clock className="text-primary w-5 h-5" />
+                          <p className="text-base">
+                            {format(new Date(userSubscription.trialEndsAt), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {userSubscription.paymentProvider && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Provedor de Pagamento</p>
+                        <div className="flex items-center space-x-2">
+                          <CreditCard className="text-primary w-5 h-5" />
+                          <p className="text-base capitalize">{userSubscription.paymentProvider}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {userSubscription.discountCode && (
+                      <div className="space-y-2 pt-2 border-t">
+                        <p className="text-sm font-medium text-[hsl(var(--medsync-dark-blue))]">Código de Desconto</p>
+                        <div className="flex items-center space-x-2">
+                          <BadgeCheck className="text-green-600 w-5 h-5" />
+                          <div>
+                            <p className="text-base font-mono font-semibold text-green-600">{userSubscription.discountCode}</p>
+                            {userSubscription.discountDescription && (
+                              <p className="text-xs text-muted-foreground">{userSubscription.discountDescription}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card className="w-full shadow-lg">
+                <CardContent className="p-8">
+                  <div className="text-center">
+                    <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-lg font-medium text-[hsl(var(--medsync-dark-blue))]">Nenhuma assinatura ativa</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Você ainda não possui uma assinatura ativa.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </TabsContent>
       </Tabs>
