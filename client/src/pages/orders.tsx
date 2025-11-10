@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
+import RoboMedSyncIcon from "@/assets/icons/MedSync_Icones_Robo Medsync_Sem_Borda.svg";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -29,6 +30,8 @@ import { t } from "@/lib/i18n";
 import { addOrdersTranslations } from "@/lib/translations/orders";
 import { useToast } from "@/hooks/use-toast";
 import { openWhatsAppChat } from "@/lib/whatsapp";
+import { LoadingLogo } from "@/components/loading-logo";
+import { AppealPreview } from "@/components/appeal-preview";
 
 // Adicionar traduções
 addOrdersTranslations();
@@ -148,6 +151,12 @@ export default function Orders() {
   const [appealJustification, setAppealJustification] = useState<string>("");
   const [rejectionReason, setRejectionReason] = useState<string>("");
   const [isCreatingAppeal, setIsCreatingAppeal] = useState<boolean>(false);
+  const [appealStep, setAppealStep] = useState<number>(1);
+  const [isGeneratingAppealAI, setIsGeneratingAppealAI] = useState<boolean>(false);
+  const [appealOrderData, setAppealOrderData] = useState<any>(null);
+  const [isLoadingAppealOrder, setIsLoadingAppealOrder] = useState<boolean>(false);
+  const [generatedAppealPdfUrl, setGeneratedAppealPdfUrl] = useState<string>("");
+  const [isFinalizingAppeal, setIsFinalizingAppeal] = useState<boolean>(false);
 
   // Estados para modal de agendamento cirúrgico
   const [showAppointmentModal, setShowAppointmentModal] = useState<boolean>(false);
@@ -431,12 +440,12 @@ export default function Orders() {
     [searchTerm, selectedHospital, selectedStatus]
   );
 
-  // Função para criar recurso
-  const createAppeal = async () => {
-    if (!selectedOrderForAppeal || !appealJustification.trim()) {
+  // Função para gerar PDF do recurso
+  const generateAppealPDF = async () => {
+    if (!selectedOrderForAppeal || !appealJustification.trim() || !appealOrderData) {
       toast({
         title: "Erro",
-        description: "Justificativa é obrigatória",
+        description: "Dados insuficientes para gerar o recurso",
         variant: "destructive",
       });
       return;
@@ -445,29 +454,86 @@ export default function Orders() {
     try {
       setIsCreatingAppeal(true);
       
-      const response = await apiRequest(`/api/medical-orders/${selectedOrderForAppeal}/appeals`, "POST", {
-        justification: appealJustification,
-        rejectionReason: rejectionReason || null
+      toast({
+        title: "Gerando PDF do Recurso",
+        description: "Criando documento...",
+      });
+
+      // Importar dinamicamente o react-pdf
+      const { pdf } = await import('@react-pdf/renderer');
+      const { AppealPDFDocument } = await import('@/components/appeal-pdf-document');
+
+      // Configurar Buffer para @react-pdf/renderer
+      if (typeof window !== 'undefined' && !(window as any).Buffer) {
+        const { Buffer } = await import('buffer');
+        (window as any).Buffer = Buffer;
+      }
+
+      // Gerar PDF do recurso
+      const pdfBlob = await pdf(
+        <AppealPDFDocument 
+          patient={appealOrderData.patient}
+          hospital={appealOrderData.hospital}
+          appealJustification={appealJustification}
+          user={user ? {
+            name: user.name,
+            crm: user.crm?.toString() || undefined,
+            logoUrl: user.logoUrl || undefined, // Logo do médico para o cabeçalho
+            signatureUrl: user.signatureUrl || undefined, // Assinatura para o rodapé
+            signatureNote: user.signatureNote || undefined,
+          } : undefined}
+        />
+      ).toBlob();
+
+      console.log("✅ PDF do recurso gerado! Tamanho:", pdfBlob.size, "bytes");
+
+      // Gerar nome do arquivo
+      const fileName = `recurso_glosa_${selectedOrderForAppeal}_${appealOrderData.patient?.fullName?.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      
+      // Criar FormData para enviar o arquivo
+      const formData = new FormData();
+      formData.append('pdf', pdfBlob, fileName);
+      formData.append('orderId', selectedOrderForAppeal.toString());
+      formData.append('patientName', appealOrderData.patient?.fullName || 'Paciente');
+      formData.append('type', 'appeal'); // Marcar como recurso
+      
+      console.log("📤 Enviando PDF do recurso para servidor...");
+      
+      // Enviar PDF para o servidor
+      const uploadResponse = await fetch('/api/uploads/order-pdf', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
       });
       
-      setShowAppealDialog(false);
-      setSelectedOrderForAppeal(null);
-      setAppealJustification("");
-      setRejectionReason("");
+      if (!uploadResponse.ok) {
+        throw new Error(`Erro no upload: ${uploadResponse.status}`);
+      }
+      
+      const uploadResult = await uploadResponse.json();
+      console.log("✅ Upload do PDF concluído:", uploadResult);
+      
+      // Criar registro do recurso no banco de dados
+      await apiRequest(`/api/medical-orders/${selectedOrderForAppeal}/appeals`, "POST", {
+        justification: appealJustification,
+        rejectionReason: rejectionReason || null,
+        pdfUrl: uploadResult.url // URL do PDF gerado
+      });
+      
+      // Salvar URL do PDF e ir para step 4 (tela de sucesso)
+      setGeneratedAppealPdfUrl(uploadResult.url);
+      setAppealStep(4);
       
       toast({
-        title: "Recurso criado",
-        description: "Seu recurso foi enviado para análise da operadora",
+        title: "✅ PDF do recurso gerado!",
+        description: "Agora você pode fazer o download e finalizar o processo.",
+        duration: 3000,
       });
       
-      // Invalidar cache e atualizar dados
+      // Invalidar cache para atualizar dados
       if (selectedOrderForAppeal) {
-        // Invalidar queries do React Query para atualizar cache
         queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${selectedOrderForAppeal}`] });
         queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
-        
-        // Buscar apenas este pedido para obter o status e cores atualizadas (otimizado)
-        await fetchOrder(selectedOrderForAppeal);
       }
       
     } catch (error) {
@@ -479,6 +545,48 @@ export default function Orders() {
       });
     } finally {
       setIsCreatingAppeal(false);
+    }
+  };
+
+  // Função para finalizar recurso e atualizar status
+  const finalizeAppeal = async () => {
+    if (!selectedOrderForAppeal) return;
+
+    try {
+      setIsFinalizingAppeal(true);
+
+      // Atualizar status do pedido para "aguardando_recurso"
+      await apiRequest(`/api/medical-orders/${selectedOrderForAppeal}/status`, "PATCH", {
+        status: "aguardando_recurso"
+      });
+
+      // Fechar modal e limpar estados
+      setShowAppealDialog(false);
+      setSelectedOrderForAppeal(null);
+      setAppealJustification("");
+      setRejectionReason("");
+      setAppealStep(1);
+      setAppealOrderData(null);
+      setGeneratedAppealPdfUrl("");
+
+      toast({
+        title: "✅ Recurso finalizado!",
+        description: "O pedido foi atualizado para 'Aguardando Recurso'.",
+        duration: 3000,
+      });
+
+      // Atualizar lista de pedidos
+      await fetchOrder(selectedOrderForAppeal);
+
+    } catch (error) {
+      console.error("Erro ao finalizar recurso:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível finalizar o recurso",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFinalizingAppeal(false);
     }
   };
 
@@ -1668,75 +1776,320 @@ export default function Orders() {
       </Dialog>
 
       {/* Dialog para criar recurso */}
-      <Dialog open={showAppealDialog} onOpenChange={setShowAppealDialog}>
-        <DialogContent className="bg-card border-gray-200 text-foreground max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-destructive flex items-center">
-              <FileText className="h-5 w-5 mr-2" />
-              Gerar Recurso
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div>
-              <Label htmlFor="rejectionReason" className="text-muted-foreground">
-                Motivo da Recusa (Operadora)
-              </Label>
-              <Textarea
-                id="rejectionReason"
-                placeholder="Cole aqui a mensagem de recusa enviada pela operadora..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                className="bg-input border-gray-200 text-foreground mt-1 min-h-[80px]"
-                rows={3}
-              />
-            </div>
-            <div>
-              <Label htmlFor="appealJustification" className="text-muted-foreground">
-                Justificativa Médica *
-              </Label>
-              <Textarea
-                id="appealJustification"
-                placeholder="Descreva a justificativa médica para o recurso..."
-                value={appealJustification}
-                onChange={(e) => setAppealJustification(e.target.value)}
-                className="bg-input border-gray-200 text-foreground mt-1 min-h-[100px]"
-                rows={4}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowAppealDialog(false);
-                  setSelectedOrderForAppeal(null);
-                  setAppealJustification("");
-                  setRejectionReason("");
-                }}
-                className="border-destructive text-destructive hover:bg-destructive/10"
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={createAppeal}
-                disabled={!appealJustification.trim() || isCreatingAppeal}
-                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-              >
-                {isCreatingAppeal ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Enviando...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Enviar Recurso
-                  </>
+      <Dialog open={showAppealDialog} onOpenChange={(open) => {
+        setShowAppealDialog(open);
+        if (!open) {
+          // Reset ao fechar
+          setAppealStep(1);
+          setSelectedOrderForAppeal(null);
+          setAppealJustification("");
+          setRejectionReason("");
+        }
+      }}>
+        <DialogContent className="bg-card border-gray-200 text-foreground max-w-[70vw] p-0">
+          <div className="bg-destructive text-white py-4 px-6 rounded-t-lg">
+            <h2 className="text-xl font-semibold text-center">Gerar Recurso de Glosas</h2>
+          </div>
+          
+          <div className="space-y-4 p-6">
+            {/* Step 1: Motivo da Recusa */}
+            {appealStep === 1 && (
+              <div>
+                <Label htmlFor="rejectionReason" className="text-muted-foreground">
+                  Motivo da Recusa (Operadora)
+                </Label>
+                <Textarea
+                  id="rejectionReason"
+                  placeholder="Cole aqui a mensagem de recusa enviada pela operadora..."
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  className="bg-input border-gray-200 text-foreground mt-1 min-h-[200px]"
+                  rows={8}
+                />
+              </div>
+            )}
+
+            {/* Step 2: Justificativa Médica */}
+            {appealStep === 2 && (
+              <div>
+                <Label htmlFor="appealJustification" className="text-muted-foreground">
+                  Justificativa Médica *
+                </Label>
+                <Textarea
+                  id="appealJustification"
+                  placeholder="Descreva a justificativa médica para o recurso..."
+                  value={appealJustification}
+                  onChange={(e) => setAppealJustification(e.target.value)}
+                  className="bg-input border-gray-200 text-foreground mt-1 min-h-[200px]"
+                  rows={8}
+                />
+                
+                {/* Nota Informativa sobre a IA */}
+                <div className="mt-2">
+                  <p className="text-xs text-medsync-dark-blue dark:text-medsync-dark-blue">
+                    * Possuímos uma IA própria treinada por médicos especialistas. Porém poderá conter imprecisões. Sempre valide o recurso antes de submeter.
+                  </p>
+                </div>
+                
+                {/* Botão para gerar com IA */}
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    disabled={isGeneratingAppealAI || !rejectionReason.trim()}
+                    className="btn-medsync-dark disabled:opacity-50"
+                    onClick={async () => {
+                      try {
+                        setIsGeneratingAppealAI(true);
+                        
+                        const response = await apiRequest(
+                          "/api/appeals/generate-with-ai",
+                          "POST",
+                          { rejectionReason: rejectionReason }
+                        );
+
+                        if (response.success && response.appealJustification) {
+                          setAppealJustification(response.appealJustification);
+                          toast({
+                            title: "✅ Recurso gerado com sucesso!",
+                            description: "A IA gerou o recurso de glosa com base no motivo da recusa.",
+                          });
+                        } else {
+                          throw new Error("Resposta inválida da API");
+                        }
+                      } catch (error) {
+                        console.error("Erro ao gerar recurso com IA:", error);
+                        toast({
+                          title: "❌ Erro ao gerar recurso",
+                          description: "Não foi possível gerar o recurso com IA. Tente novamente.",
+                          variant: "destructive"
+                        });
+                      } finally {
+                        setIsGeneratingAppealAI(false);
+                      }
+                    }}
+                    data-testid="button-generate-appeal-ai"
+                  >
+                    {isGeneratingAppealAI ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Gerando...
+                      </>
+                    ) : (
+                      <>
+                        <img src={RoboMedSyncIcon} alt="IA" className="w-5 h-5 mr-2 inline-block" />
+                        Gerar Recurso de Glosa com IA
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Visualização do Recurso */}
+            {appealStep === 3 && selectedOrderForAppeal && appealOrderData && (
+              <div className="max-h-[70vh] overflow-y-auto">
+                <div className="mb-4">
+                  <h3 className="text-lg font-medium text-foreground">
+                    Visualização do Recurso
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Revise os dados do recurso antes de enviar
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Prévia A4 (210 x 297 mm)
+                  </p>
+                </div>
+                
+                <AppealPreview 
+                  patient={appealOrderData.patient || {}}
+                  hospital={appealOrderData.hospital || {}}
+                  rejectionReason={rejectionReason}
+                  appealJustification={appealJustification}
+                />
+              </div>
+            )}
+
+            {/* Passo 4 - Sucesso e Ações */}
+            {appealStep === 4 && (
+              <div className="py-8">
+                <div className="text-center space-y-6">
+                  <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-xl font-semibold text-foreground mb-2">
+                      Recurso Gerado com Sucesso!
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      O PDF do recurso foi criado e salvo no servidor. Agora você pode:
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-3 max-w-sm mx-auto">
+                    {/* Botão de Download */}
+                    <Button
+                      onClick={() => {
+                        if (generatedAppealPdfUrl) {
+                          window.open(generatedAppealPdfUrl, '_blank');
+                        }
+                      }}
+                      variant="outline"
+                      className="w-full border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Fazer Download do PDF
+                    </Button>
+
+                    {/* Botão Finalizar */}
+                    <Button
+                      onClick={finalizeAppeal}
+                      disabled={isFinalizingAppeal}
+                      className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                    >
+                      {isFinalizingAppeal ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Finalizando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Finalizar Recurso
+                        </>
+                      )}
+                    </Button>
+
+                    <p className="text-xs text-muted-foreground">
+                      Ao finalizar, o status do pedido será atualizado para "Aguardando Recurso"
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Botões de navegação - esconder no step 4 */}
+            {appealStep !== 4 && (
+              <div className="flex justify-between gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowAppealDialog(false);
+                    setAppealStep(1);
+                    setSelectedOrderForAppeal(null);
+                    setAppealJustification("");
+                    setRejectionReason("");
+                    setAppealOrderData(null);
+                    setGeneratedAppealPdfUrl("");
+                  }}
+                  className="border-destructive text-destructive hover:bg-destructive/10"
+                >
+                  Cancelar
+                </Button>
+
+              <div className="flex gap-2">
+                {/* Botão Voltar - Passos 2 e 3 */}
+                {(appealStep === 2 || appealStep === 3) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setAppealStep(appealStep - 1)}
+                    className="border-gray-200 text-muted-foreground hover:bg-muted"
+                  >
+                    Voltar
+                  </Button>
                 )}
-              </Button>
+
+                {/* Botão Próximo - Passo 1 */}
+                {appealStep === 1 && (
+                  <Button
+                    onClick={() => setAppealStep(2)}
+                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                  >
+                    Próximo
+                  </Button>
+                )}
+
+                {/* Botão Visualizar Recurso - Passo 2 */}
+                {appealStep === 2 && (
+                  <Button
+                    onClick={async () => {
+                      if (!selectedOrderForAppeal) return;
+                      
+                      try {
+                        setIsLoadingAppealOrder(true);
+                        const response = await fetch(`/api/medical-orders/${selectedOrderForAppeal}`);
+                        
+                        if (!response.ok) {
+                          throw new Error('Erro ao buscar dados do pedido');
+                        }
+                        
+                        const orderData = await response.json();
+                        setAppealOrderData(orderData);
+                        setAppealStep(3);
+                      } catch (error) {
+                        console.error('Erro ao buscar dados do pedido:', error);
+                        toast({
+                          title: "❌ Erro ao carregar dados",
+                          description: "Não foi possível carregar os dados do pedido para visualização.",
+                          variant: "destructive"
+                        });
+                      } finally {
+                        setIsLoadingAppealOrder(false);
+                      }
+                    }}
+                    disabled={!appealJustification.trim() || isLoadingAppealOrder}
+                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                  >
+                    {isLoadingAppealOrder ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Carregando...
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="h-4 w-4 mr-2" />
+                        Visualizar Recurso
+                      </>
+                    )}
+                  </Button>
+                )}
+
+                {/* Botão Gerar Recurso - Passo 3 */}
+                {appealStep === 3 && (
+                  <Button
+                    onClick={generateAppealPDF}
+                    disabled={isCreatingAppeal}
+                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                  >
+                    {isCreatingAppeal ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Gerando PDF...
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-4 w-4 mr-2" />
+                        Gerar Recurso
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Overlay de Loading da IA - Recurso de Glosa */}
+      {isGeneratingAppealAI && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150]" data-testid="ai-appeal-loading-overlay">
+          <LoadingLogo 
+            message="A IA está analisando o motivo da recusa e gerando o recurso de glosa..." 
+            size="lg"
+          />
+        </div>
+      )}
 
       {/* Modal de Aprovação Parcial */}
       {partialApprovalOrderId && (
