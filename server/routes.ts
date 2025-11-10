@@ -2696,7 +2696,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // ✅ REGIÃO ANATÔMICA: Incluir anatomicalRegionId para persistência visual
           anatomicalRegionId: order.anatomicalRegionId || null,
           // **CRÍTICO**: Incluir attachments para correção do bug de finalização
-          attachments: order.attachments || []
+          attachments: order.attachments || [],
+          // ✅ DADOS COMPLETOS: patient e hospital para preview de recursos
+          patient: patientData ? {
+            fullName: patientData.fullName,
+            birthDate: patientData.birthDate,
+            insurance: patientData.insurance,
+            insuranceNumber: patientData.insuranceNumber,
+            plan: patientData.plan
+          } : null,
+          hospital: hospitalData ? {
+            name: hospitalData.name,
+            logoUrl: hospitalData.logoUrl
+          } : null
         };
 
         console.log(`✅ Pedido médico ${orderId} encontrado com statusColorClasses:`, !!enrichedOrder.statusColorClasses);
@@ -8176,6 +8188,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Erro ao atualizar status do recurso:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  // Gerar recurso de glosa com IA (N8N Webhook)
+  app.post("/api/appeals/generate-with-ai", async (req: Request, res: Response) => {
+    try {
+      const { rejectionReason } = req.body;
+
+      // Validar campo obrigatório
+      if (!rejectionReason || rejectionReason.trim().length === 0) {
+        return res.status(400).json({ 
+          message: "Motivo da recusa é obrigatório para gerar recurso com IA" 
+        });
+      }
+
+      console.log("🤖 Gerando recurso de glosa com IA...");
+      console.log("📋 Motivo da glosa:", rejectionReason);
+
+      // Chamar webhook N8N para gerar recurso
+      const { sendToN8NWebhook } = await import("../shared/config.js");
+      
+      const response = await sendToN8NWebhook("generateGlossAppeal", {
+        motivo_glosa: rejectionReason.trim()
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Erro do webhook N8N:", errorText);
+        throw new Error(`Webhook retornou status ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log("✅ Recurso de glosa gerado com sucesso pela IA");
+      
+      res.json({ 
+        success: true,
+        appealJustification: result.motivo_glosa || result.resposta || result.justificativa || "Recurso gerado pela IA",
+        data: result
+      });
+
+    } catch (error) {
+      console.error("❌ Erro ao gerar recurso de glosa com IA:", error);
+      res.status(500).json({ 
+        message: "Erro ao gerar recurso com IA",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
     }
   });
 
