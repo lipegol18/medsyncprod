@@ -62,7 +62,8 @@ export interface CheckoutInput {
   successUrl: string;
   cancelUrl: string;
   allowPromotionCodes?: boolean;
-  couponId?: string;
+  promotionCodeId?: string; // ID do código promocional (promo_xxx) - pré-aplica e permite troca
+  couponId?: string; // Deprecated: use promotionCodeId
   metadata?: Record<string, string>;
 }
 
