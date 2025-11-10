@@ -13,6 +13,7 @@ const app = express();
 // IMPORTANTE: Aplicar express.raw() APENAS para a rota do webhook Stripe
 // O Stripe precisa do corpo bruto (raw body) para verificar a assinatura
 // Esta condição DEVE vir ANTES do express.json()
+// teste
 app.use((req, res, next) => {
   if (req.path === '/api/webhooks/stripe') {
     express.raw({ type: 'application/json' })(req, res, next);
