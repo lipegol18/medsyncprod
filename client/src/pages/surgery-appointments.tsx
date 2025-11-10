@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SurgeryAppointmentFormCompact } from '@/components/surgery-appointment-form-compact';
 import { SurgicalCalendarBig } from '@/components/surgical-calendar-big';
+import { Calendar } from 'lucide-react';
 import type { SurgeryAppointment } from '@shared/schema';
 
 // Interface estendida que inclui os dados do paciente
@@ -163,10 +164,11 @@ export default function SurgeryAppointments() {
       />
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-6xl max-h-[95vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}
+        <DialogContent className="bg-card border-gray-200 text-foreground max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="bg-medsync-blue text-white py-4 -mx-6 -mt-6 mb-2 rounded-t-lg">
+            <DialogTitle className="text-white text-xl font-bold text-center flex items-center justify-center gap-2">
+              <Calendar className="h-5 w-5" />
+              <span>{selectedAppointment ? 'Editar Agendamento' : 'Agendar Cirurgia'}</span>
             </DialogTitle>
           </DialogHeader>
           <SurgeryAppointmentFormCompact
