@@ -18,7 +18,7 @@ export function TrialExpiredModal({ isOpen, trialEndDate }: TrialExpiredModalPro
   const [, setLocation] = useLocation();
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
 
-  // Buscar planos de assinatura
+  // Buscar planos de assinatura teste
   const { data: plans } = useQuery<SubscriptionPlan[]>({
     queryKey: ["/api/subscriptions/plans"],
   });
