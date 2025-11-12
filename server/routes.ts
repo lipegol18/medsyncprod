@@ -1053,10 +1053,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
              WHERE mosp.medical_order_id = mo.id),
             'Procedimento não especificado'
           ) as procedures,
-          mo.received_value
+          mo.received_value,
+          os.name as status_name
         FROM medical_orders mo
         LEFT JOIN patients p ON mo.patient_id = p.id
         LEFT JOIN hospitals h ON mo.hospital_id = h.id
+        LEFT JOIN order_statuses os ON mo.status_id = os.id
         WHERE mo.user_id = $1
           AND mo.status_id = 6
           AND (mo.received_value IS NULL OR mo.received_value = 0)
@@ -1069,6 +1071,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hospitalName: row.hospital_name || 'Não informado',
         procedureDate: row.procedure_date,
         procedures: row.procedures,
+        statusName: row.status_name || 'Não informado',
         expectedValue: 0 // Valor esperado pode ser calculado se necessário
       }));
       
