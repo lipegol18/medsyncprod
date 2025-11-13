@@ -3,12 +3,12 @@ import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
 import session from "express-session";
 import { randomBytes } from "crypto";
+import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
 import { hashPassword, comparePasswords } from "./utils";
-import { sendPasswordRes
-import { storage } from "./storage";etEmail } from "./sendgrid";
+import { sendPasswordResetEmail } from "./sendgrid";
 import { WebhookService } from "./services/webhook-service";
 import { discountCodes } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
@@ -85,7 +85,7 @@ export function setupAuth(app: Express) {
           const failedAttempts = (user.failedLoginAttempts || 0) + 1;
           const updates: any = { failedLoginAttempts: failedAttempts };
 
-          // Se atingiu o limite de tentativas, bloquear temporariamente
+          // Se atingiu o limite de tentativas, bloquear temporariamente fdsfsdfdsfs
           if (failedAttempts >= 5) {
             const lockoutUntil = new Date();
             lockoutUntil.setMinutes(lockoutUntil.getMinutes() + 30); // Bloquear por 30 minutos
