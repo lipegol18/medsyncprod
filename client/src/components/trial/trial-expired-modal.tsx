@@ -18,12 +18,12 @@ export function TrialExpiredModal({ isOpen, trialEndDate }: TrialExpiredModalPro
   const [, setLocation] = useLocation();
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
 
-  // Buscar planos de assinatura teste
+  // Buscar planos de assinatura
   const { data: plans } = useQuery<SubscriptionPlan[]>({
     queryKey: ["/api/subscriptions/plans"],
   });
 
-  // Buscar desconto automático ativo
+  // Buscar desconto automático ativo saddsadwqewqewq
   const { data: automaticDiscountResponse } = useQuery({
     queryKey: ['/api/discount-codes/automatic'],
   });
