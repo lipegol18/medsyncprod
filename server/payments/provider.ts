@@ -88,7 +88,7 @@ export interface PaymentProvider {
   updateCoupon(couponId: string, updates: any): Promise<any>;
 
   /**
-   * Excluir/desativar cupom
+   * Excluir/desativar cupom dewqewqewq
    */
   deleteCoupon(couponId: string): Promise<any>;
 
