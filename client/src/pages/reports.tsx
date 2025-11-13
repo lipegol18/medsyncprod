@@ -62,7 +62,7 @@ import {
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 
-// Componente para listar cirurgias por hospital
+// Componente para listar cirurgias por hospital   adadadsada
 function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
   const {
     data: hospitalSurgeries,
