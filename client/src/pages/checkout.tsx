@@ -11,7 +11,7 @@ import { Link } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
-// Configurar Stripe - usar chave pública de teste
+// Configurar Stripe - usar chave pública de teste fsfdsfdsf
 const STRIPE_PUBLIC_KEY = 'pk_test_51S43b8BDo1YVjn0iA29tn753TDK4YTsWFc8QfYJV90EpdltYqJ0xoZbp8akaT9IHEyQwtsPyPF2YhbDfW7PcNfvH00hBlxfmCd';
 const stripePromise = loadStripe(STRIPE_PUBLIC_KEY);
 
