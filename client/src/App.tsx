@@ -28,6 +28,7 @@ import SubscriptionPlans from "@/pages/subscription-plans";
 import Checkout from "@/pages/checkout";
 import CheckoutSuccess from "@/pages/checkout-success";
 import CheckoutCancel from "@/pages/checkout-cancel";
+import Upgrade from "@/pages/upgrade";
 import StripeTest from "@/pages/stripe-test";
 import LogoTest from "@/pages/logo-test";
 
@@ -88,6 +89,7 @@ function Router() {
       {/* Subscription and Payment Routes */}
       <ProtectedRoute path="/subscription-plans" component={SubscriptionPlans} />
       <ProtectedRoute path="/checkout" component={Checkout} />
+      <ProtectedRoute path="/upgrade" component={Upgrade} />
       
       {/* Checkout success/cancel pages - não precisam de autenticação */}
       <Route path="/checkout/success" component={CheckoutSuccess} />
