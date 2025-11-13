@@ -247,7 +247,7 @@ class EnvironmentManager {
   }
 
   /**
-   * Checks if running on Replit sadsad
+   * Checks if running on Replit sadsadasdasdsa
    */
   isReplitPlatform(): boolean {
     return this.config.isReplit;
