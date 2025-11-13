@@ -44,7 +44,7 @@ export function RegisterModal({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // Buscar planos de assinatura
+  // Buscar planos de assinatura asdsadasdsa
   const { data: plans } = useQuery<SubscriptionPlan[]>({
     queryKey: ["/api/subscriptions/plans"],
   });
