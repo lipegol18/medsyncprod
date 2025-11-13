@@ -16,7 +16,7 @@ export function PricingSection({ onPlanSelection, selectedPlanId, onAdvanceToPay
   const [hoveredPlan, setHoveredPlan] = useState<'START' | 'PRO' | 'CLINICA' | null>(null);
   const { toast } = useToast();
 
-  // Buscar planos de assinatura teste
+  // Buscar planos de assinatura teaffdsfdsfdsfdsf
   const { data: subscriptionPlans = [], isLoading } = useQuery({
     queryKey: ['/api/subscriptions/plans'],
   });
