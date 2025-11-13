@@ -52,7 +52,7 @@ export interface MedicalOrder {
   updatedAt?: string;
 }
 
-// Interface para a resposta da API de pedidos médicos
+// Interface para a resposta da API de pedidos médicos  fr
 export interface MedicalOrderResponse extends MedicalOrder {
   // Campos específicos da resposta
   created_at: string;
