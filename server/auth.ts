@@ -3,12 +3,12 @@ import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
 import session from "express-session";
 import { randomBytes } from "crypto";
-import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
 import { hashPassword, comparePasswords } from "./utils";
 import { sendPasswordResetEmail } from "./sendgrid";
+import { storage } from "./storage";
 import { WebhookService } from "./services/webhook-service";
 import { discountCodes } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
@@ -24,7 +24,7 @@ declare global {
 }
 
 export function setupAuth(app: Express) {
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = process.env.NODE_ENV === "development";
   console.log(
     "🔐 Configurando autenticação - Ambiente:",
     isProduction ? "production" : "development",
@@ -85,7 +85,7 @@ export function setupAuth(app: Express) {
           const failedAttempts = (user.failedLoginAttempts || 0) + 1;
           const updates: any = { failedLoginAttempts: failedAttempts };
 
-          // Se atingiu o limite de tentativas, bloquear temporariamente fdsfsdfdsfs
+          // Se atingiu o limite de tentativas, bloquear temporariamente
           if (failedAttempts >= 5) {
             const lockoutUntil = new Date();
             lockoutUntil.setMinutes(lockoutUntil.getMinutes() + 30); // Bloquear por 30 minutos
@@ -567,7 +567,6 @@ export function setupAuth(app: Express) {
             customerData: customerData, // Dados para criação automática do Customer
             successUrl,
             cancelUrl,
-            couponId: discountCode?.externalCouponId || undefined, // Cupom gerenciado pelo StripeProvider
             metadata,
           };
 
@@ -1182,7 +1181,7 @@ export function hasPermission(permission: string) {
 }
 
 // Função auxiliar para verificação síncrona de permissões
-// Útil para verificações dentro de outros handlers de rotas
+// Útil para verificações dentro de outros handlers de rotas   asdasd
 export function hasPermissionCheck(req: any, permission: string): boolean {
   if (!req.isAuthenticated() || !req.user) {
     return false;
