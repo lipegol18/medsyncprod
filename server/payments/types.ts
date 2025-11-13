@@ -100,7 +100,7 @@ export interface SubscriptionRetrieveInput {
 }
 
 /**
- * Resultado da recuperação de assinatura
+ * Resultado da recuperação de assinatura afdadsa
  */
 export interface SubscriptionResult {
   id: string;
