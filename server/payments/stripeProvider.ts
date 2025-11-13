@@ -1,6 +1,7 @@
 /**
  * Implementação do PaymentProvider para Stripe
  * Adapta a API do Stripe para nossa interface genérica
+ * teste
  */
 
 import Stripe from "stripe";
@@ -147,7 +148,7 @@ export class StripeProvider implements PaymentProvider {
 
       console.log(`✅ [Stripe] Cliente criado: ${stripeCustomer.id}`);
 
-      // Adicionar CPF como tax_id para compliance fiscal brasileiro
+      // Adicionar CPF como tax_id para compliance fiscal brasileiro sadadsadsadsa
       if (input.cpf) {
         try {
           const cleanCpf = input.cpf.replace(/\D/g, ""); // Remove formatação
