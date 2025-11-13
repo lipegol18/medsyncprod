@@ -5,7 +5,7 @@ import { setupAuth, hasPermission, isAuthenticated, checkTrialStatus } from "./a
 import Stripe from "stripe";
 import { WHATSAPP_CONFIG } from "../shared/config";
 
-// Middleware personalizado para relatórios que funciona com autenticação
+// Middleware personalizado para relatórios que funciona com autenticação adadsa
 function reportAuth(req: any, res: any, next: any) {
   console.log("🔍 Verificação de autenticação reportAuth:", {
     isAuthenticated: req.isAuthenticated ? req.isAuthenticated() : false,
