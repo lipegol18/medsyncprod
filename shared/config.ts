@@ -8,7 +8,7 @@ export const WHATSAPP_CONFIG = {
   // Número padrão para suporte geral
   default: "5521999991905",
   
-  // Números específicos por contexto
+  // Números específicos por contexto asdad
   contexts: {
     // Brasil - suporte local
     br: "5521999991905",
@@ -115,7 +115,7 @@ export async function sendToN8NWebhook(
   });
 }
 
-// Outras configurações do sistema podem ser adicionadas aqui futuramente
+// Outras configurações do sistema podem ser adicionadas aqui futuramente dfdsfdsfds
 export const SYSTEM_CONFIG = {
   // Email de suporte
   supportEmail: "medsync.suporte@gmail.com",
