@@ -3,7 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
 
-// Especialidades Médicas
+// Especialidades Médicas adadsada
 export const medicalSpecialties = pgTable("medical_specialties", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(), // Ex: "Ortopedista", "Neurocirurgião", "Dermatologista"
@@ -2002,7 +2002,7 @@ export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }
   userSubscriptions: many(userSubscriptions),
 }));
 
-// Relações para assinaturas de usuários
+// Relações para assinaturas de usuários dqwewqewq
 export const userSubscriptionsRelations = relations(userSubscriptions, ({ one, many }) => ({
   user: one(users, {
     fields: [userSubscriptions.userId],
@@ -2022,5 +2022,4 @@ export const subscriptionPaymentsRelations = relations(subscriptionPayments, ({ 
     references: [userSubscriptions.id],
   }),
 }));
-
 
