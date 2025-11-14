@@ -3,7 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
 
-// Especialidades Médicas adadsada
+// Especialidades Médicas
 export const medicalSpecialties = pgTable("medical_specialties", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(), // Ex: "Ortopedista", "Neurocirurgião", "Dermatologista"
@@ -1171,6 +1171,195 @@ export const insertDiscountCodeSchema = createInsertSchema(discountCodes).pick({
 export type DiscountCode = typeof discountCodes.$inferSelect;
 export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
 
+// =================== STRIPE COUPONS STRUCTURE ===================
+// Nova estrutura normalizada para integração completa com Stripe
+// Substitui discount_codes para permitir múltiplos promotion codes por cupom
+
+// Tabela 1: Stripe Coupons (definição do desconto)
+export const stripeCoupons = pgTable("stripe_coupons", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // Nome interno: "Black Friday 2025 - 50% OFF"
+  description: text("description"),
+  stripeCouponId: text("stripe_coupon_id").unique().notNull(), // coupon id do Stripe (ex: "o5kvEMCE")
+  discountType: text("discount_type").notNull(), // 'percent' | 'amount' | 'trial_days'
+  percentOff: numeric("percent_off", { precision: 5, scale: 2 }), // ex: 10.00 (%)
+  amountOffCents: integer("amount_off_cents"), // em centavos (1000 = R$10)
+  currency: text("currency"), // 'brl', 'usd', etc.
+  duration: text("duration").notNull(), // 'once' | 'repeating' | 'forever'
+  durationInMonths: integer("duration_in_months"), // para 'repeating', ex: 3 meses
+  
+  maxRedemptions: integer("max_redemptions"), // limite global (somando todos os códigos ligados)
+  redeemedCount: integer("redeemed_count").notNull().default(0),
+  validFrom: timestamp("valid_from"),
+  validUntil: timestamp("valid_until"),
+  
+  metadata: jsonb("metadata"), // Metadata do Stripe
+  applicablePlans: integer("applicable_plans").array(), // Array de IDs de planos aplicáveis, NULL = todos
+  
+  isActive: boolean("is_active").notNull().default(true),
+  createdByUserId: integer("created_by_user_id").references(() => users.id),
+  updatedByUserId: integer("updated_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  lastSyncAt: timestamp("last_sync_at"), // Última sincronização com Stripe
+  syncStatus: text("sync_status").default("synced"), // 'synced' | 'pending' | 'error'
+});
+
+export const insertStripeCouponSchema = createInsertSchema(stripeCoupons).pick({
+  name: true,
+  description: true,
+  stripeCouponId: true,
+  discountType: true,
+  percentOff: true,
+  amountOffCents: true,
+  currency: true,
+  duration: true,
+  durationInMonths: true,
+  maxRedemptions: true,
+  validFrom: true,
+  validUntil: true,
+  metadata: true,
+  applicablePlans: true,
+  isActive: true,
+  createdByUserId: true,
+});
+
+export type StripeCoupon = typeof stripeCoupons.$inferSelect;
+export type InsertStripeCoupon = z.infer<typeof insertStripeCouponSchema>;
+
+// Tabela 2: Stripe Promotion Codes (códigos digitáveis)
+export const stripePromotionCodes = pgTable("stripe_promotion_codes", {
+  id: serial("id").primaryKey(),
+  stripeCouponId: text("stripe_coupon_id").notNull().references(() => stripeCoupons.stripeCouponId, { onDelete: 'cascade' }),
+  
+  code: text("code").notNull(), // Ex.: 'DRCARLOS10', 'BLACKFRIDAY', 'WELCOME10'
+  stripePromotionCodeId: text("stripe_promotion_code_id").unique().notNull(), // promotion_code_id do Stripe
+  
+  maxRedemptions: integer("max_redemptions"), // limite só desse código
+  redeemedCount: integer("redeemed_count").notNull().default(0),
+  oneTimePerCustomer: boolean("one_time_per_customer").default(true),
+  expiresAt: timestamp("expires_at"), // Data de expiração específica deste código
+  
+  metadata: jsonb("metadata"), // Metadata do Stripe
+  notes: text("notes"), // Notas internas (ex: "Código para parceria com Dr. Carlos")
+  
+  isActive: boolean("is_active").notNull().default(true),
+  createdByUserId: integer("created_by_user_id").references(() => users.id),
+  updatedByUserId: integer("updated_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  lastSyncAt: timestamp("last_sync_at"), // Última sincronização com Stripe
+  syncStatus: text("sync_status").default("synced"), // 'synced' | 'pending' | 'error'
+}, (table) => ({
+  // Índice composto para buscar códigos por cupom
+  couponCodeIdx: index("stripe_promotion_codes_coupon_code_idx").on(table.stripeCouponId, table.code),
+}));
+
+export const insertStripePromotionCodeSchema = createInsertSchema(stripePromotionCodes).pick({
+  stripeCouponId: true,
+  code: true,
+  stripePromotionCodeId: true,
+  maxRedemptions: true,
+  oneTimePerCustomer: true,
+  expiresAt: true,
+  metadata: true,
+  notes: true,
+  isActive: true,
+  createdByUserId: true,
+});
+
+export type StripePromotionCode = typeof stripePromotionCodes.$inferSelect;
+export type InsertStripePromotionCode = z.infer<typeof insertStripePromotionCodeSchema>;
+
+// Relações entre cupons e códigos promocionais
+export const stripeCouponsRelations = relations(stripeCoupons, ({ many }) => ({
+  promotionCodes: many(stripePromotionCodes),
+  redemptions: many(stripeDiscountRedemptions),
+}));
+
+export const stripePromotionCodesRelations = relations(stripePromotionCodes, ({ one, many }) => ({
+  coupon: one(stripeCoupons, {
+    fields: [stripePromotionCodes.stripeCouponId],
+    references: [stripeCoupons.stripeCouponId],
+  }),
+  redemptions: many(stripeDiscountRedemptions),
+}));
+
+// Tabela 3: Stripe Discount Redemptions (histórico de uso)
+export const stripeDiscountRedemptions = pgTable("stripe_discount_redemptions", {
+  id: serial("id").primaryKey(),
+  
+  userId: integer("user_id").notNull().references(() => users.id), // médico que usou o código
+  stripePromotionCodeId: text("stripe_promotion_code_id").notNull().references(() => stripePromotionCodes.stripePromotionCodeId),
+  stripeCouponId: text("stripe_coupon_id").notNull().references(() => stripeCoupons.stripeCouponId),
+  
+  // Stripe references
+  stripeCustomerId: text("stripe_customer_id").notNull(),
+  stripeSubscriptionId: text("stripe_subscription_id"), // se for recorrente
+  stripeInvoiceId: text("stripe_invoice_id"), // fatura onde o desconto foi aplicado
+  stripeDiscountId: text("stripe_discount_id"), // discount_id aplicado na subscription/invoice
+  
+  // Snapshot da condição no momento do resgate
+  discountType: text("discount_type").notNull(), // 'percent' | 'amount' | 'trial_days'
+  percentOff: numeric("percent_off", { precision: 5, scale: 2 }),
+  amountOffCents: integer("amount_off_cents"),
+  currency: text("currency"),
+  duration: text("duration"), // 'once' | 'repeating' | 'forever'
+  durationInMonths: integer("duration_in_months"),
+  
+  // Valores efetivamente aplicados
+  subtotalCents: integer("subtotal_cents"), // antes do desconto
+  discountValueCents: integer("discount_value_cents"), // valor descontado
+  totalAfterDiscountCents: integer("total_after_discount_cents"), // depois do desconto
+  
+  redeemedAt: timestamp("redeemed_at").notNull().defaultNow(),
+  metadata: jsonb("metadata"), // Dados adicionais do resgate
+}, (table) => ({
+  // Índices para queries comuns
+  userIdx: index("stripe_discount_redemptions_user_idx").on(table.userId),
+  promotionCodeIdx: index("stripe_discount_redemptions_promo_code_idx").on(table.stripePromotionCodeId),
+  subscriptionIdx: index("stripe_discount_redemptions_subscription_idx").on(table.stripeSubscriptionId),
+}));
+
+export const insertStripeDiscountRedemptionSchema = createInsertSchema(stripeDiscountRedemptions).pick({
+  userId: true,
+  stripePromotionCodeId: true,
+  stripeCouponId: true,
+  stripeCustomerId: true,
+  stripeSubscriptionId: true,
+  stripeInvoiceId: true,
+  stripeDiscountId: true,
+  discountType: true,
+  percentOff: true,
+  amountOffCents: true,
+  currency: true,
+  duration: true,
+  durationInMonths: true,
+  subtotalCents: true,
+  discountValueCents: true,
+  totalAfterDiscountCents: true,
+  metadata: true,
+});
+
+export type StripeDiscountRedemption = typeof stripeDiscountRedemptions.$inferSelect;
+export type InsertStripeDiscountRedemption = z.infer<typeof insertStripeDiscountRedemptionSchema>;
+
+// Relações de redemptions
+export const stripeDiscountRedemptionsRelations = relations(stripeDiscountRedemptions, ({ one }) => ({
+  user: one(users, {
+    fields: [stripeDiscountRedemptions.userId],
+    references: [users.id],
+  }),
+  promotionCode: one(stripePromotionCodes, {
+    fields: [stripeDiscountRedemptions.stripePromotionCodeId],
+    references: [stripePromotionCodes.stripePromotionCodeId],
+  }),
+  coupon: one(stripeCoupons, {
+    fields: [stripeDiscountRedemptions.stripeCouponId],
+    references: [stripeCoupons.stripeCouponId],
+  }),
+}));
+
 // Export types
 export type Patient = typeof patients.$inferSelect;
 export type InsertPatient = z.infer<typeof insertPatientSchema>;
@@ -2002,7 +2191,7 @@ export const subscriptionPlansRelations = relations(subscriptionPlans, ({ many }
   userSubscriptions: many(userSubscriptions),
 }));
 
-// Relações para assinaturas de usuários dqwewqewq
+// Relações para assinaturas de usuários
 export const userSubscriptionsRelations = relations(userSubscriptions, ({ one, many }) => ({
   user: one(users, {
     fields: [userSubscriptions.userId],
