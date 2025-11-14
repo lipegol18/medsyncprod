@@ -5,7 +5,7 @@ import { setupAuth, hasPermission, isAuthenticated, checkTrialStatus } from "./a
 import Stripe from "stripe";
 import { WHATSAPP_CONFIG } from "../shared/config";
 
-// Middleware personalizado para relatórios que funciona com autenticação
+// Middleware personalizado para relatórios que funciona com autenticação  dddd
 function reportAuth(req: any, res: any, next: any) {
   console.log("🔍 Verificação de autenticação reportAuth:", {
     isAuthenticated: req.isAuthenticated ? req.isAuthenticated() : false,
@@ -15352,7 +15352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Health check endpoint para Docker sadads
+  // Health check endpoint para Docker
   app.get('/api/health', async (req, res) => {
     try {
       // Verificar conectividade com banco de dados
