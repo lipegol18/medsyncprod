@@ -1,6 +1,6 @@
 /**
  * Implementação do PaymentProvider para Stripe
- * Adapta a API do Stripe para nossa interface genérica  qsdad
+ * Adapta a API do Stripe para nossa interface genérica
  */
 
 import Stripe from "stripe";
@@ -733,6 +733,302 @@ export class StripeProvider implements PaymentProvider {
       throw new PaymentError(
         "PROMOTION_CODE_UPDATE_FAILED",
         `Falha ao atualizar código promocional: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Listar códigos promocionais com paginação automática
+   */
+  async listPromotionCodes(
+    params?: Stripe.PromotionCodeListParams,
+  ): Promise<Stripe.PromotionCode[]> {
+    try {
+      console.log("📋 [Stripe] Listando códigos promocionais");
+
+      const allPromotionCodes: Stripe.PromotionCode[] = [];
+      let hasMore = true;
+      let startingAfter: string | undefined = undefined;
+
+      // Paginação automática
+      while (hasMore) {
+        const response = await this.stripe.promotionCodes.list({
+          ...params,
+          limit: 100, // Máximo permitido pela API
+          starting_after: startingAfter,
+        });
+
+        allPromotionCodes.push(...response.data);
+        hasMore = response.has_more;
+        
+        if (hasMore && response.data.length > 0) {
+          startingAfter = response.data[response.data.length - 1].id;
+        }
+      }
+
+      console.log(
+        `✅ [Stripe] ${allPromotionCodes.length} códigos promocionais encontrados`,
+      );
+      return allPromotionCodes;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao listar códigos promocionais:", error);
+      throw new PaymentError(
+        "PROMOTION_CODE_LIST_FAILED",
+        `Falha ao listar códigos promocionais: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Listar todos os cupons com paginação automática
+   */
+  async listAllCoupons(
+    params?: Stripe.CouponListParams,
+  ): Promise<Stripe.Coupon[]> {
+    try {
+      console.log("📋 [Stripe] Listando todos os cupons com paginação");
+
+      const allCoupons: Stripe.Coupon[] = [];
+      let hasMore = true;
+      let startingAfter: string | undefined = undefined;
+
+      // Paginação automática
+      while (hasMore) {
+        const response = await this.stripe.coupons.list({
+          ...params,
+          limit: 100, // Máximo permitido pela API
+          starting_after: startingAfter,
+        });
+
+        allCoupons.push(...response.data);
+        hasMore = response.has_more;
+        
+        if (hasMore && response.data.length > 0) {
+          startingAfter = response.data[response.data.length - 1].id;
+        }
+      }
+
+      console.log(
+        `✅ [Stripe] ${allCoupons.length} cupons encontrados`,
+      );
+      return allCoupons;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao listar todos os cupons:", error);
+      throw new PaymentError(
+        "COUPON_LIST_ALL_FAILED",
+        `Falha ao listar todos os cupons: ${error.message}`,
+      );
+    }
+  }
+
+  // ===========================
+  // COUPON MANAGEMENT METHODS
+  // ===========================
+
+  /**
+   * Criar novo cupom no Stripe
+   */
+  async createCoupon(params: {
+    id?: string; // ID customizado opcional
+    name?: string;
+    percentOff?: number; // 1-100
+    amountOff?: number; // em centavos
+    currency?: string;
+    duration: 'once' | 'repeating' | 'forever';
+    durationInMonths?: number;
+    maxRedemptions?: number;
+    redeemBy?: number; // Unix timestamp
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Coupon> {
+    try {
+      console.log(`🎟️ [Stripe] Criando cupom: ${params.name || params.id || 'sem nome'}`);
+
+      const couponData: Stripe.CouponCreateParams = {
+        id: params.id,
+        name: params.name,
+        percent_off: params.percentOff,
+        amount_off: params.amountOff,
+        currency: params.currency || 'brl',
+        duration: params.duration,
+        duration_in_months: params.durationInMonths,
+        max_redemptions: params.maxRedemptions,
+        redeem_by: params.redeemBy,
+        metadata: params.metadata,
+      };
+
+      const coupon = await this.stripe.coupons.create(couponData);
+      console.log(`✅ [Stripe] Cupom criado: ${coupon.id}`);
+      return coupon;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao criar cupom:", error);
+      throw new PaymentError(
+        "COUPON_CREATE_FAILED",
+        `Falha ao criar cupom: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Buscar cupom individual
+   */
+  async getCoupon(couponId: string): Promise<Stripe.Coupon> {
+    try {
+      console.log(`🔍 [Stripe] Buscando cupom: ${couponId}`);
+      const coupon = await this.stripe.coupons.retrieve(couponId);
+      return coupon;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao buscar cupom:", error);
+      throw new PaymentError(
+        "COUPON_RETRIEVE_FAILED",
+        `Falha ao buscar cupom: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Atualizar metadados de cupom (Stripe só permite atualizar metadata e name)
+   */
+  async updateCoupon(
+    couponId: string,
+    params: { name?: string; metadata?: Record<string, string> }
+  ): Promise<Stripe.Coupon> {
+    try {
+      console.log(`🔄 [Stripe] Atualizando cupom: ${couponId}`);
+      const coupon = await this.stripe.coupons.update(couponId, params);
+      console.log(`✅ [Stripe] Cupom atualizado: ${coupon.id}`);
+      return coupon;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao atualizar cupom:", error);
+      throw new PaymentError(
+        "COUPON_UPDATE_FAILED",
+        `Falha ao atualizar cupom: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Deletar cupom (cuidado: irreversível!)
+   */
+  async deleteCoupon(couponId: string): Promise<void> {
+    try {
+      console.log(`🗑️ [Stripe] Deletando cupom: ${couponId}`);
+      await this.stripe.coupons.del(couponId);
+      console.log(`✅ [Stripe] Cupom deletado: ${couponId}`);
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao deletar cupom:", error);
+      throw new PaymentError(
+        "COUPON_DELETE_FAILED",
+        `Falha ao deletar cupom: ${error.message}`,
+      );
+    }
+  }
+
+  // ===========================
+  // PROMOTION CODE MANAGEMENT
+  // ===========================
+
+  /**
+   * Criar código promocional vinculado a um cupom
+   */
+  async createPromotionCode(params: {
+    coupon: string; // ID do cupom Stripe
+    code: string; // Código digitável (ex: BLACKFRIDAY)
+    active?: boolean;
+    maxRedemptions?: number;
+    expiresAt?: number; // Unix timestamp
+    restrictions?: {
+      first_time_transaction?: boolean;
+      minimum_amount?: number;
+      minimum_amount_currency?: string;
+    };
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.PromotionCode> {
+    try {
+      console.log(`🎫 [Stripe] Criando código promocional: ${params.code}`);
+
+      const promoData: Stripe.PromotionCodeCreateParams = {
+        coupon: params.coupon,
+        code: params.code.toUpperCase(), // Sempre uppercase
+        active: params.active ?? true,
+        max_redemptions: params.maxRedemptions,
+        expires_at: params.expiresAt,
+        restrictions: params.restrictions,
+        metadata: params.metadata,
+      };
+
+      const promoCode = await this.stripe.promotionCodes.create(promoData);
+      console.log(`✅ [Stripe] Código promocional criado: ${promoCode.id}`);
+      return promoCode;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao criar código promocional:", error);
+      throw new PaymentError(
+        "PROMOTION_CODE_CREATE_FAILED",
+        `Falha ao criar código promocional: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Buscar código promocional individual
+   */
+  async getPromotionCode(promoCodeId: string): Promise<Stripe.PromotionCode> {
+    try {
+      console.log(`🔍 [Stripe] Buscando código promocional: ${promoCodeId}`);
+      const promoCode = await this.stripe.promotionCodes.retrieve(promoCodeId);
+      return promoCode;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao buscar código promocional:", error);
+      throw new PaymentError(
+        "PROMOTION_CODE_RETRIEVE_FAILED",
+        `Falha ao buscar código promocional: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Atualizar código promocional (só metadata e active)
+   */
+  async updatePromotionCode(
+    promoCodeId: string,
+    params: { active?: boolean; metadata?: Record<string, string> }
+  ): Promise<Stripe.PromotionCode> {
+    try {
+      console.log(`🔄 [Stripe] Atualizando código promocional: ${promoCodeId}`);
+      const promoCode = await this.stripe.promotionCodes.update(promoCodeId, params);
+      console.log(`✅ [Stripe] Código promocional atualizado: ${promoCode.id}`);
+      return promoCode;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao atualizar código promocional:", error);
+      throw new PaymentError(
+        "PROMOTION_CODE_UPDATE_FAILED",
+        `Falha ao atualizar código promocional: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Buscar código promocional pelo código digitável (não pelo ID)2222
+   */
+  async findPromotionCodeByCode(code: string): Promise<Stripe.PromotionCode | null> {
+    try {
+      console.log(`🔍 [Stripe] Buscando código promocional pelo código: ${code}`);
+      
+      const result = await this.stripe.promotionCodes.list({
+        code: code.toUpperCase(),
+        limit: 1,
+      });
+
+      if (result.data.length === 0) {
+        console.log(`⚠️ [Stripe] Código não encontrado: ${code}`);
+        return null;
+      }
+
+      return result.data[0];
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao buscar código por string:", error);
+      throw new PaymentError(
+        "PROMOTION_CODE_FIND_FAILED",
+        `Falha ao buscar código: ${error.message}`,
       );
     }
   }
