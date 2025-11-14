@@ -5,7 +5,7 @@ import { setupAuth, hasPermission, isAuthenticated, checkTrialStatus } from "./a
 import Stripe from "stripe";
 import { WHATSAPP_CONFIG } from "../shared/config";
 
-// Middleware personalizado para relatórios que funciona com autenticação adadsa
+// Middleware personalizado para relatórios que funciona com autenticação
 function reportAuth(req: any, res: any, next: any) {
   console.log("🔍 Verificação de autenticação reportAuth:", {
     isAuthenticated: req.isAuthenticated ? req.isAuthenticated() : false,
@@ -15020,6 +15020,210 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/admin/discount-codes/stripe-available - Buscar cupons disponíveis no Stripe
+  app.get('/api/admin/discount-codes/stripe-available', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({
+          success: false,
+          message: 'Provedor de pagamento não configurado'
+        });
+      }
+
+      // Buscar códigos já existentes no banco local
+      const localCodes = await db.select().from(discountCodes);
+      const localCouponIds = new Set(localCodes.map(c => c.externalCouponId).filter(Boolean));
+      const localPromoCodes = new Set(localCodes.map(c => c.code.toUpperCase()));
+
+      // Buscar cupons e promotion codes do Stripe
+      const [stripeCoupons, stripePromoCodes] = await Promise.all([
+        paymentProvider.listAllCoupons(),
+        paymentProvider.listPromotionCodes({ active: true })
+      ]);
+
+      // Preparar cupons disponíveis (não importados ainda)
+      const availableCoupons = stripeCoupons
+        .filter(coupon => !localCouponIds.has(coupon.id))
+        .map(coupon => ({
+          id: coupon.id,
+          name: coupon.name || coupon.id,
+          discountType: coupon.percent_off ? 'percentage' : 'fixed_amount',
+          discountValue: coupon.percent_off || (coupon.amount_off ? coupon.amount_off / 100 : 0),
+          currency: coupon.currency || 'brl',
+          duration: coupon.duration,
+          durationInMonths: coupon.duration_in_months,
+          maxRedemptions: coupon.max_redemptions,
+          redeemBy: coupon.redeem_by ? new Date(coupon.redeem_by * 1000) : null,
+          timesRedeemed: coupon.times_redeemed,
+          valid: coupon.valid,
+          created: new Date(coupon.created * 1000)
+        }));
+
+      // Preparar promotion codes disponíveis
+      const availablePromoCodes = stripePromoCodes
+        .filter(promo => {
+          const promoCode = promo.code.toUpperCase();
+          const couponId = typeof promo.coupon === 'string' ? promo.coupon : promo.coupon.id;
+          return !localPromoCodes.has(promoCode) && !localCouponIds.has(couponId);
+        })
+        .map(promo => {
+          const coupon = typeof promo.coupon === 'object' ? promo.coupon : null;
+          return {
+            id: promo.id,
+            code: promo.code,
+            couponId: typeof promo.coupon === 'string' ? promo.coupon : promo.coupon.id,
+            discountType: coupon?.percent_off ? 'percentage' : 'fixed_amount',
+            discountValue: coupon?.percent_off || (coupon?.amount_off ? coupon.amount_off / 100 : 0),
+            currency: coupon?.currency || 'brl',
+            active: promo.active,
+            maxRedemptions: promo.max_redemptions,
+            timesRedeemed: promo.times_redeemed,
+            expiresAt: promo.expires_at ? new Date(promo.expires_at * 1000) : null,
+            created: new Date(promo.created * 1000)
+          };
+        });
+
+      res.json({
+        success: true,
+        data: {
+          coupons: availableCoupons,
+          promotionCodes: availablePromoCodes,
+          summary: {
+            totalCoupons: stripeCoupons.length,
+            totalPromoCodes: stripePromoCodes.length,
+            availableCoupons: availableCoupons.length,
+            availablePromoCodes: availablePromoCodes.length,
+            alreadyImported: localCodes.length
+          }
+        }
+      });
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro ao buscar cupons do Stripe:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro ao buscar cupons: ${error.message}` 
+      });
+    }
+  });
+
+  // POST /api/admin/discount-codes/import - Importar cupons/promotion codes do Stripe
+  app.post('/api/admin/discount-codes/import', isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { items } = req.body;
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nenhum item selecionado para importação'
+        });
+      }
+
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({
+          success: false,
+          message: 'Provedor de pagamento não configurado'
+        });
+      }
+
+      const imported = [];
+      const errors = [];
+
+      for (const item of items) {
+        try {
+          // Validar se é BRL (apenas suportamos BRL no momento)
+          if (item.currency && item.currency.toLowerCase() !== 'brl') {
+            errors.push({
+              code: item.code || item.id,
+              error: `Moeda não suportada: ${item.currency}. Apenas BRL é suportado.`
+            });
+            continue;
+          }
+
+          // Preparar dados para inserção
+          const validUntilValue = item.redeemBy || item.expiresAt;
+          
+          // Identificar se é promotion code ou coupon
+          // Promotion codes têm o campo 'code' (string) e 'couponId'
+          // Cupons têm o campo 'name' e o ID é o couponId
+          const isPromotionCode = !!item.couponId;
+          
+          const codeData: any = {
+            code: item.code || item.id,
+            description: item.name || `Importado do Stripe: ${item.code || item.id}`,
+            discountType: item.discountType,
+            discountValue: Math.round(item.discountValue),
+            maxUses: item.maxRedemptions || null,
+            currentUses: item.timesRedeemed || 0,
+            validFrom: new Date(),
+            validUntil: validUntilValue ? new Date(validUntilValue) : null,
+            applicablePlans: null,
+            isActive: item.active !== false && item.valid !== false,
+            isAutomatic: false,
+            paymentProvider: 'stripe',
+            externalCouponId: item.couponId || item.id,
+            externalPromotionCodeId: isPromotionCode ? item.id : null,
+            syncStatus: 'synced',
+            lastSyncAt: new Date()
+          };
+
+          // Upsert: Se já existe (mesmo external_coupon_id), atualiza; senão insere
+          const [newCode] = await db.insert(discountCodes)
+            .values(codeData)
+            .onConflictDoUpdate({
+              target: discountCodes.externalCouponId,
+              set: {
+                code: codeData.code,
+                description: codeData.description,
+                discountType: codeData.discountType,
+                discountValue: codeData.discountValue,
+                maxUses: codeData.maxUses,
+                currentUses: codeData.currentUses,
+                validFrom: codeData.validFrom,
+                validUntil: codeData.validUntil,
+                isActive: codeData.isActive,
+                externalPromotionCodeId: codeData.externalPromotionCodeId,
+                syncStatus: codeData.syncStatus,
+                lastSyncAt: codeData.lastSyncAt
+              }
+            })
+            .returning();
+          
+          imported.push(newCode);
+
+        } catch (itemError: any) {
+          console.error(`❌ Erro ao importar ${item.code || item.id}:`, itemError);
+          errors.push({
+            code: item.code || item.id,
+            error: itemError.message
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          imported,
+          errors,
+          summary: {
+            total: items.length,
+            successful: imported.length,
+            failed: errors.length
+          }
+        },
+        message: `${imported.length} de ${items.length} códigos importados com sucesso`
+      });
+
+    } catch (error: any) {
+      console.error('❌ [ADMIN] Erro ao importar cupons:', error);
+      res.status(500).json({ 
+        success: false,
+        message: `Erro ao importar cupons: ${error.message}` 
+      });
+    }
+  });
+
   // ❌ ROTA DUPLICADA REMOVIDA - JÁ EXISTE EM routes/discount-codes.ts
 
   // =================== UPGRADE ENDPOINT FOR EXISTING USERS ===================
@@ -15148,7 +15352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Health check endpoint para Docker
+  // Health check endpoint para Docker sadads
   app.get('/api/health', async (req, res) => {
     try {
       // Verificar conectividade com banco de dados
