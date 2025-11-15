@@ -11,9 +11,8 @@ import { getBaseUrl, isReplit, isDevelopment } from "./utils/environment";
 const app = express();
 
 // IMPORTANTE: Aplicar express.raw() APENAS para a rota do webhook Stripe
-// O Stripe precisa do corpo bruto (raw body) para verificar a assinatura
+// O Stripe precisa do corpo bruto (raw body) para verificar a assinatura dsds
 // Esta condição DEVE vir ANTES do express.json()
-// teste
 app.use((req, res, next) => {
   if (req.path === '/api/webhooks/stripe') {
     express.raw({ type: 'application/json' })(req, res, next);
@@ -147,6 +146,12 @@ app.use((req, res, next) => {
   // Add discount codes routes
   const discountCodesRoutes = await import("./routes/discount-codes");
   app.use("/api/discount-codes", discountCodesRoutes.default);
+
+  // Add discount admin routes (new 3-table architecture)
+  const { getPaymentProvider } = await import("./payments");
+  const createDiscountAdminRouter = await import("./routes/discounts-admin-routes");
+  const stripeProvider = getPaymentProvider();
+  app.use("/api/admin/discounts", createDiscountAdminRouter.default(stripeProvider as any));
 
   // Adicionar rotas para arquivos estáticos (mockups, etc)
   addStaticRoutes(app);
