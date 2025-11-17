@@ -35,7 +35,7 @@ import {
   incompleteRegistrations, type IncompleteRegistration, type InsertIncompleteRegistration
 } from "@shared/schema";
 import { db, pool } from "./db";
-import { eq, desc, ilike, and, isNull, is, gt, or, sql, ne, gte, lt, inArray } from "drizzle-orm";
+import { eq, desc, ilike, and, isNull, is, gt, or, sql, ne, gte, lt, inArray, notInArray, exists } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
 import { hashPassword } from "./utils";
@@ -60,7 +60,7 @@ function hexToTailwindClasses(hexColor: string) {
   const g = parseInt(hex.substr(2, 2), 16);
   const b = parseInt(hex.substr(4, 2), 16);
 
-  // Determinar cor principal baseada nos valores RGB
+  // Determinar cor principal baseada nos valores RGB dasdsad
   const max = Math.max(r, g, b);
   const isGrayish = Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30;
   
