@@ -5,7 +5,7 @@ import { setupAuth, hasPermission, isAuthenticated, checkTrialStatus } from "./a
 import Stripe from "stripe";
 import { WHATSAPP_CONFIG } from "../shared/config";
 
-// Middleware personalizado para relatórios que funciona com autenticação  dddd
+// Middleware personalizado para relatórios que funciona com autenticação fff
 function reportAuth(req: any, res: any, next: any) {
   console.log("🔍 Verificação de autenticação reportAuth:", {
     isAuthenticated: req.isAuthenticated ? req.isAuthenticated() : false,
@@ -20,7 +20,7 @@ function reportAuth(req: any, res: any, next: any) {
     return next();
   }
   
-  // Usuário não autenticado - retornar erro 401
+  // Usuário não autenticado - retornar erro 401 fffff
   console.log(`❌ Usuário não autenticado - negando acesso`);
   return res.status(401).json({ error: "Usuário não autenticado" });
 }
@@ -42,6 +42,7 @@ import fs from "fs";
 import { addStaticRoutes } from "./static-routes";
 import { setupUploadRoutes } from "./upload-routes";
 import { registerDoctorImageRoutes } from "./doctor-images-routes";
+import { registerHospitalImageRoutes } from "./hospital-images-routes";
 import relationalRoutes from "./relational-routes";
 import { relationalOrderService } from "./relational-services";
 import { randomUUID } from "crypto";
@@ -1116,6 +1117,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Configurar as rotas de imagens dos médicos
   registerDoctorImageRoutes(app);
+  
+  // Configurar as rotas de imagens dos hospitais
+  registerHospitalImageRoutes(app);
   
   // Configurar as rotas relacionais unificadas (CIDs, OPME, fornecedores, procedimentos)
   app.use('/api', relationalRoutes);
