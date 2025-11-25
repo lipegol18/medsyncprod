@@ -1,41 +1,123 @@
 import {
-  patients, type Patient, type InsertPatient,
-  healthInsuranceProviders, type Healt\hInsuranceProvider, type InsertHealthInsuranceProvider,
-  healthInsurancePlans, type HealthInsurancePlan, type InsertHealthInsurancePlan,
-  opmeItems, type OpmeItem, type InsertOpmeItem,
-  opmeSuppliers, type OpmeSupplier, type InsertOpmeSupplier,
-  procedures, type Procedure, type InsertProcedure,
-  medicalOrders, type MedicalOrder, type InsertMedicalOrder,
-  orderItems, type OrderItem, type InsertOrderItem,
-  scannedDocuments, type ScannedDocument, type InsertScannedDocument,
-  users, type User, type InsertUser,
-  hospitals, type Hospital, type InsertHospital,
-  roles, type Role, type InsertRole,
-  rolePermissions, type RolePermission, type InsertRolePermission,
-  userPermissions, type UserPermission, type InsertUserPermission,
+  patients,
+  type Patient,
+  type InsertPatient,
+  healthInsuranceProviders,
+  type HealthInsuranceProvider,
+  type InsertHealthInsuranceProvider,
+  healthInsurancePlans,
+  type HealthInsurancePlan,
+  type InsertHealthInsurancePlan,
+  opmeItems,
+  type OpmeItem,
+  type InsertOpmeItem,
+  opmeSuppliers,
+  type OpmeSupplier,
+  type InsertOpmeSupplier,
+  procedures,
+  type Procedure,
+  type InsertProcedure,
+  medicalOrders,
+  type MedicalOrder,
+  type InsertMedicalOrder,
+  orderItems,
+  type OrderItem,
+  type InsertOrderItem,
+  scannedDocuments,
+  type ScannedDocument,
+  type InsertScannedDocument,
+  users,
+  type User,
+  type InsertUser,
+  hospitals,
+  type Hospital,
+  type InsertHospital,
+  roles,
+  type Role,
+  type InsertRole,
+  rolePermissions,
+  type RolePermission,
+  type InsertRolePermission,
+  userPermissions,
+  type UserPermission,
+  type InsertUserPermission,
   permissionEnum,
-  cidCodes, type CidCode, type InsertCidCode,
-  suppliers, type Supplier, type InsertSupplier,
-  notifications, type Notification, type InsertNotification,
-  doctorHospitals, type DoctorHospital, type InsertDoctorHospital,
-  doctorPatients, type DoctorPatient, type InsertDoctorPatient,
-  contactMessages, type ContactMessage, type InsertContactMessage,
-  appeals, type Appeal, type InsertAppeal,
-  municipalities, type Municipality, type InsertMunicipality,
-  brazilianStates, type BrazilianState, type InsertBrazilianState,
-  medicalOrderProcedures, type MedicalOrderProcedure, type InsertMedicalOrderProcedure,
-  orderStatuses, type OrderStatus, type InsertOrderStatus,
-  medicalSpecialties, type MedicalSpecialty, type InsertMedicalSpecialty,
-  subscriptionPlans, type SubscriptionPlan, type InsertSubscriptionPlan,
-  userSubscriptions, type UserSubscription, type InsertUserSubscription,
-  subscriptionPayments, type SubscriptionPayment, type InsertSubscriptionPayment,
-  discountCodes, type DiscountCode, type InsertDiscountCode,
-  surgeryAppointments, type SurgeryAppointment, type InsertSurgeryAppointment,
-  userAddresses, type UserAddress, type InsertUserAddress,
-  incompleteRegistrations, type IncompleteRegistration, type InsertIncompleteRegistration
+  cidCodes,
+  type CidCode,
+  type InsertCidCode,
+  suppliers,
+  type Supplier,
+  type InsertSupplier,
+  notifications,
+  type Notification,
+  type InsertNotification,
+  doctorHospitals,
+  type DoctorHospital,
+  type InsertDoctorHospital,
+  doctorPatients,
+  type DoctorPatient,
+  type InsertDoctorPatient,
+  contactMessages,
+  type ContactMessage,
+  type InsertContactMessage,
+  appeals,
+  type Appeal,
+  type InsertAppeal,
+  municipalities,
+  type Municipality,
+  type InsertMunicipality,
+  brazilianStates,
+  type BrazilianState,
+  type InsertBrazilianState,
+  medicalOrderProcedures,
+  type MedicalOrderProcedure,
+  type InsertMedicalOrderProcedure,
+  orderStatuses,
+  type OrderStatus,
+  type InsertOrderStatus,
+  medicalSpecialties,
+  type MedicalSpecialty,
+  type InsertMedicalSpecialty,
+  subscriptionPlans,
+  type SubscriptionPlan,
+  type InsertSubscriptionPlan,
+  userSubscriptions,
+  type UserSubscription,
+  type InsertUserSubscription,
+  subscriptionPayments,
+  type SubscriptionPayment,
+  type InsertSubscriptionPayment,
+  discountCodes,
+  type DiscountCode,
+  type InsertDiscountCode,
+  surgeryAppointments,
+  type SurgeryAppointment,
+  type InsertSurgeryAppointment,
+  userAddresses,
+  type UserAddress,
+  type InsertUserAddress,
+  incompleteRegistrations,
+  type IncompleteRegistration,
+  type InsertIncompleteRegistration,
 } from "@shared/schema";
 import { db, pool } from "./db";
-import { eq, desc, ilike, and, isNull, is, gt, or, sql, ne, gte, lt, inArray, notInArray, exists } from "drizzle-orm";
+import {
+  eq,
+  desc,
+  ilike,
+  and,
+  isNull,
+  is,
+  gt,
+  or,
+  sql,
+  ne,
+  gte,
+  lt,
+  inArray,
+  notInArray,
+  exists,
+} from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
 import { hashPassword } from "./utils";
@@ -46,29 +128,30 @@ let statusColorCache: Record<string, any> = {};
 
 // Função para converter cor hexadecimal para classes CSS Tailwind
 function hexToTailwindClasses(hexColor: string) {
-  if (!hexColor || !hexColor.startsWith('#')) {
+  if (!hexColor || !hexColor.startsWith("#")) {
     return {
-      background: 'bg-gradient-to-r from-slate-50 to-slate-100/50',
-      iconBg: 'bg-slate-200',
-      iconText: 'text-slate-700'
+      background: "bg-gradient-to-r from-slate-50 to-slate-100/50",
+      iconBg: "bg-slate-200",
+      iconText: "text-slate-700",
     };
   }
 
   // Converter hex para RGB
-  const hex = hexColor.replace('#', '');
+  const hex = hexColor.replace("#", "");
   const r = parseInt(hex.substr(0, 2), 16);
   const g = parseInt(hex.substr(2, 2), 16);
   const b = parseInt(hex.substr(4, 2), 16);
 
   // Determinar cor principal baseada nos valores RGB
   const max = Math.max(r, g, b);
-  const isGrayish = Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30;
-  
+  const isGrayish =
+    Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30;
+
   if (isGrayish) {
     return {
-      background: 'bg-gradient-to-r from-slate-50 to-slate-100/50',
-      iconBg: 'bg-slate-200',
-      iconText: 'text-slate-700'
+      background: "bg-gradient-to-r from-slate-50 to-slate-100/50",
+      iconBg: "bg-slate-200",
+      iconText: "text-slate-700",
     };
   }
 
@@ -76,91 +159,98 @@ function hexToTailwindClasses(hexColor: string) {
   if ((r > 220 && g > 220 && b < 200) || (r > 240 && g > 230 && b < 180)) {
     // Amarelo ou amarelo claro como #FFF59D
     return {
-      background: 'bg-gradient-to-r from-yellow-50 to-yellow-100/50',
-      iconBg: 'bg-yellow-200',
-      iconText: 'text-yellow-700'
+      background: "bg-gradient-to-r from-yellow-50 to-yellow-100/50",
+      iconBg: "bg-yellow-200",
+      iconText: "text-yellow-700",
     };
   }
-  
+
   // Verificar se é laranja (cores com R alto, G médio-alto, B médio-baixo)
-  if ((r > 240 && g > 180 && g < 220 && b < 160) || (r === 255 && g > 200 && b < 140)) {
+  if (
+    (r > 240 && g > 180 && g < 220 && b < 160) ||
+    (r === 255 && g > 200 && b < 140)
+  ) {
     // Laranja como #FFCC80 (255, 204, 128)
     return {
-      background: 'bg-gradient-to-r from-orange-50 to-orange-100/50',
-      iconBg: 'bg-orange-200',
-      iconText: 'text-orange-700'
+      background: "bg-gradient-to-r from-orange-50 to-orange-100/50",
+      iconBg: "bg-orange-200",
+      iconText: "text-orange-700",
     };
   }
-  
+
   // Determinar cor dominante
   if (r > g && r > b) {
     // Vermelho dominante
     return {
-      background: 'bg-gradient-to-r from-red-50 to-red-100/50',
-      iconBg: 'bg-red-200',
-      iconText: 'text-red-700'
+      background: "bg-gradient-to-r from-red-50 to-red-100/50",
+      iconBg: "bg-red-200",
+      iconText: "text-red-700",
     };
   } else if (g > r && g > b) {
     // Verde dominante
     return {
-      background: 'bg-gradient-to-r from-green-50 to-green-100/50',
-      iconBg: 'bg-green-200',
-      iconText: 'text-green-700'
+      background: "bg-gradient-to-r from-green-50 to-green-100/50",
+      iconBg: "bg-green-200",
+      iconText: "text-green-700",
     };
   } else if (b > r && b > g) {
     // Azul dominante
     return {
-      background: 'bg-gradient-to-r from-blue-50 to-blue-100/50',
-      iconBg: 'bg-blue-200',
-      iconText: 'text-blue-700'
+      background: "bg-gradient-to-r from-blue-50 to-blue-100/50",
+      iconBg: "bg-blue-200",
+      iconText: "text-blue-700",
     };
   } else if (r > 180 && g > 100 && g < 180 && b < 150) {
     // Laranja
     return {
-      background: 'bg-gradient-to-r from-orange-50 to-orange-100/50',
-      iconBg: 'bg-orange-200',
-      iconText: 'text-orange-700'
+      background: "bg-gradient-to-r from-orange-50 to-orange-100/50",
+      iconBg: "bg-orange-200",
+      iconText: "text-orange-700",
     };
   } else if (r > 150 && b > 150 && g < 180) {
     // Roxo
     return {
-      background: 'bg-gradient-to-r from-purple-50 to-purple-100/50',
-      iconBg: 'bg-purple-200',
-      iconText: 'text-purple-700'
+      background: "bg-gradient-to-r from-purple-50 to-purple-100/50",
+      iconBg: "bg-purple-200",
+      iconText: "text-purple-700",
     };
   }
 
   // Fallback para cinza
   return {
-    background: 'bg-gradient-to-r from-slate-50 to-slate-100/50',
-    iconBg: 'bg-slate-200',
-    iconText: 'text-slate-700'
+    background: "bg-gradient-to-r from-slate-50 to-slate-100/50",
+    iconBg: "bg-slate-200",
+    iconText: "text-slate-700",
   };
 }
 
 // Função para inicializar cache de cores
 async function initializeStatusColorCache() {
   try {
-    console.log('🎨 Inicializando cache de cores dos status...');
+    console.log("🎨 Inicializando cache de cores dos status...");
     const statusInfos = await db.select().from(orderStatuses);
-    
+
     statusColorCache = {};
-    statusInfos.forEach(status => {
+    statusInfos.forEach((status) => {
       // Usar statusId como chave em vez de cor para evitar conflitos
       statusColorCache[status.id] = {
         statusName: status.name,
-        statusColor: status.color || '#EEEEEE',
-        color: status.color || '#EEEEEE',
-        classes: hexToTailwindClasses(status.color || '#EEEEEE')
+        statusColor: status.color || "#EEEEEE",
+        color: status.color || "#EEEEEE",
+        classes: hexToTailwindClasses(status.color || "#EEEEEE"),
       };
     });
-    
+
     // Disponibilizar cache globalmente para uso em routes.ts
     (global as any).statusColorCache = statusColorCache;
-    
-    console.log('✅ Cache de cores inicializado com', Object.keys(statusColorCache).length, 'status');
+
+    console.log(
+      "✅ Cache de cores inicializado com",
+      Object.keys(statusColorCache).length,
+      "status",
+    );
   } catch (error) {
-    console.error('❌ Erro ao inicializar cache de cores:', error);
+    console.error("❌ Erro ao inicializar cache de cores:", error);
     // Cache vazio como fallback
     statusColorCache = {};
   }
@@ -176,148 +266,261 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByResetToken(token: string): Promise<User | undefined>;
   getUserByCrm(crm: number): Promise<User | undefined>;
-  getUserByField(field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string): Promise<User | undefined>;
+  getUserByField(
+    field: "cpf" | "crm" | "phone" | "email" | "username",
+    value: string,
+  ): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
   deleteUser(id: number): Promise<boolean>;
   deleteUserPermanently(id: number): Promise<boolean>;
-  
+
   // User address operations
   getUserAddresses(userId: number): Promise<UserAddress[]>;
   getUserPrimaryAddress(userId: number): Promise<UserAddress | undefined>;
   createUserAddress(address: InsertUserAddress): Promise<UserAddress>;
-  updateUserAddress(id: number, updates: Partial<InsertUserAddress>): Promise<UserAddress | undefined>;
+  updateUserAddress(
+    id: number,
+    updates: Partial<InsertUserAddress>,
+  ): Promise<UserAddress | undefined>;
   deleteUserAddress(id: number): Promise<boolean>;
   setUserPrimaryAddress(userId: number, addressId: number): Promise<boolean>;
-  
+
   // Medical specialty operations
   getMedicalSpecialties(): Promise<MedicalSpecialty[]>;
   getMedicalSpecialty(id: number): Promise<MedicalSpecialty | undefined>;
-  getMedicalSpecialtyByName(name: string): Promise<MedicalSpecialty | undefined>;
-  createMedicalSpecialty(specialty: InsertMedicalSpecialty): Promise<MedicalSpecialty>;
-  
+  getMedicalSpecialtyByName(
+    name: string,
+  ): Promise<MedicalSpecialty | undefined>;
+  createMedicalSpecialty(
+    specialty: InsertMedicalSpecialty,
+  ): Promise<MedicalSpecialty>;
+
   // Subscription plans operations
   getAllSubscriptionPlans(): Promise<SubscriptionPlan[]>;
   getSubscriptionPlans(): Promise<SubscriptionPlan[]>;
   getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined>;
-  getSubscriptionPlanByName(name: string): Promise<SubscriptionPlan | undefined>;
-  createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
-  updateSubscriptionPlan(id: number, plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
+  getSubscriptionPlanByName(
+    name: string,
+  ): Promise<SubscriptionPlan | undefined>;
+  createSubscriptionPlan(
+    plan: InsertSubscriptionPlan,
+  ): Promise<SubscriptionPlan>;
+  updateSubscriptionPlan(
+    id: number,
+    plan: InsertSubscriptionPlan,
+  ): Promise<SubscriptionPlan>;
   deleteSubscriptionPlan(id: number): Promise<void>;
   hasActiveSubscriptionsForPlan(planId: number): Promise<boolean>;
   toggleSubscriptionPlanStatus(id: number): Promise<SubscriptionPlan>;
-  
+
   // User subscriptions operations
   getUserSubscription(userId: number): Promise<UserSubscription | undefined>;
-  getUserSubscriptionWithPlan(userId: number): Promise<(UserSubscription & { plan: SubscriptionPlan }) | undefined>;
-  getUserSubscriptionByProviderSubscriptionId(providerSubscriptionId: string): Promise<UserSubscription | undefined>;
-  createUserSubscription(subscription: InsertUserSubscription): Promise<UserSubscription>;
-  updateUserSubscription(id: number, updates: Partial<InsertUserSubscription>): Promise<UserSubscription | undefined>;
+  getUserSubscriptionWithPlan(
+    userId: number,
+  ): Promise<(UserSubscription & { plan: SubscriptionPlan }) | undefined>;
+  getUserSubscriptionByProviderSubscriptionId(
+    providerSubscriptionId: string,
+  ): Promise<UserSubscription | undefined>;
+  createUserSubscription(
+    subscription: InsertUserSubscription,
+  ): Promise<UserSubscription>;
+  updateUserSubscription(
+    id: number,
+    updates: Partial<InsertUserSubscription>,
+  ): Promise<UserSubscription | undefined>;
   createTrialSubscription(userId: number): Promise<UserSubscription>;
-  isUserSubscriptionValid(userId: number): Promise<{ valid: boolean; reason?: string; subscription?: UserSubscription & { plan: SubscriptionPlan } }>;
-  
+  isUserSubscriptionValid(
+    userId: number,
+  ): Promise<{
+    valid: boolean;
+    reason?: string;
+    subscription?: UserSubscription & { plan: SubscriptionPlan };
+  }>;
+
   // Subscription payments operations
-  createSubscriptionPayment(payment: InsertSubscriptionPayment): Promise<SubscriptionPayment>;
-  getSubscriptionPayments(subscriptionId: number): Promise<SubscriptionPayment[]>;
-  
+  createSubscriptionPayment(
+    payment: InsertSubscriptionPayment,
+  ): Promise<SubscriptionPayment>;
+  getSubscriptionPayments(
+    subscriptionId: number,
+  ): Promise<SubscriptionPayment[]>;
+
   // Discount codes operations
   getDiscountCode(code: string): Promise<DiscountCode | undefined>;
-  validateDiscountCode(code: string, planId: number): Promise<{ valid: boolean; discount?: DiscountCode; reason?: string }>;
+  validateDiscountCode(
+    code: string,
+    planId: number,
+  ): Promise<{ valid: boolean; discount?: DiscountCode; reason?: string }>;
   applyDiscountCode(code: string): Promise<DiscountCode>;
-  calculateDiscountedPrice(originalPrice: number, discount: DiscountCode): { finalPrice: number; discountAmount: number };
-  createLifetimeSubscription(userId: number, discountCode?: string): Promise<UserSubscription>;
-  
+  calculateDiscountedPrice(
+    originalPrice: number,
+    discount: DiscountCode,
+  ): { finalPrice: number; discountAmount: number };
+  createLifetimeSubscription(
+    userId: number,
+    discountCode?: string,
+  ): Promise<UserSubscription>;
+
   // Promotional pricing operations
-  createPromotionalSubscription(userId: number, planId: number, promotionalDiscountPercent: number, promotionalDurationMonths: number, description?: string): Promise<UserSubscription>;
-  getCurrentSubscriptionPrice(userId: number): Promise<{ currentPrice: number; isPromotional: boolean; promotionalEndsAt?: Date; originalPrice: number }>;
-  checkPromotionalExpiry(userId: number): Promise<{ expired: boolean; subscription?: UserSubscription }>;
-  
+  createPromotionalSubscription(
+    userId: number,
+    planId: number,
+    promotionalDiscountPercent: number,
+    promotionalDurationMonths: number,
+    description?: string,
+  ): Promise<UserSubscription>;
+  getCurrentSubscriptionPrice(
+    userId: number,
+  ): Promise<{
+    currentPrice: number;
+    isPromotional: boolean;
+    promotionalEndsAt?: Date;
+    originalPrice: number;
+  }>;
+  checkPromotionalExpiry(
+    userId: number,
+  ): Promise<{ expired: boolean; subscription?: UserSubscription }>;
+
   // Supplier operations
   getSupplier(id: number): Promise<Supplier | undefined>;
   getSuppliers(): Promise<Supplier[]>;
   searchSuppliers(term: string): Promise<Supplier[]>;
-  
+
   // Report operations
   countAllMedicalOrders(): Promise<number>;
   countMedicalOrdersByDoctor(doctorId: number): Promise<number>;
   countAllPatients(): Promise<number>;
   countPatientsByDoctor(doctorId: number): Promise<number>;
-  getDoctorPerformanceStats(): Promise<Array<{doctorName: string, orderCount: number}>>;
-  getHospitalVolumeStats(): Promise<Array<{hospitalName: string, orderCount: number}>>;
-  getHospitalVolumeStatsByDoctor(doctorId: number): Promise<Array<{hospitalName: string, orderCount: number}>>;
+  getDoctorPerformanceStats(): Promise<
+    Array<{ doctorName: string; orderCount: number }>
+  >;
+  getHospitalVolumeStats(): Promise<
+    Array<{ hospitalName: string; orderCount: number }>
+  >;
+  getHospitalVolumeStatsByDoctor(
+    doctorId: number,
+  ): Promise<Array<{ hospitalName: string; orderCount: number }>>;
   getMedicalOrdersForReporting(filters: {
-    status?: string | null,
-    startDate?: string | null,
-    endDate?: string | null,
-    hospitalId?: number | null,
-    complexity?: string | null
+    status?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    hospitalId?: number | null;
+    complexity?: string | null;
   }): Promise<MedicalOrder[]>;
   getMedicalOrdersForReportingByDoctor(
     doctorId: number,
     filters: {
-      status?: string | null,
-      startDate?: string | null,
-      endDate?: string | null,
-      hospitalId?: number | null,
-      complexity?: string | null
-    }
+      status?: string | null;
+      startDate?: string | null;
+      endDate?: string | null;
+      hospitalId?: number | null;
+      complexity?: string | null;
+    },
   ): Promise<MedicalOrder[]>;
-  
+
   // Health Insurance Provider operations
-  getHealthInsuranceProvider(id: number): Promise<HealthInsuranceProvider | undefined>;
-  getHealthInsuranceProviderByCnpj(cnpj: string): Promise<HealthInsuranceProvider | undefined>;
-  getHealthInsuranceProviderByAnsCode(ansCode: string): Promise<HealthInsuranceProvider | undefined>;
-  getHealthInsuranceProviders(activeOnly?: boolean): Promise<HealthInsuranceProvider[]>;
-  createHealthInsuranceProvider(provider: InsertHealthInsuranceProvider): Promise<HealthInsuranceProvider>;
-  updateHealthInsuranceProvider(id: number, provider: Partial<InsertHealthInsuranceProvider>): Promise<HealthInsuranceProvider | undefined>;
+  getHealthInsuranceProvider(
+    id: number,
+  ): Promise<HealthInsuranceProvider | undefined>;
+  getHealthInsuranceProviderByCnpj(
+    cnpj: string,
+  ): Promise<HealthInsuranceProvider | undefined>;
+  getHealthInsuranceProviderByAnsCode(
+    ansCode: string,
+  ): Promise<HealthInsuranceProvider | undefined>;
+  getHealthInsuranceProviders(
+    activeOnly?: boolean,
+  ): Promise<HealthInsuranceProvider[]>;
+  createHealthInsuranceProvider(
+    provider: InsertHealthInsuranceProvider,
+  ): Promise<HealthInsuranceProvider>;
+  updateHealthInsuranceProvider(
+    id: number,
+    provider: Partial<InsertHealthInsuranceProvider>,
+  ): Promise<HealthInsuranceProvider | undefined>;
   deleteHealthInsuranceProvider(id: number): Promise<boolean>;
-  
+
   // Health Insurance Plans operations
   getHealthInsurancePlans(): Promise<HealthInsurancePlan[]>;
-  getHealthInsurancePlansByProvider(ansCode: string): Promise<HealthInsurancePlan[]>;
+  getHealthInsurancePlansByProvider(
+    ansCode: string,
+  ): Promise<HealthInsurancePlan[]>;
   getHealthInsurancePlan(id: number): Promise<HealthInsurancePlan | undefined>;
-  createHealthInsurancePlan(plan: InsertHealthInsurancePlan): Promise<HealthInsurancePlan>;
-  updateHealthInsurancePlan(id: number, plan: Partial<InsertHealthInsurancePlan>): Promise<HealthInsurancePlan | undefined>;
+  createHealthInsurancePlan(
+    plan: InsertHealthInsurancePlan,
+  ): Promise<HealthInsurancePlan>;
+  updateHealthInsurancePlan(
+    id: number,
+    plan: Partial<InsertHealthInsurancePlan>,
+  ): Promise<HealthInsurancePlan | undefined>;
   deleteHealthInsurancePlan(id: number): Promise<boolean>;
-  
+
   // Supplier operations
   getSupplier(id: number): Promise<Supplier | undefined>;
   getSupplierByCnpj(cnpj: string): Promise<Supplier | undefined>;
-  getSuppliers(municipalityId?: number, active?: boolean, search?: string): Promise<Supplier[]>;
+  getSuppliers(
+    municipalityId?: number,
+    active?: boolean,
+    search?: string,
+  ): Promise<Supplier[]>;
   getActiveSuppliers(): Promise<Supplier[]>;
   searchSuppliers(term: string): Promise<Supplier[]>;
   createSupplier(supplier: InsertSupplier): Promise<Supplier>;
-  updateSupplier(id: number, supplierData: Partial<InsertSupplier>): Promise<Supplier | undefined>;
+  updateSupplier(
+    id: number,
+    supplierData: Partial<InsertSupplier>,
+  ): Promise<Supplier | undefined>;
   deleteSupplier(id: number): Promise<boolean>;
   getMunicipality(id: number): Promise<any | undefined>;
-  
+
   // Doctor-Hospital operations
   getDoctorHospitals(userId: number): Promise<any[]>;
-  addDoctorHospital(doctorHospital: InsertDoctorHospital): Promise<DoctorHospital>;
+  addDoctorHospital(
+    doctorHospital: InsertDoctorHospital,
+  ): Promise<DoctorHospital>;
   removeDoctorHospital(userId: number, hospitalId: number): Promise<boolean>;
-  updateDoctorHospitals(userId: number, hospitalIds: number[]): Promise<DoctorHospital[]>;
-  
+  updateDoctorHospitals(
+    userId: number,
+    hospitalIds: number[],
+  ): Promise<DoctorHospital[]>;
+
   // Doctor-Patient operations
   getDoctorPatients(doctorId: number): Promise<DoctorPatient[]>;
-  getDoctorPatientsWithDetails(doctorId: number): Promise<{ patientId: number, patientName: string, associatedAt: Date }[]>;
-  getPatientDoctors(patientId: number): Promise<{ doctorId: number, doctorName: string, associatedAt: Date }[]>;
+  getDoctorPatientsWithDetails(
+    doctorId: number,
+  ): Promise<{ patientId: number; patientName: string; associatedAt: Date }[]>;
+  getPatientDoctors(
+    patientId: number,
+  ): Promise<{ doctorId: number; doctorName: string; associatedAt: Date }[]>;
   addDoctorPatient(doctorPatient: InsertDoctorPatient): Promise<DoctorPatient>;
-  updateDoctorPatient(id: number, isActive: boolean): Promise<DoctorPatient | undefined>;
+  updateDoctorPatient(
+    id: number,
+    isActive: boolean,
+  ): Promise<DoctorPatient | undefined>;
   removeDoctorPatient(doctorId: number, patientId: number): Promise<boolean>;
-  
+
   // Password reset operations
   createPasswordResetToken(email: string): Promise<string>;
-  verifyPasswordResetToken(token: string): Promise<{valid: boolean, userId?: number}>;
+  verifyPasswordResetToken(
+    token: string,
+  ): Promise<{ valid: boolean; userId?: number }>;
   resetPassword(userId: number, newPassword: string): Promise<boolean>;
-  updateUserPassword(username: string, hashedPassword: string): Promise<boolean>;
-  
+  updateUserPassword(
+    username: string,
+    hashedPassword: string,
+  ): Promise<boolean>;
+
   // CID-10 operations
   getCidCodes(search?: string, category?: string): Promise<CidCode[]>;
   getCidCode(id: number): Promise<CidCode | undefined>;
   createCidCode(cidCode: InsertCidCode): Promise<CidCode>;
-  updateCidCode(id: number, updates: Partial<InsertCidCode>): Promise<CidCode | undefined>;
+  updateCidCode(
+    id: number,
+    updates: Partial<InsertCidCode>,
+  ): Promise<CidCode | undefined>;
   deleteCidCode(id: number): Promise<boolean>;
-  
+
   // Role/Permission operations
   getRoles(): Promise<Role[]>;
   getRole(id: number): Promise<Role | undefined>;
@@ -325,28 +528,42 @@ export interface IStorage {
   createRole(role: InsertRole): Promise<Role>;
   updateRole(id: number, updates: Partial<Role>): Promise<Role | undefined>;
   deleteRole(id: number): Promise<boolean>;
-  
+
   getRolePermissions(roleId: number): Promise<RolePermission[]>;
-  addRolePermission(rolePermission: InsertRolePermission): Promise<RolePermission>;
+  addRolePermission(
+    rolePermission: InsertRolePermission,
+  ): Promise<RolePermission>;
   removeRolePermission(roleId: number, permission: string): Promise<boolean>;
   checkRolePermission(roleId: number, permission: string): Promise<boolean>;
-  
+
   getUserPermissions(userId: number): Promise<UserPermission[]>;
-  getUserPermission(userId: number, permission: string): Promise<UserPermission | undefined>;
-  addUserPermission(userPermission: InsertUserPermission): Promise<UserPermission>;
+  getUserPermission(
+    userId: number,
+    permission: string,
+  ): Promise<UserPermission | undefined>;
+  addUserPermission(
+    userPermission: InsertUserPermission,
+  ): Promise<UserPermission>;
   removeUserPermission(userId: number, permission: string): Promise<boolean>;
 
   // Session store para autenticação
   sessionStore: any;
-  
+
   // Patient operations
   getPatient(id: number): Promise<Patient | undefined>;
   getPatientByCPF(cpf: string): Promise<Patient | undefined>;
   getPatients(): Promise<Patient[]>;
   getPatientsByDoctor(doctorId: number): Promise<Patient[]>;
-  getRecentPatientsByDoctor(doctorId: number, limit?: number): Promise<Patient[]>;
+  getRecentPatientsByDoctor(
+    doctorId: number,
+    limit?: number,
+  ): Promise<Patient[]>;
   createPatient(patient: InsertPatient, userId?: number): Promise<Patient>;
-  updatePatient(id: number, patient: Partial<InsertPatient>, userId?: number): Promise<Patient | undefined>;
+  updatePatient(
+    id: number,
+    patient: Partial<InsertPatient>,
+    userId?: number,
+  ): Promise<Patient | undefined>;
   deletePatient(id: number, userId?: number): Promise<boolean>; // Soft delete com auditoria
   restorePatient(id: number): Promise<boolean>; // Restaurar paciente excluído
   getDeletedPatients(): Promise<Patient[]>; // Listar pacientes excluídos
@@ -362,9 +579,12 @@ export interface IStorage {
   getProcedures(): Promise<Procedure[]>;
   searchProcedures(term: string): Promise<Procedure[]>;
   createProcedure(procedure: InsertProcedure): Promise<Procedure>;
-  updateProcedure(id: number, procedure: Partial<InsertProcedure>): Promise<Procedure | undefined>;
+  updateProcedure(
+    id: number,
+    procedure: Partial<InsertProcedure>,
+  ): Promise<Procedure | undefined>;
   deleteProcedure(id: number): Promise<boolean>;
-  
+
   // CID-10 operations
   getCidCode(id: number): Promise<CidCode | undefined>;
   getCidCodeByCode(code: string): Promise<CidCode | undefined>;
@@ -372,32 +592,55 @@ export interface IStorage {
   getCidCodesByCategory(category: string): Promise<CidCode[]>;
   searchCidCodes(term: string): Promise<CidCode[]>;
   createCidCode(cidCode: InsertCidCode): Promise<CidCode>;
-  updateCidCode(id: number, cidCode: Partial<InsertCidCode>): Promise<CidCode | undefined>;
+  updateCidCode(
+    id: number,
+    cidCode: Partial<InsertCidCode>,
+  ): Promise<CidCode | undefined>;
   deleteCidCode(id: number): Promise<boolean>;
 
   // Medical order operations
   getMedicalOrder(id: number): Promise<MedicalOrder | undefined>;
   getMedicalOrders(): Promise<MedicalOrder[]>;
   createMedicalOrder(order: InsertMedicalOrder): Promise<MedicalOrder>;
-  updateMedicalOrder(id: number, updates: Partial<InsertMedicalOrder>): Promise<MedicalOrder | undefined>;
-  updateMedicalOrderStatus(id: number, statusId: number): Promise<MedicalOrder | undefined>;
+  updateMedicalOrder(
+    id: number,
+    updates: Partial<InsertMedicalOrder>,
+  ): Promise<MedicalOrder | undefined>;
+  updateMedicalOrderStatus(
+    id: number,
+    statusId: number,
+  ): Promise<MedicalOrder | undefined>;
   deleteMedicalOrder(id: number): Promise<boolean>;
-  
+
   // ⚠️  ATENÇÃO: Função retorna TODOS os campos do pedido médico (16+ campos)
   // Para casos específicos, considere usar versões otimizadas como getMedicalOrdersInProgressForPatientModal()
   // Antes de usar, avalie se todos os campos são necessários para evitar over-fetching
   getMedicalOrdersForPatient(patientId: number): Promise<MedicalOrder[]>;
-  
+
   // ✅ OTIMIZADA: Retorna apenas 10 campos essenciais para o modal de escolha
-  getMedicalOrdersInProgressForPatientModal(patientId: number, userId: number): Promise<any[]>;
-  getMedicalOrderInProgressByUser(userId: number): Promise<MedicalOrder | undefined>;
-  
+  getMedicalOrdersInProgressForPatientModal(
+    patientId: number,
+    userId: number,
+  ): Promise<any[]>;
+  getMedicalOrderInProgressByUser(
+    userId: number,
+  ): Promise<MedicalOrder | undefined>;
+
   // Medical order procedures operations
   getMedicalOrderProcedures(orderId: number): Promise<MedicalOrderProcedure[]>;
-  createMedicalOrderProcedure(procedure: InsertMedicalOrderProcedure): Promise<MedicalOrderProcedure>;
-  updateMedicalOrderProcedure(id: number, updates: Partial<InsertMedicalOrderProcedure>): Promise<MedicalOrderProcedure | undefined>;
+  createMedicalOrderProcedure(
+    procedure: InsertMedicalOrderProcedure,
+  ): Promise<MedicalOrderProcedure>;
+  updateMedicalOrderProcedure(
+    id: number,
+    updates: Partial<InsertMedicalOrderProcedure>,
+  ): Promise<MedicalOrderProcedure | undefined>;
   deleteMedicalOrderProcedure(id: number): Promise<boolean>;
-  updateProcedureApprovalStatus(id: number, quantityApproved: number, status: string): Promise<MedicalOrderProcedure | undefined>;
+  updateProcedureApprovalStatus(
+    id: number,
+    quantityApproved: number,
+    status: string,
+  ): Promise<MedicalOrderProcedure | undefined>;
 
   // Order items operations
   getOrderItems(orderId: number): Promise<OrderItem[]>;
@@ -405,23 +648,28 @@ export interface IStorage {
   deleteOrderItem(id: number): Promise<boolean>;
 
   // Scanned document operations
-  saveScannedDocument(document: InsertScannedDocument): Promise<ScannedDocument>;
+  saveScannedDocument(
+    document: InsertScannedDocument,
+  ): Promise<ScannedDocument>;
   getScannedDocuments(patientId: number): Promise<ScannedDocument[]>;
-  
+
   // Hospital operations
   getHospital(id: number): Promise<Hospital | undefined>;
   getHospitalByCNPJ(cnpj: string): Promise<Hospital | undefined>;
   getHospitals(): Promise<Hospital[]>;
   createHospital(hospital: InsertHospital): Promise<Hospital>;
-  updateHospital(id: number, hospital: Partial<InsertHospital>): Promise<Hospital | undefined>;
+  updateHospital(
+    id: number,
+    hospital: Partial<InsertHospital>,
+  ): Promise<Hospital | undefined>;
   deleteHospital(id: number): Promise<boolean>;
-  
+
   // Brazilian states operations
   getBrazilianStates(): Promise<BrazilianState[]>;
-  
+
   // Municipality operations
   getMunicipalitiesByState(stateIbgeCode: number): Promise<Municipality[]>;
-  
+
   // Supplier operations (Fornecedores)
   getSupplier(id: number): Promise<Supplier | undefined>;
   getSupplierByCnpj(cnpj: string): Promise<Supplier | undefined>;
@@ -429,9 +677,12 @@ export interface IStorage {
   getActiveSuppliers(): Promise<Supplier[]>;
   searchSuppliers(term: string): Promise<Supplier[]>;
   createSupplier(supplier: InsertSupplier): Promise<Supplier>;
-  updateSupplier(id: number, supplier: Partial<InsertSupplier>): Promise<Supplier | undefined>;
+  updateSupplier(
+    id: number,
+    supplier: Partial<InsertSupplier>,
+  ): Promise<Supplier | undefined>;
   deleteSupplier(id: number): Promise<boolean>;
-  
+
   // Notification operations
   getNotifications(userId: number): Promise<Notification[]>;
   getUnreadNotificationsCount(userId: number): Promise<number>;
@@ -439,37 +690,60 @@ export interface IStorage {
   markNotificationAsRead(id: number): Promise<Notification | undefined>;
   markAllNotificationsAsRead(userId: number): Promise<boolean>;
   deleteNotification(id: number): Promise<boolean>;
-  
+
   // Contact/Fale Conosco operations
   getContactMessage(id: number): Promise<ContactMessage | undefined>;
   getContactMessages(): Promise<ContactMessage[]>;
   getPendingContactMessages(): Promise<ContactMessage[]>;
   createContactMessage(message: InsertContactMessage): Promise<ContactMessage>;
-  updateContactMessageStatus(id: number, status: string): Promise<ContactMessage | undefined>;
-  respondToContactMessage(id: number, responseMessage: string, respondedById: number): Promise<ContactMessage | undefined>;
+  updateContactMessageStatus(
+    id: number,
+    status: string,
+  ): Promise<ContactMessage | undefined>;
+  respondToContactMessage(
+    id: number,
+    responseMessage: string,
+    respondedById: number,
+  ): Promise<ContactMessage | undefined>;
   deleteContactMessage(id: number): Promise<boolean>;
-  
+
   // Appeal operations
   createAppeal(appeal: InsertAppeal): Promise<Appeal>;
   getAppealsByOrderId(orderId: number): Promise<Appeal[]>;
-  updateAppealStatus(appealId: number, status: string, reviewerNotes?: string): Promise<Appeal | undefined>;
-  
+  updateAppealStatus(
+    appealId: number,
+    status: string,
+    reviewerNotes?: string,
+  ): Promise<Appeal | undefined>;
+
   // CID-10 operations
   getCidCodes(search?: string, category?: string): Promise<CidCode[]>;
   getCidCode(id: number): Promise<CidCode | undefined>;
   createCidCode(cidCode: InsertCidCode): Promise<CidCode>;
-  updateCidCode(id: number, cidCode: Partial<InsertCidCode>): Promise<CidCode | undefined>;
+  updateCidCode(
+    id: number,
+    cidCode: Partial<InsertCidCode>,
+  ): Promise<CidCode | undefined>;
   deleteCidCode(id: number): Promise<boolean>;
 
   // ========================================
   // FASE 2: MÉTODOS INCOMPLETE REGISTRATIONS
   // ========================================
-  
+
   // Métodos para gerenciar registros incompletos com regToken
-  createIncompleteRegistration(registration: Partial<InsertIncompleteRegistration>): Promise<IncompleteRegistration>;
-  getIncompleteRegistrationByEmail(email: string): Promise<IncompleteRegistration | undefined>;
-  getIncompleteRegistrationByToken(regToken: string): Promise<IncompleteRegistration | undefined>;
-  updateIncompleteRegistration(id: number, updates: Partial<InsertIncompleteRegistration>): Promise<IncompleteRegistration>;
+  createIncompleteRegistration(
+    registration: Partial<InsertIncompleteRegistration>,
+  ): Promise<IncompleteRegistration>;
+  getIncompleteRegistrationByEmail(
+    email: string,
+  ): Promise<IncompleteRegistration | undefined>;
+  getIncompleteRegistrationByToken(
+    regToken: string,
+  ): Promise<IncompleteRegistration | undefined>;
+  updateIncompleteRegistration(
+    id: number,
+    updates: Partial<InsertIncompleteRegistration>,
+  ): Promise<IncompleteRegistration>;
   deleteIncompleteRegistration(id: number): Promise<boolean>;
 }
 
@@ -477,12 +751,12 @@ export class DatabaseStorage implements IStorage {
   sessionStore: any;
 
   constructor() {
-    this.sessionStore = new PostgresSessionStore({ 
-      pool, 
-      tableName: 'session',
-      createTableIfMissing: true 
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      tableName: "session",
+      createTableIfMissing: true,
     });
-    
+
     // Inicializar cache de cores quando o storage é criado
     this.initializeColorCache();
   }
@@ -497,21 +771,24 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
   }
-  
+
   async getUsers(): Promise<User[]> {
     return await db.select().from(users).where(eq(users.active, true));
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username));
     return user || undefined;
   }
-  
+
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user || undefined;
   }
-  
+
   async getUserByResetToken(token: string): Promise<User | undefined> {
     const currentDate = new Date();
     const [user] = await db
@@ -520,50 +797,47 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(users.passwordResetToken, token),
-          gt(users.passwordResetExpires, currentDate)
-        )
+          gt(users.passwordResetExpires, currentDate),
+        ),
       );
     return user || undefined;
   }
-  
+
   async getUserByCrm(crm: number): Promise<User | undefined> {
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.crm, crm));
+    const [user] = await db.select().from(users).where(eq(users.crm, crm));
     return user || undefined;
   }
-  
-  async getUserByField(field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string): Promise<User | undefined> {
+
+  async getUserByField(
+    field: "cpf" | "crm" | "phone" | "email" | "username",
+    value: string,
+  ): Promise<User | undefined> {
     let query;
-    
+
     switch (field) {
-      case 'cpf':
+      case "cpf":
         // Para CPF, normalizar ambos os lados da comparação (remover pontos, traços e espaços)
         // Buscar por REPLACE(REPLACE(REPLACE(cpf, '.', ''), '-', ''), ' ', '') = valor_normalizado
-        const normalizedCpf = value.replace(/[.\-\s]/g, '');
+        const normalizedCpf = value.replace(/[.\-\s]/g, "");
         query = sql`REPLACE(REPLACE(REPLACE(${users.cpf}, '.', ''), '-', ''), ' ', '') = ${normalizedCpf}`;
         break;
-      case 'crm':
+      case "crm":
         query = eq(users.crm, parseInt(value));
         break;
-      case 'phone':
+      case "phone":
         query = eq(users.phone, value);
         break;
-      case 'email':
+      case "email":
         query = eq(users.email, value);
         break;
-      case 'username':
+      case "username":
         query = eq(users.username, value);
         break;
       default:
         return undefined;
     }
-    
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(query);
+
+    const [user] = await db.select().from(users).where(query);
     return user || undefined;
   }
 
@@ -577,47 +851,49 @@ export class DatabaseStorage implements IStorage {
 
     // Gera um token aleatório (6 dígitos para simulação)
     const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Define a expiração em 1 hora
     const resetExpires = new Date();
     resetExpires.setHours(resetExpires.getHours() + 1);
-    
+
     // Atualiza o usuário com o token
     await db
       .update(users)
       .set({
         passwordResetToken: resetToken,
         passwordResetExpires: resetExpires,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(users.id, user.id));
-    
+
     return resetToken;
   }
-  
-  async verifyPasswordResetToken(token: string): Promise<{valid: boolean, userId?: number}> {
+
+  async verifyPasswordResetToken(
+    token: string,
+  ): Promise<{ valid: boolean; userId?: number }> {
     const user = await this.getUserByResetToken(token);
-    
+
     if (!user) {
       return { valid: false };
     }
-    
-    return { 
+
+    return {
       valid: true,
-      userId: user.id
+      userId: user.id,
     };
   }
-  
+
   async resetPassword(userId: number, newPassword: string): Promise<boolean> {
     // Verificar se o usuário existe
     const user = await this.getUser(userId);
     if (!user) {
       return false;
     }
-    
+
     // Hash da nova senha (importando função do auth.ts para evitar duplicação)
     const hashedPassword = await hashPassword(newPassword);
-    
+
     // Atualiza a senha e limpa os tokens de recuperação
     await db
       .update(users)
@@ -625,32 +901,35 @@ export class DatabaseStorage implements IStorage {
         password: hashedPassword,
         passwordResetToken: null,
         passwordResetExpires: null,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(users.id, userId));
-    
+
     return true;
   }
-  
+
   // Método para atualizar a senha de um usuário pelo nome de usuário (usado para testes)
-  async updateUserPassword(username: string, hashedPassword: string): Promise<boolean> {
+  async updateUserPassword(
+    username: string,
+    hashedPassword: string,
+  ): Promise<boolean> {
     try {
       // Verificar se o usuário existe
       const user = await this.getUserByUsername(username);
       if (!user) {
         return false;
       }
-      
+
       // Atualiza a senha
       const result = await db
         .update(users)
         .set({
           password: hashedPassword,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(users.username, username))
         .returning();
-      
+
       return result.length > 0;
     } catch (error) {
       console.error("Erro ao atualizar senha do usuário:", error);
@@ -662,23 +941,23 @@ export class DatabaseStorage implements IStorage {
     // Se medicalSpecialtyId não foi definida, definir como Ortopedista (ID = 1)
     const userData = {
       ...insertUser,
-      medicalSpecialtyId: insertUser.medicalSpecialtyId || 1
+      medicalSpecialtyId: insertUser.medicalSpecialtyId || 1,
     };
-    
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .returning();
+
+    const [user] = await db.insert(users).values(userData).returning();
     return user;
   }
-  
-  async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
+
+  async updateUser(
+    id: number,
+    updates: Partial<User>,
+  ): Promise<User | undefined> {
     // Atualize o timestamp de atualização
     const updateData = {
       ...updates,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
-    
+
     const [updated] = await db
       .update(users)
       .set(updateData)
@@ -686,58 +965,57 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return updated;
   }
-  
+
   async deleteUser(id: number): Promise<boolean> {
     try {
       console.log(`[Storage] Iniciando exclusão do usuário ${id}`);
-      
+
       // Verificar se o usuário existe e se já está inativo
-      const [existingUser] = await db.select().from(users).where(eq(users.id, id));
+      const [existingUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, id));
       if (!existingUser) {
         console.log(`[Storage] Usuário ${id} não encontrado`);
         return false;
       }
-      
+
       if (!existingUser.active) {
         console.log(`[Storage] Usuário ${id} já está inativo`);
         return true; // Usuário já foi desativado anteriormente
       }
-      
+
       // Remover associações com hospitais (doctorHospitals)
-      console.log(`[Storage] Removendo associações de hospitais para o usuário ${id}`);
-      await db
-        .delete(doctorHospitals)
-        .where(eq(doctorHospitals.userId, id));
-      
+      console.log(
+        `[Storage] Removendo associações de hospitais para o usuário ${id}`,
+      );
+      await db.delete(doctorHospitals).where(eq(doctorHospitals.userId, id));
+
       // Remover associações com pacientes (doctorPatients)
-      console.log(`[Storage] Removendo associações de pacientes para o usuário ${id}`);
-      await db
-        .delete(doctorPatients)
-        .where(eq(doctorPatients.doctorId, id));
-      
+      console.log(
+        `[Storage] Removendo associações de pacientes para o usuário ${id}`,
+      );
+      await db.delete(doctorPatients).where(eq(doctorPatients.doctorId, id));
+
       // Remover permissões específicas do usuário
       console.log(`[Storage] Removendo permissões para o usuário ${id}`);
-      await db
-        .delete(userPermissions)
-        .where(eq(userPermissions.userId, id));
-      
+      await db.delete(userPermissions).where(eq(userPermissions.userId, id));
+
       // Remover notificações do usuário
       console.log(`[Storage] Removendo notificações para o usuário ${id}`);
-      await db
-        .delete(notifications)
-        .where(eq(notifications.userId, id));
-      
+      await db.delete(notifications).where(eq(notifications.userId, id));
+
       // Marcar como inativo ao invés de excluir (para preservar integridade referencial)
       console.log(`[Storage] Marcando usuário ${id} como inativo`);
       await db
         .update(users)
-        .set({ 
+        .set({
           active: false,
           username: `deleted_${id}_${Date.now()}`,
-          email: `deleted_${id}_${Date.now()}@system.local`
+          email: `deleted_${id}_${Date.now()}@system.local`,
         })
         .where(eq(users.id, id));
-      
+
       console.log(`[Storage] Usuário ${id} desativado com sucesso`);
       return true;
     } catch (error) {
@@ -749,60 +1027,62 @@ export class DatabaseStorage implements IStorage {
   async deleteUserPermanently(id: number): Promise<boolean> {
     try {
       console.log(`[Storage] Iniciando exclusão PERMANENTE do usuário ${id}`);
-      
+
       // Verificar se o usuário existe
-      const [existingUser] = await db.select().from(users).where(eq(users.id, id));
+      const [existingUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, id));
       if (!existingUser) {
         console.log(`[Storage] Usuário ${id} não encontrado`);
         return false;
       }
-      
+
       // Remover associações com hospitais (doctorHospitals)
-      console.log(`[Storage] Removendo associações de hospitais para o usuário ${id}`);
-      await db
-        .delete(doctorHospitals)
-        .where(eq(doctorHospitals.userId, id));
-      
+      console.log(
+        `[Storage] Removendo associações de hospitais para o usuário ${id}`,
+      );
+      await db.delete(doctorHospitals).where(eq(doctorHospitals.userId, id));
+
       // Remover associações com pacientes (doctorPatients)
-      console.log(`[Storage] Removendo associações de pacientes para o usuário ${id}`);
-      await db
-        .delete(doctorPatients)
-        .where(eq(doctorPatients.doctorId, id));
-      
+      console.log(
+        `[Storage] Removendo associações de pacientes para o usuário ${id}`,
+      );
+      await db.delete(doctorPatients).where(eq(doctorPatients.doctorId, id));
+
       // Remover permissões específicas do usuário
       console.log(`[Storage] Removendo permissões para o usuário ${id}`);
-      await db
-        .delete(userPermissions)
-        .where(eq(userPermissions.userId, id));
-      
+      await db.delete(userPermissions).where(eq(userPermissions.userId, id));
+
       // Remover notificações do usuário
       console.log(`[Storage] Removendo notificações para o usuário ${id}`);
-      await db
-        .delete(notifications)
-        .where(eq(notifications.userId, id));
-      
+      await db.delete(notifications).where(eq(notifications.userId, id));
+
       // Remover endereços do usuário
       console.log(`[Storage] Removendo endereços para o usuário ${id}`);
-      await db
-        .delete(userAddresses)
-        .where(eq(userAddresses.userId, id));
-      
+      await db.delete(userAddresses).where(eq(userAddresses.userId, id));
+
       // DELETAR O USUÁRIO PERMANENTEMENTE
       console.log(`[Storage] Removendo usuário ${id} PERMANENTEMENTE do banco`);
       const [deleted] = await db
         .delete(users)
         .where(eq(users.id, id))
         .returning();
-      
+
       if (!deleted) {
         console.log(`[Storage] Falha ao deletar usuário ${id}`);
         return false;
       }
-      
-      console.log(`[Storage] Usuário ${id} REMOVIDO PERMANENTEMENTE com sucesso`);
+
+      console.log(
+        `[Storage] Usuário ${id} REMOVIDO PERMANENTEMENTE com sucesso`,
+      );
       return true;
     } catch (error) {
-      console.error(`[Storage] Erro ao deletar usuário ${id} permanentemente:`, error);
+      console.error(
+        `[Storage] Erro ao deletar usuário ${id} permanentemente:`,
+        error,
+      );
       return false;
     }
   }
@@ -816,14 +1096,18 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(userAddresses.isPrimary), userAddresses.id);
   }
 
-  async getUserPrimaryAddress(userId: number): Promise<UserAddress | undefined> {
+  async getUserPrimaryAddress(
+    userId: number,
+  ): Promise<UserAddress | undefined> {
     const [address] = await db
       .select()
       .from(userAddresses)
-      .where(and(
-        eq(userAddresses.userId, userId),
-        eq(userAddresses.isPrimary, true)
-      ));
+      .where(
+        and(
+          eq(userAddresses.userId, userId),
+          eq(userAddresses.isPrimary, true),
+        ),
+      );
     return address || undefined;
   }
 
@@ -843,14 +1127,17 @@ export class DatabaseStorage implements IStorage {
     return newAddress;
   }
 
-  async updateUserAddress(id: number, updates: Partial<InsertUserAddress>): Promise<UserAddress | undefined> {
+  async updateUserAddress(
+    id: number,
+    updates: Partial<InsertUserAddress>,
+  ): Promise<UserAddress | undefined> {
     // Se está marcando como principal, desmarcar outros
     if (updates.isPrimary) {
       const [address] = await db
         .select()
         .from(userAddresses)
         .where(eq(userAddresses.id, id));
-      
+
       if (address) {
         await db
           .update(userAddresses)
@@ -875,12 +1162,15 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return !!deleted;
     } catch (error) {
-      console.error('Erro ao deletar endereço:', error);
+      console.error("Erro ao deletar endereço:", error);
       return false;
     }
   }
 
-  async setUserPrimaryAddress(userId: number, addressId: number): Promise<boolean> {
+  async setUserPrimaryAddress(
+    userId: number,
+    addressId: number,
+  ): Promise<boolean> {
     try {
       // Desmarcar todos os endereços como principais
       await db
@@ -892,59 +1182,64 @@ export class DatabaseStorage implements IStorage {
       const [updated] = await db
         .update(userAddresses)
         .set({ isPrimary: true })
-        .where(and(
-          eq(userAddresses.id, addressId),
-          eq(userAddresses.userId, userId)
-        ))
+        .where(
+          and(
+            eq(userAddresses.id, addressId),
+            eq(userAddresses.userId, userId),
+          ),
+        )
         .returning();
 
       return !!updated;
     } catch (error) {
-      console.error('Erro ao definir endereço principal:', error);
+      console.error("Erro ao definir endereço principal:", error);
       return false;
     }
   }
-  
+
   // Role methods
   async getRoles(): Promise<Role[]> {
     return await db.select().from(roles);
   }
-  
+
   async getRole(id: number): Promise<Role | undefined> {
     const [role] = await db.select().from(roles).where(eq(roles.id, id));
     return role || undefined;
   }
-  
+
   async getDefaultRole(): Promise<Role | undefined> {
-    const [role] = await db.select().from(roles).where(eq(roles.isDefault, true));
+    const [role] = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.isDefault, true));
     return role || undefined;
   }
-  
+
   async createRole(insertRole: InsertRole): Promise<Role> {
     // Se esta role for definida como padrão, remova a marca de padrão de todas as outras
     if (insertRole.isDefault) {
       await db.update(roles).set({ isDefault: false });
     }
-    
-    const [role] = await db
-      .insert(roles)
-      .values(insertRole)
-      .returning();
+
+    const [role] = await db.insert(roles).values(insertRole).returning();
     return role;
   }
-  
-  async updateRole(id: number, updates: Partial<Role>): Promise<Role | undefined> {
+
+  async updateRole(
+    id: number,
+    updates: Partial<Role>,
+  ): Promise<Role | undefined> {
     // Se esta role for definida como padrão, remova a marca de padrão de todas as outras
     if (updates.isDefault) {
       await db.update(roles).set({ isDefault: false });
     }
-    
+
     // Atualize o timestamp de atualização
     const updateData = {
       ...updates,
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
-    
+
     const [updated] = await db
       .update(roles)
       .set(updateData)
@@ -952,12 +1247,12 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return updated;
   }
-  
+
   async deleteRole(id: number): Promise<boolean> {
     await db.delete(roles).where(eq(roles.id, id));
     return true;
   }
-  
+
   // Role Permission methods
   async getRolePermissions(roleId: number): Promise<RolePermission[]> {
     return await db
@@ -965,8 +1260,10 @@ export class DatabaseStorage implements IStorage {
       .from(rolePermissions)
       .where(eq(rolePermissions.roleId, roleId));
   }
-  
-  async addRolePermission(insertRolePermission: InsertRolePermission): Promise<RolePermission> {
+
+  async addRolePermission(
+    insertRolePermission: InsertRolePermission,
+  ): Promise<RolePermission> {
     // Verificar se já existe
     const [existing] = await db
       .select()
@@ -974,46 +1271,50 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(rolePermissions.roleId, insertRolePermission.roleId),
-          eq(rolePermissions.permission, insertRolePermission.permission)
-        )
+          eq(rolePermissions.permission, insertRolePermission.permission),
+        ),
       );
-    
+
     if (existing) {
       return existing;
     }
-    
+
     const [permission] = await db
       .insert(rolePermissions)
       .values(insertRolePermission)
       .returning();
     return permission;
   }
-  
-  async removeRolePermission(roleId: number, permission: string): Promise<boolean> {
-    await db
-      .delete(rolePermissions)
-      .where(
-        and(
-          eq(rolePermissions.roleId, roleId),
-          eq(rolePermissions.permission, permission as any) // Cast necessário
-        )
-      );
+
+  async removeRolePermission(
+    roleId: number,
+    permission: string,
+  ): Promise<boolean> {
+    await db.delete(rolePermissions).where(
+      and(
+        eq(rolePermissions.roleId, roleId),
+        eq(rolePermissions.permission, permission as any), // Cast necessário
+      ),
+    );
     return true;
   }
-  
-  async checkRolePermission(roleId: number, permission: string): Promise<boolean> {
+
+  async checkRolePermission(
+    roleId: number,
+    permission: string,
+  ): Promise<boolean> {
     const [result] = await db
       .select()
       .from(rolePermissions)
       .where(
         and(
           eq(rolePermissions.roleId, roleId),
-          eq(rolePermissions.permission, permission as any) // Cast necessário
-        )
+          eq(rolePermissions.permission, permission as any), // Cast necessário
+        ),
       );
     return !!result;
   }
-  
+
   // User Permission methods
   async getUserPermissions(userId: number): Promise<UserPermission[]> {
     return await db
@@ -1021,21 +1322,26 @@ export class DatabaseStorage implements IStorage {
       .from(userPermissions)
       .where(eq(userPermissions.userId, userId));
   }
-  
-  async getUserPermission(userId: number, permission: string): Promise<UserPermission | undefined> {
+
+  async getUserPermission(
+    userId: number,
+    permission: string,
+  ): Promise<UserPermission | undefined> {
     const [result] = await db
       .select()
       .from(userPermissions)
       .where(
         and(
           eq(userPermissions.userId, userId),
-          eq(userPermissions.permission, permission as any) // Cast necessário
-        )
+          eq(userPermissions.permission, permission as any), // Cast necessário
+        ),
       );
     return result;
   }
-  
-  async addUserPermission(insertUserPermission: InsertUserPermission): Promise<UserPermission> {
+
+  async addUserPermission(
+    insertUserPermission: InsertUserPermission,
+  ): Promise<UserPermission> {
     // Verificar se já existe e atualizar
     const [existing] = await db
       .select()
@@ -1043,10 +1349,10 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(userPermissions.userId, insertUserPermission.userId),
-          eq(userPermissions.permission, insertUserPermission.permission)
-        )
+          eq(userPermissions.permission, insertUserPermission.permission),
+        ),
       );
-    
+
     if (existing) {
       // Se já existe com valor diferente, atualize
       if (existing.granted !== insertUserPermission.granted) {
@@ -1059,7 +1365,7 @@ export class DatabaseStorage implements IStorage {
       }
       return existing;
     }
-    
+
     // Se não existe, insira novo
     const [permission] = await db
       .insert(userPermissions)
@@ -1067,27 +1373,34 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return permission;
   }
-  
-  async removeUserPermission(userId: number, permission: string): Promise<boolean> {
-    await db
-      .delete(userPermissions)
-      .where(
-        and(
-          eq(userPermissions.userId, userId),
-          eq(userPermissions.permission, permission as any) // Cast necessário
-        )
-      );
+
+  async removeUserPermission(
+    userId: number,
+    permission: string,
+  ): Promise<boolean> {
+    await db.delete(userPermissions).where(
+      and(
+        eq(userPermissions.userId, userId),
+        eq(userPermissions.permission, permission as any), // Cast necessário
+      ),
+    );
     return true;
   }
 
   // Patient methods
   async getPatient(id: number): Promise<Patient | undefined> {
-    const [patient] = await db.select().from(patients).where(eq(patients.id, id));
+    const [patient] = await db
+      .select()
+      .from(patients)
+      .where(eq(patients.id, id));
     return patient || undefined;
   }
 
   async getPatientByCPF(cpf: string): Promise<Patient | undefined> {
-    const [patient] = await db.select().from(patients).where(eq(patients.cpf, cpf));
+    const [patient] = await db
+      .select()
+      .from(patients)
+      .where(eq(patients.cpf, cpf));
     return patient || undefined;
   }
 
@@ -1125,13 +1438,16 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(doctorPatients.doctorId, doctorId),
           eq(doctorPatients.isActive, true),
-          eq(patients.isDeleted, false) // Filtrar pacientes não excluídos
-        )
+          eq(patients.isDeleted, false), // Filtrar pacientes não excluídos
+        ),
       )
       .orderBy(patients.fullName);
   }
 
-  async getRecentPatientsByDoctor(doctorId: number, limit: number = 25): Promise<Patient[]> {
+  async getRecentPatientsByDoctor(
+    doctorId: number,
+    limit: number = 25,
+  ): Promise<Patient[]> {
     return await db
       .select({
         id: patients.id,
@@ -1158,8 +1474,8 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(doctorPatients.doctorId, doctorId),
           eq(doctorPatients.isActive, true),
-          eq(patients.isDeleted, false) // Filtrar pacientes não excluídos
-        )
+          eq(patients.isDeleted, false), // Filtrar pacientes não excluídos
+        ),
       )
       .orderBy(desc(doctorPatients.associatedAt))
       .limit(limit);
@@ -1173,24 +1489,31 @@ export class DatabaseStorage implements IStorage {
     return patient;
   }
 
-  async createPatient(insertPatient: InsertPatient, userId?: number): Promise<Patient> {
+  async createPatient(
+    insertPatient: InsertPatient,
+    userId?: number,
+  ): Promise<Patient> {
     const [patient] = await db
       .insert(patients)
       .values({
         ...insertPatient,
-        createdBy: userId || null
+        createdBy: userId || null,
       })
       .returning();
     return patient;
   }
 
-  async updatePatient(id: number, patientData: Partial<InsertPatient>, userId?: number): Promise<Patient | undefined> {
+  async updatePatient(
+    id: number,
+    patientData: Partial<InsertPatient>,
+    userId?: number,
+  ): Promise<Patient | undefined> {
     const [updated] = await db
       .update(patients)
       .set({
         ...patientData,
         updatedAt: new Date(),
-        updatedBy: userId || null
+        updatedBy: userId || null,
       })
       .where(eq(patients.id, id))
       .returning();
@@ -1200,22 +1523,27 @@ export class DatabaseStorage implements IStorage {
   async deletePatient(id: number, userId?: number): Promise<boolean> {
     try {
       console.log(`[SOFT DELETE] Marcando paciente ID ${id} como excluído...`);
-      
+
       // Soft delete: marcar como excluído ao invés de remover do banco
       const [result] = await db
         .update(patients)
-        .set({ 
+        .set({
           isDeleted: true,
           deletedAt: new Date(),
-          deletedBy: userId || null
+          deletedBy: userId || null,
         })
         .where(eq(patients.id, id))
         .returning();
-      
-      console.log(`[SOFT DELETE] Paciente ID ${id} marcado como excluído por usuário ${userId || 'desconhecido'}`);
+
+      console.log(
+        `[SOFT DELETE] Paciente ID ${id} marcado como excluído por usuário ${userId || "desconhecido"}`,
+      );
       return !!result;
     } catch (error) {
-      console.error(`[SOFT DELETE] Erro ao marcar paciente ID ${id} como excluído:`, error);
+      console.error(
+        `[SOFT DELETE] Erro ao marcar paciente ID ${id} como excluído:`,
+        error,
+      );
       return false;
     }
   }
@@ -1223,18 +1551,18 @@ export class DatabaseStorage implements IStorage {
   async restorePatient(id: number): Promise<boolean> {
     try {
       console.log(`[RESTORE] Restaurando paciente ID ${id}...`);
-      
+
       // Restaurar paciente: remover marcação de exclusão
       const [result] = await db
         .update(patients)
-        .set({ 
+        .set({
           isDeleted: false,
           deletedAt: null,
-          deletedBy: null
+          deletedBy: null,
         })
         .where(eq(patients.id, id))
         .returning();
-      
+
       console.log(`[RESTORE] Paciente ID ${id} restaurado com sucesso`);
       return !!result;
     } catch (error) {
@@ -1253,7 +1581,10 @@ export class DatabaseStorage implements IStorage {
 
   // OPME item methods
   async getOpmeItem(id: number): Promise<OpmeItem | undefined> {
-    const [item] = await db.select().from(opmeItems).where(eq(opmeItems.id, id));
+    const [item] = await db
+      .select()
+      .from(opmeItems)
+      .where(eq(opmeItems.id, id));
     return item || undefined;
   }
 
@@ -1262,66 +1593,81 @@ export class DatabaseStorage implements IStorage {
   }
 
   async searchOpmeItems(term: string): Promise<OpmeItem[]> {
-    // Buscar todos os materiais OPME e filtrar usando normalização  
-    const allOpmeItems = await db.select().from(opmeItems).orderBy(opmeItems.technicalName);
-    
+    // Buscar todos os materiais OPME e filtrar usando normalização
+    const allOpmeItems = await db
+      .select()
+      .from(opmeItems)
+      .orderBy(opmeItems.technicalName);
+
     // Normalizar o termo de busca
     const normalizedTerm = normalizeText(term);
-    
+
     // Filtrar usando normalização de texto
-    const filteredOpmeItems = allOpmeItems.filter(item => {
+    const filteredOpmeItems = allOpmeItems.filter((item) => {
       const normalizedTechnicalName = normalizeText(item.technicalName);
       const normalizedCommercialName = normalizeText(item.commercialName);
       const normalizedManufacturerName = normalizeText(item.manufacturerName);
-      const normalizedAnvisaNumber = normalizeText(item.anvisaRegistrationNumber);
+      const normalizedAnvisaNumber = normalizeText(
+        item.anvisaRegistrationNumber,
+      );
       const normalizedProcessNumber = normalizeText(item.processNumber);
-      const normalizedRegistrationHolder = normalizeText(item.registrationHolder);
-      
-      return normalizedTechnicalName.includes(normalizedTerm) || 
-             normalizedCommercialName.includes(normalizedTerm) || 
-             normalizedManufacturerName.includes(normalizedTerm) ||
-             normalizedAnvisaNumber.includes(normalizedTerm) ||
-             normalizedProcessNumber.includes(normalizedTerm) ||
-             normalizedRegistrationHolder.includes(normalizedTerm);
+      const normalizedRegistrationHolder = normalizeText(
+        item.registrationHolder,
+      );
+
+      return (
+        normalizedTechnicalName.includes(normalizedTerm) ||
+        normalizedCommercialName.includes(normalizedTerm) ||
+        normalizedManufacturerName.includes(normalizedTerm) ||
+        normalizedAnvisaNumber.includes(normalizedTerm) ||
+        normalizedProcessNumber.includes(normalizedTerm) ||
+        normalizedRegistrationHolder.includes(normalizedTerm)
+      );
     });
-    
+
     // Retornar apenas os primeiros 30 resultados
     return filteredOpmeItems.slice(0, 30);
   }
-  
+
   // Supplier methods
   async getSupplier(id: number): Promise<Supplier | undefined> {
-    const [supplier] = await db.select().from(suppliers).where(eq(suppliers.id, id));
+    const [supplier] = await db
+      .select()
+      .from(suppliers)
+      .where(eq(suppliers.id, id));
     return supplier || undefined;
   }
 
   async getSuppliers(): Promise<Supplier[]> {
     return await db.select().from(suppliers).where(eq(suppliers.active, true));
   }
-  
+
   async searchSuppliers(term: string): Promise<Supplier[]> {
     console.log(`Buscando fornecedores com o termo "${term}"`);
-    
+
     try {
       const searchTerm = `%${term}%`;
-      
-      // Busca fornecedores por nome da empresa, nome fantasia ou CNPJ 
-      const searchResults = await db.select()
+
+      // Busca fornecedores por nome da empresa, nome fantasia ou CNPJ
+      const searchResults = await db
+        .select()
         .from(suppliers)
         .where(
           and(
             eq(suppliers.active, true),
             or(
               ilike(suppliers.company_name, searchTerm),
-              ilike(suppliers.trade_name || '', searchTerm),
-              ilike(suppliers.cnpj, searchTerm)
-            )
-          )
+              ilike(suppliers.trade_name || "", searchTerm),
+              ilike(suppliers.cnpj, searchTerm),
+            ),
+          ),
         )
         .orderBy(suppliers.company_name)
         .limit(10);
-      
-      console.log(`Encontrados ${searchResults.length} fornecedores ativos para o termo "${term}"`);
+
+      console.log(
+        `Encontrados ${searchResults.length} fornecedores ativos para o termo "${term}"`,
+      );
       return searchResults;
     } catch (error) {
       console.error("Erro na busca de fornecedores:", error);
@@ -1339,67 +1685,67 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOpmeItem(insertItem: InsertOpmeItem): Promise<OpmeItem> {
-    const [item] = await db
-      .insert(opmeItems)
-      .values(insertItem)
-      .returning();
+    const [item] = await db.insert(opmeItems).values(insertItem).returning();
     return item;
   }
-  
-  async updateOpmeItem(id: number, updates: Partial<InsertOpmeItem>): Promise<OpmeItem | undefined> {
+
+  async updateOpmeItem(
+    id: number,
+    updates: Partial<InsertOpmeItem>,
+  ): Promise<OpmeItem | undefined> {
     const [updated] = await db
       .update(opmeItems)
       .set({
         ...updates,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(opmeItems.id, id))
       .returning();
     return updated;
   }
-  
+
   async deleteOpmeItem(id: number): Promise<boolean> {
     try {
       // Primeiro excluir todas as relações com fornecedores
-      await db
-        .delete(opmeSuppliers)
-        .where(eq(opmeSuppliers.opmeItemId, id));
-      
+      await db.delete(opmeSuppliers).where(eq(opmeSuppliers.opmeItemId, id));
+
       // Depois excluir o próprio item OPME
-      await db
-        .delete(opmeItems)
-        .where(eq(opmeItems.id, id));
+      await db.delete(opmeItems).where(eq(opmeItems.id, id));
       return true;
     } catch (error) {
-      console.error('Erro ao excluir item OPME:', error);
+      console.error("Erro ao excluir item OPME:", error);
       return false;
     }
   }
-  
+
   // Métodos para gerenciamento de relações entre OPMEs e fornecedores
-  async getOpmeSuppliers(opmeItemId?: number, supplierId?: number, active?: boolean): Promise<OpmeSupplier[]> {
+  async getOpmeSuppliers(
+    opmeItemId?: number,
+    supplierId?: number,
+    active?: boolean,
+  ): Promise<OpmeSupplier[]> {
     try {
       let query = db.select().from(opmeSuppliers);
-      
+
       if (opmeItemId !== undefined) {
         query = query.where(eq(opmeSuppliers.opmeItemId, opmeItemId));
       }
-      
+
       if (supplierId !== undefined) {
         query = query.where(eq(opmeSuppliers.supplierId, supplierId));
       }
-      
+
       if (active !== undefined) {
         query = query.where(eq(opmeSuppliers.active, active));
       }
-      
+
       return await query;
     } catch (error) {
-      console.error('Erro ao buscar relações OPME-Fornecedor:', error);
+      console.error("Erro ao buscar relações OPME-Fornecedor:", error);
       return [];
     }
   }
-  
+
   async getOpmeSupplier(id: number): Promise<OpmeSupplier | undefined> {
     try {
       const [relation] = await db
@@ -1408,45 +1754,53 @@ export class DatabaseStorage implements IStorage {
         .where(eq(opmeSuppliers.id, id));
       return relation;
     } catch (error) {
-      console.error('Erro ao buscar relação OPME-Fornecedor:', error);
+      console.error("Erro ao buscar relação OPME-Fornecedor:", error);
       return undefined;
     }
   }
-  
-  async getOpmeItemWithSuppliers(opmeItemId: number): Promise<{opmeItem: OpmeItem, suppliers: OpmeSupplier[]}> {
+
+  async getOpmeItemWithSuppliers(
+    opmeItemId: number,
+  ): Promise<{ opmeItem: OpmeItem; suppliers: OpmeSupplier[] }> {
     try {
       const opmeItem = await this.getOpmeItem(opmeItemId);
-      
+
       if (!opmeItem) {
         throw new Error(`Item OPME com ID ${opmeItemId} não encontrado`);
       }
-      
+
       const suppliers = await this.getOpmeSuppliers(opmeItemId);
-      
+
       return {
         opmeItem,
-        suppliers
+        suppliers,
       };
     } catch (error) {
-      console.error('Erro ao buscar item OPME com fornecedores:', error);
+      console.error("Erro ao buscar item OPME com fornecedores:", error);
       throw error;
     }
   }
-  
-  async createOpmeSupplier(insertOpmeSupplier: InsertOpmeSupplier): Promise<OpmeSupplier> {
+
+  async createOpmeSupplier(
+    insertOpmeSupplier: InsertOpmeSupplier,
+  ): Promise<OpmeSupplier> {
     try {
       // Verificar se o OPME existe
       const opmeItem = await this.getOpmeItem(insertOpmeSupplier.opmeItemId);
       if (!opmeItem) {
-        throw new Error(`Item OPME com ID ${insertOpmeSupplier.opmeItemId} não encontrado`);
+        throw new Error(
+          `Item OPME com ID ${insertOpmeSupplier.opmeItemId} não encontrado`,
+        );
       }
-      
+
       // Verificar se o fornecedor existe
       const supplier = await this.getSupplier(insertOpmeSupplier.supplierId);
       if (!supplier) {
-        throw new Error(`Fornecedor com ID ${insertOpmeSupplier.supplierId} não encontrado`);
+        throw new Error(
+          `Fornecedor com ID ${insertOpmeSupplier.supplierId} não encontrado`,
+        );
       }
-      
+
       // Se estiver marcando como preferencial, desmarcar outros como preferenciais
       if (insertOpmeSupplier.isPreferred) {
         await db
@@ -1455,32 +1809,35 @@ export class DatabaseStorage implements IStorage {
           .where(
             and(
               eq(opmeSuppliers.opmeItemId, insertOpmeSupplier.opmeItemId),
-              eq(opmeSuppliers.isPreferred, true)
-            )
+              eq(opmeSuppliers.isPreferred, true),
+            ),
           );
       }
-      
+
       // Criar a relação
       const [relation] = await db
         .insert(opmeSuppliers)
         .values(insertOpmeSupplier)
         .returning();
-      
+
       return relation;
     } catch (error) {
-      console.error('Erro ao criar relação OPME-Fornecedor:', error);
+      console.error("Erro ao criar relação OPME-Fornecedor:", error);
       throw error;
     }
   }
-  
-  async updateOpmeSupplier(id: number, updates: Partial<InsertOpmeSupplier>): Promise<OpmeSupplier | undefined> {
+
+  async updateOpmeSupplier(
+    id: number,
+    updates: Partial<InsertOpmeSupplier>,
+  ): Promise<OpmeSupplier | undefined> {
     try {
       // Verificar se a relação existe
       const relation = await this.getOpmeSupplier(id);
       if (!relation) {
         return undefined;
       }
-      
+
       // Se estiver marcando como preferencial, desmarcar outros como preferenciais
       if (updates.isPreferred) {
         await db
@@ -1490,48 +1847,52 @@ export class DatabaseStorage implements IStorage {
             and(
               eq(opmeSuppliers.opmeItemId, relation.opmeItemId),
               eq(opmeSuppliers.isPreferred, true),
-              ne(opmeSuppliers.id, id)
-            )
+              ne(opmeSuppliers.id, id),
+            ),
           );
       }
-      
+
       // Atualizar a relação
       const [updated] = await db
         .update(opmeSuppliers)
         .set({
           ...updates,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(opmeSuppliers.id, id))
         .returning();
-      
+
       return updated;
     } catch (error) {
-      console.error('Erro ao atualizar relação OPME-Fornecedor:', error);
+      console.error("Erro ao atualizar relação OPME-Fornecedor:", error);
       return undefined;
     }
   }
-  
+
   async deleteOpmeSupplier(id: number): Promise<boolean> {
     try {
-      await db
-        .delete(opmeSuppliers)
-        .where(eq(opmeSuppliers.id, id));
+      await db.delete(opmeSuppliers).where(eq(opmeSuppliers.id, id));
       return true;
     } catch (error) {
-      console.error('Erro ao excluir relação OPME-Fornecedor:', error);
+      console.error("Erro ao excluir relação OPME-Fornecedor:", error);
       return false;
     }
   }
 
   // Procedure methods
   async getProcedure(id: number): Promise<Procedure | undefined> {
-    const [procedure] = await db.select().from(procedures).where(eq(procedures.id, id));
+    const [procedure] = await db
+      .select()
+      .from(procedures)
+      .where(eq(procedures.id, id));
     return procedure || undefined;
   }
 
   async getProcedures(): Promise<Procedure[]> {
-    return await db.select().from(procedures).where(eq(procedures.active, true));
+    return await db
+      .select()
+      .from(procedures)
+      .where(eq(procedures.active, true));
   }
 
   async getProcedureById(id: number): Promise<Procedure | undefined> {
@@ -1541,14 +1902,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(procedures.id, id));
     return procedure;
   }
-  
+
   async searchProcedures(term: string): Promise<Procedure[]> {
     // Transformar o termo para minúsculas para uma busca case-insensitive mais fácil
     const searchTerm = `%${term.toLowerCase()}%`;
     console.log("Pesquisando procedimentos com termo:", searchTerm);
-    
+
     // Buscar por código ou nome/descrição que contenham o termo
-    const results = await db.select()
+    const results = await db
+      .select()
       .from(procedures)
       .where(
         and(
@@ -1556,13 +1918,15 @@ export class DatabaseStorage implements IStorage {
           or(
             ilike(procedures.code, searchTerm),
             ilike(procedures.name, searchTerm),
-            ilike(procedures.description, searchTerm)
-          )
-        )
+            ilike(procedures.description, searchTerm),
+          ),
+        ),
       )
       .limit(10);
-    
-    console.log(`Encontrados ${results.length} procedimentos para o termo "${term}"`);
+
+    console.log(
+      `Encontrados ${results.length} procedimentos para o termo "${term}"`,
+    );
     return results;
   }
 
@@ -1574,18 +1938,25 @@ export class DatabaseStorage implements IStorage {
     return procedure;
   }
 
-  async updateProcedure(id: number, procedureData: Partial<InsertProcedure>): Promise<Procedure | undefined> {
+  async updateProcedure(
+    id: number,
+    procedureData: Partial<InsertProcedure>,
+  ): Promise<Procedure | undefined> {
     try {
       // Se o código está sendo atualizado, verificar se já existe em outro procedimento
       if (procedureData.code) {
         const existingProcedure = await db
           .select()
           .from(procedures)
-          .where(and(eq(procedures.code, procedureData.code), ne(procedures.id, id)))
+          .where(
+            and(eq(procedures.code, procedureData.code), ne(procedures.id, id)),
+          )
           .limit(1);
-        
+
         if (existingProcedure.length > 0) {
-          throw new Error(`Código ${procedureData.code} já está sendo usado por outro procedimento`);
+          throw new Error(
+            `Código ${procedureData.code} já está sendo usado por outro procedimento`,
+          );
         }
       }
 
@@ -1593,13 +1964,13 @@ export class DatabaseStorage implements IStorage {
         .update(procedures)
         .set({
           ...procedureData,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(procedures.id, id))
         .returning();
       return updated;
     } catch (error) {
-      console.error('Erro ao atualizar procedimento:', error);
+      console.error("Erro ao atualizar procedimento:", error);
       if (error instanceof Error) {
         throw error;
       }
@@ -1615,17 +1986,23 @@ export class DatabaseStorage implements IStorage {
         .from(medicalOrders)
         .where(
           exists(
-            db.select().from(medicalOrderProcedures)
-              .where(and(
-                eq(medicalOrderProcedures.orderId, medicalOrders.id),
-                eq(medicalOrderProcedures.procedureId, id)
-              ))
-          )
+            db
+              .select()
+              .from(medicalOrderProcedures)
+              .where(
+                and(
+                  eq(medicalOrderProcedures.orderId, medicalOrders.id),
+                  eq(medicalOrderProcedures.procedureId, id),
+                ),
+              ),
+          ),
         )
         .limit(1);
-      
+
       if (ordersUsingProcedure.length > 0) {
-        throw new Error('Não é possível excluir este procedimento pois ele está sendo usado em pedidos médicos');
+        throw new Error(
+          "Não é possível excluir este procedimento pois ele está sendo usado em pedidos médicos",
+        );
       }
 
       // Em vez de deletar, marcar como inativo
@@ -1635,7 +2012,7 @@ export class DatabaseStorage implements IStorage {
         .where(eq(procedures.id, id));
       return true;
     } catch (error) {
-      console.error('Erro ao excluir procedimento:', error);
+      console.error("Erro ao excluir procedimento:", error);
       if (error instanceof Error) {
         throw error;
       }
@@ -1647,50 +2024,54 @@ export class DatabaseStorage implements IStorage {
   async getMedicalOrder(id: number): Promise<MedicalOrder | undefined> {
     console.log("=== GET MEDICAL ORDER ===");
     console.log("Order ID:", id, "Type:", typeof id);
-    
+
     try {
-      // Use simple select all to avoid field mapping issues  
+      // Use simple select all to avoid field mapping issues
       const [order] = await db
         .select()
         .from(medicalOrders)
         .where(eq(medicalOrders.id, id));
-      
+
       console.log("Raw order from database:", order);
-      
+
       if (!order) {
         console.log("Order not found for ID:", id);
         return undefined;
       }
-      
+
       console.log("Order found successfully");
-      
+
       // Handle attachments parsing
       let attachments = order.attachments;
-      if (attachments && typeof attachments === 'string') {
+      if (attachments && typeof attachments === "string") {
         try {
           attachments = JSON.parse(attachments);
         } catch (e) {
-          console.error('Erro ao fazer parse dos attachments:', e);
+          console.error("Erro ao fazer parse dos attachments:", e);
           attachments = [];
         }
       }
-      
+
       // Return order with correct field mapping (Drizzle automatically maps to camelCase)
       return {
         ...order,
-        attachments
+        attachments,
       };
     } catch (error) {
       console.error("=== ERROR IN getMedicalOrder ===");
       console.error("Error:", error.message);
       console.error("Stack:", error.stack);
-      
+
       // Handle specific database errors
-      if (error.message && error.message.includes("column") && error.message.includes("does not exist")) {
+      if (
+        error.message &&
+        error.message.includes("column") &&
+        error.message.includes("does not exist")
+      ) {
         console.error("DATABASE COLUMN ERROR - using only valid fields");
         throw new Error("Campo não existe no banco de dados");
       }
-      
+
       throw error;
     }
   }
@@ -1704,114 +2085,119 @@ export class DatabaseStorage implements IStorage {
   }): Promise<MedicalOrder[]> {
     try {
       console.log("Buscando pedidos médicos com filtros:", filters);
-      
+
       // Construir condições dinâmicas baseadas nos filtros
       let conditions = [];
-      
+
       if (filters?.userId) {
         conditions.push(eq(medicalOrders.userId, filters.userId));
       }
-      
+
       if (filters?.patientId) {
         conditions.push(eq(medicalOrders.patientId, filters.patientId));
       }
-      
+
       if (filters?.hospitalId) {
         conditions.push(eq(medicalOrders.hospitalId, filters.hospitalId));
       }
-      
+
       if (filters?.statusId) {
         conditions.push(eq(medicalOrders.statusId, filters.statusId));
       }
-      
+
       // Usar Drizzle com campos básicos primeiro
-      let query = db.select({
-        id: medicalOrders.id,
-        patientId: medicalOrders.patientId,
-        userId: medicalOrders.userId,
-        hospitalId: medicalOrders.hospitalId,
-        procedureDate: medicalOrders.procedureDate,
-        clinicalIndication: medicalOrders.clinicalIndication,
-        clinicalJustification: medicalOrders.clinicalJustification,
-        procedureLaterality: medicalOrders.procedureLaterality,
-        procedureType: medicalOrders.procedureType,
-        additionalNotes: medicalOrders.additionalNotes,
-        complexity: medicalOrders.complexity,
-        createdAt: medicalOrders.createdAt,
-        updatedAt: medicalOrders.updatedAt,
-        statusId: medicalOrders.statusId,
-        previousStatusId: medicalOrders.previousStatusId,
-        receivedValue: medicalOrders.receivedValue,
-        attachments: medicalOrders.attachments
-      }).from(medicalOrders);
-      
+      let query = db
+        .select({
+          id: medicalOrders.id,
+          patientId: medicalOrders.patientId,
+          userId: medicalOrders.userId,
+          hospitalId: medicalOrders.hospitalId,
+          procedureDate: medicalOrders.procedureDate,
+          clinicalIndication: medicalOrders.clinicalIndication,
+          clinicalJustification: medicalOrders.clinicalJustification,
+          procedureLaterality: medicalOrders.procedureLaterality,
+          procedureType: medicalOrders.procedureType,
+          additionalNotes: medicalOrders.additionalNotes,
+          complexity: medicalOrders.complexity,
+          createdAt: medicalOrders.createdAt,
+          updatedAt: medicalOrders.updatedAt,
+          statusId: medicalOrders.statusId,
+          previousStatusId: medicalOrders.previousStatusId,
+          receivedValue: medicalOrders.receivedValue,
+          attachments: medicalOrders.attachments,
+        })
+        .from(medicalOrders);
+
       if (conditions.length > 0) {
         query = query.where(and(...conditions));
       }
-      
+
       const orders = await query;
       console.log(`Encontrados ${orders.length} pedidos médicos`);
-      
+
       // Buscar informações de status da tabela order_statuses
       const statusInfos = await db.select().from(orderStatuses);
-      const statusMap = statusInfos.reduce((acc, status) => {
-        acc[status.id] = status;
-        return acc;
-      }, {} as Record<number, any>);
-      
-      
+      const statusMap = statusInfos.reduce(
+        (acc, status) => {
+          acc[status.id] = status;
+          return acc;
+        },
+        {} as Record<number, any>,
+      );
+
       // Mapeamento manual baseado na tabela order_statuses real (mantido para compatibilidade)
       const statusMapping = {
-        1: 'em_preenchimento',   // Incompleta
-        2: 'em_avaliacao',       // Em análise
-        3: 'aceito',             // Autorizado  
-        4: 'autorizado_parcial', // Autorizado Parcial
-        5: 'pendencia',          // Pendência
-        6: 'cirurgia_realizada', // Cirurgia realizada
-        7: 'cancelado',          // Cancelada
-        8: 'aguardando_envio',   // Aguardando Envio
-        9: 'recebido',           // Recebido
-        10: 'aguardando_recurso' // Aguardando Recurso
+        1: "em_preenchimento", // Incompleta
+        2: "em_avaliacao", // Em análise
+        3: "aceito", // Autorizado
+        4: "autorizado_parcial", // Autorizado Parcial
+        5: "pendencia", // Pendência
+        6: "cirurgia_realizada", // Cirurgia realizada
+        7: "cancelado", // Cancelada
+        8: "aguardando_envio", // Aguardando Envio
+        9: "recebido", // Recebido
+        10: "aguardando_recurso", // Aguardando Recurso
       };
-      
+
       // Adicionar campos de status baseado no statusId usando cache de cores
-      const ordersWithStatus = orders.map(order => {
+      const ordersWithStatus = orders.map((order) => {
         const statusInfo = statusMap[order.statusId];
         const cachedStatus = statusColorCache[order.statusId];
-        const statusColor = statusInfo?.color || '#EEEEEE';
-        const colorClasses = cachedStatus?.classes || hexToTailwindClasses(statusColor);
-        
-        
-        
+        const statusColor = statusInfo?.color || "#EEEEEE";
+        const colorClasses =
+          cachedStatus?.classes || hexToTailwindClasses(statusColor);
+
         // Correção específica para status ID 10
         if (order.statusId === 10 && !statusInfo) {
           return {
             ...order,
-            status: 'aguardando_recurso',
-            statusCode: 'aguardando_recurso',
-            statusName: 'Aguardando Recurso',
-            statusColor: '#EF9A9A',
-            statusIcon: 'file-text',
+            status: "aguardando_recurso",
+            statusCode: "aguardando_recurso",
+            statusName: "Aguardando Recurso",
+            statusColor: "#EF9A9A",
+            statusIcon: "file-text",
             statusColorClasses: {
-              background: 'bg-gradient-to-r from-red-50 to-red-100/50',
-              iconBg: 'bg-red-200',
-              iconText: 'text-red-700'
-            }
+              background: "bg-gradient-to-r from-red-50 to-red-100/50",
+              iconBg: "bg-red-200",
+              iconText: "text-red-700",
+            },
           };
         }
-        
+
         return {
           ...order,
-          status: statusMapping[order.statusId as keyof typeof statusMapping] || 'nao_especificado',
+          status:
+            statusMapping[order.statusId as keyof typeof statusMapping] ||
+            "nao_especificado",
           statusCode: statusInfo?.code || null,
-          statusName: statusInfo?.name || 'Não especificado',
+          statusName: statusInfo?.name || "Não especificado",
           statusColor: statusColor,
           statusIcon: statusInfo?.icon || null,
           // Adicionar classes CSS geradas automaticamente
-          statusColorClasses: colorClasses
+          statusColorClasses: colorClasses,
         };
       });
-      
+
       return ordersWithStatus;
     } catch (error) {
       console.error("Erro ao buscar pedidos médicos:", error);
@@ -1819,37 +2205,84 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createMedicalOrder(insertOrder: InsertMedicalOrder): Promise<MedicalOrder> {
+  async createMedicalOrder(
+    insertOrder: InsertMedicalOrder,
+  ): Promise<MedicalOrder> {
     try {
       console.log("🔍 STORAGE.TS - INÍCIO createMedicalOrder");
-      console.log("🔍 STORAGE.TS - Tipo do parâmetro recebido:", typeof insertOrder);
-      console.log("🔍 STORAGE.TS - Dados brutos recebidos:", JSON.stringify(insertOrder, null, 2));
+      console.log(
+        "🔍 STORAGE.TS - Tipo do parâmetro recebido:",
+        typeof insertOrder,
+      );
+      console.log(
+        "🔍 STORAGE.TS - Dados brutos recebidos:",
+        JSON.stringify(insertOrder, null, 2),
+      );
       console.log("🔍 STORAGE.TS - Verificação individual de campos:");
-      console.log("  - insertOrder.patientId:", insertOrder.patientId, "(tipo:", typeof insertOrder.patientId, ")");
-      console.log("  - insertOrder.userId:", insertOrder.userId, "(tipo:", typeof insertOrder.userId, ")");
-      console.log("  - insertOrder.hospitalId:", insertOrder.hospitalId, "(tipo:", typeof insertOrder.hospitalId, ")");
-      console.log("🔍 STORAGE.TS - Campos presentes no objeto:", Object.keys(insertOrder));
+      console.log(
+        "  - insertOrder.patientId:",
+        insertOrder.patientId,
+        "(tipo:",
+        typeof insertOrder.patientId,
+        ")",
+      );
+      console.log(
+        "  - insertOrder.userId:",
+        insertOrder.userId,
+        "(tipo:",
+        typeof insertOrder.userId,
+        ")",
+      );
+      console.log(
+        "  - insertOrder.hospitalId:",
+        insertOrder.hospitalId,
+        "(tipo:",
+        typeof insertOrder.hospitalId,
+        ")",
+      );
+      console.log(
+        "🔍 STORAGE.TS - Campos presentes no objeto:",
+        Object.keys(insertOrder),
+      );
       console.log("🔍 STORAGE.TS - insertOrder completo:", insertOrder);
-      
+
       // Se statusId não for fornecido, define como 1 (Incompleta)
       const orderData = {
         ...insertOrder,
         statusId: insertOrder.statusId || 1,
       };
-      
+
       console.log("🔍 STORAGE.TS - orderData após spread de insertOrder:");
       console.log("orderData:", JSON.stringify(orderData, null, 2));
       console.log("🔍 STORAGE.TS - Verificação de campos após spread:");
-      console.log("  - orderData.patientId:", orderData.patientId, "(tipo:", typeof orderData.patientId, ")");
-      console.log("  - orderData.userId:", orderData.userId, "(tipo:", typeof orderData.userId, ")");
-      console.log("  - orderData.hospitalId:", orderData.hospitalId, "(tipo:", typeof orderData.hospitalId, ")");
-      
+      console.log(
+        "  - orderData.patientId:",
+        orderData.patientId,
+        "(tipo:",
+        typeof orderData.patientId,
+        ")",
+      );
+      console.log(
+        "  - orderData.userId:",
+        orderData.userId,
+        "(tipo:",
+        typeof orderData.userId,
+        ")",
+      );
+      console.log(
+        "  - orderData.hospitalId:",
+        orderData.hospitalId,
+        "(tipo:",
+        typeof orderData.hospitalId,
+        ")",
+      );
+
       // Garantir que arrays vazios sejam inicializados corretamente para evitar erros SQL
       // e ajustar os tipos de dados para compatibilidade com o banco
       // Garantimos que utilizamos apenas o campo statusCode
       // Já não é necessário remover o status pois ele não deve existir no objeto
       const orderDataWithoutStatus = orderData;
-      
+
       // CORREÇÃO: Usar APENAS os nomes exatos das colunas do banco de dados
       // As consultas SQL devem usar snake_case para os campos, não camelCase
       // Verificar se os dados chegaram corretamente
@@ -1858,30 +2291,40 @@ export class DatabaseStorage implements IStorage {
         userId: orderData.userId,
         hospitalId: orderData.hospitalId,
         patientIdValue: orderData.patientId,
-        userIdValue: orderData.userId
+        userIdValue: orderData.userId,
       });
-      
+
       const sanitizedOrderData = {
         // Campos básicos do pedido - garantir que não sejam null
-        patient_id: orderData.patientId ? Number(orderData.patientId) : (() => { 
-          console.error("❌ ERRO: patient_id é obrigatório mas recebido:", orderData.patientId);
-          throw new Error("patient_id é obrigatório"); 
-        })(),
-        user_id: orderData.userId ? Number(orderData.userId) : (() => { 
-          console.error("❌ ERRO: user_id é obrigatório mas recebido:", orderData.userId);
-          throw new Error("user_id é obrigatório"); 
-        })(),
+        patient_id: orderData.patientId
+          ? Number(orderData.patientId)
+          : (() => {
+              console.error(
+                "❌ ERRO: patient_id é obrigatório mas recebido:",
+                orderData.patientId,
+              );
+              throw new Error("patient_id é obrigatório");
+            })(),
+        user_id: orderData.userId
+          ? Number(orderData.userId)
+          : (() => {
+              console.error(
+                "❌ ERRO: user_id é obrigatório mas recebido:",
+                orderData.userId,
+              );
+              throw new Error("user_id é obrigatório");
+            })(),
         hospital_id: orderData.hospitalId ? Number(orderData.hospitalId) : null,
         procedure_date: orderData.procedureDate || null,
         clinical_indication: orderData.clinicalIndication || "A ser preenchido",
         status_code: orderData.statusCode || "em_preenchimento",
-        
+
         // Campos de lateralidade e diagnóstico
         procedure_laterality: orderData.procedureLaterality || null,
-        
+
         // Campos de procedimento CBHPM (já estão em snake_case)
         // Procedimentos gerenciados via medical_order_procedures
-        
+
         // Arrays (já estão em snake_case)
         // CIDs, OPME Items e Suppliers agora gerenciados via tabelas relacionais
         procedure_type: orderData.procedureType || "eletiva",
@@ -1889,24 +2332,31 @@ export class DatabaseStorage implements IStorage {
         additional_notes: orderData.additionalNotes || null,
         clinical_justification: orderData.clinicalJustification || null,
         received_value: orderData.receivedValue || null,
-        attachments: orderData.attachments || []
+        attachments: orderData.attachments || [],
       };
-      
-      console.log("🔍 Dados sanitizados para inserção:", JSON.stringify(sanitizedOrderData, null, 2));
+
+      console.log(
+        "🔍 Dados sanitizados para inserção:",
+        JSON.stringify(sanitizedOrderData, null, 2),
+      );
       console.log("🔍 Verificação final dos campos obrigatórios:", {
         patient_id: sanitizedOrderData.patient_id,
         user_id: sanitizedOrderData.user_id,
         clinical_indication: sanitizedOrderData.clinical_indication,
         patient_id_type: typeof sanitizedOrderData.patient_id,
-        user_id_type: typeof sanitizedOrderData.user_id
+        user_id_type: typeof sanitizedOrderData.user_id,
       });
-      
+
       // Validação final antes da inserção
       if (!sanitizedOrderData.patient_id || !sanitizedOrderData.user_id) {
-        console.error("❌ ERRO CRÍTICO: Campos obrigatórios são null/undefined na sanitização");
-        throw new Error(`Campos obrigatórios ausentes: patient_id=${sanitizedOrderData.patient_id}, user_id=${sanitizedOrderData.user_id}`);
+        console.error(
+          "❌ ERRO CRÍTICO: Campos obrigatórios são null/undefined na sanitização",
+        );
+        throw new Error(
+          `Campos obrigatórios ausentes: patient_id=${sanitizedOrderData.patient_id}, user_id=${sanitizedOrderData.user_id}`,
+        );
       }
-      
+
       // Primeiro, vamos ver que SQL o Drizzle está tentando gerar (apenas para debug)
       try {
         // Obter o SQL gerado sem executá-lo
@@ -1914,24 +2364,31 @@ export class DatabaseStorage implements IStorage {
           .insert(medicalOrders)
           .values(sanitizedOrderData)
           .toSQL();
-        
+
         console.log("SQL que seria gerado pelo Drizzle:", sqlQuery.sql);
         console.log("Parâmetros da query:", sqlQuery.params);
       } catch (err) {
         console.error("Erro ao gerar SQL via Drizzle:", err);
       }
-      
+
       // Agora vamos fazer uma inserção manual para garantir que os nomes das colunas estejam corretos
       console.log("Tentando inserção direta com a conexão do pool...");
       try {
         // Importante: aqui vamos garantir que todos os campos estão nos seus lugares corretos
         // Para debugar o erro envolvendo exam_image_url vs exam_images_url
         console.log("Verificando campos antes da inserção:");
-        console.log(`Existência do campo exam_images_url: ${sanitizedOrderData.hasOwnProperty('exam_images_url')}`);
-        console.log(`Valor de exam_images_url: ${JSON.stringify(sanitizedOrderData.exam_images_url)}`);
-        
+        console.log(
+          `Existência do campo exam_images_url: ${sanitizedOrderData.hasOwnProperty("exam_images_url")}`,
+        );
+        console.log(
+          `Valor de exam_images_url: ${JSON.stringify(sanitizedOrderData.exam_images_url)}`,
+        );
+
         // Usar Drizzle ORM com estrutura relacional atualizada
-        console.log("🔍 ANTES DO INSERT - sanitizedOrderData final:", sanitizedOrderData);
+        console.log(
+          "🔍 ANTES DO INSERT - sanitizedOrderData final:",
+          sanitizedOrderData,
+        );
         const result = await db
           .insert(medicalOrders)
           .values({
@@ -1948,10 +2405,10 @@ export class DatabaseStorage implements IStorage {
             additionalNotes: sanitizedOrderData.additional_notes,
             clinicalJustification: sanitizedOrderData.clinical_justification,
             receivedValue: sanitizedOrderData.received_value,
-            attachments: sanitizedOrderData.attachments
+            attachments: sanitizedOrderData.attachments,
           })
           .returning();
-        
+
         const newOrder = result[0];
         console.log("Pedido médico criado com sucesso:", newOrder);
         // Transformar manualmente para evitar erro da função ausente
@@ -1971,7 +2428,7 @@ export class DatabaseStorage implements IStorage {
           receivedValue: newOrder.receivedValue,
           attachments: newOrder.attachments,
           createdAt: newOrder.createdAt,
-          updatedAt: newOrder.updatedAt
+          updatedAt: newOrder.updatedAt,
         };
       } catch (dbError) {
         console.error("Erro na inserção via Drizzle:", dbError);
@@ -1983,124 +2440,156 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateMedicalOrder(id: number, updates: Partial<InsertMedicalOrder>): Promise<MedicalOrder | undefined> {
+  async updateMedicalOrder(
+    id: number,
+    updates: Partial<InsertMedicalOrder>,
+  ): Promise<MedicalOrder | undefined> {
     console.log("=== UPDATE MEDICAL ORDER SIMPLIFIED ===");
     console.log("ID:", id, "Updates:", updates);
 
     try {
       // Construir apenas os campos que foram fornecidos na atualização
       const updateData: any = {};
-      
-      if (updates.patientId !== undefined) updateData.patientId = updates.patientId;
+
+      if (updates.patientId !== undefined)
+        updateData.patientId = updates.patientId;
       if (updates.userId !== undefined) updateData.userId = updates.userId;
-      if (updates.hospitalId !== undefined) updateData.hospitalId = updates.hospitalId;
-      if (updates.clinicalIndication !== undefined) updateData.clinicalIndication = updates.clinicalIndication;
-      if (updates.clinical_indication !== undefined) updateData.clinicalIndication = updates.clinical_indication;
-      if (updates.clinicalJustification !== undefined) updateData.clinicalJustification = updates.clinicalJustification;
-      if (updates.clinical_justification !== undefined) updateData.clinicalJustification = updates.clinical_justification;
-      if (updates.procedureLaterality !== undefined) updateData.procedureLaterality = updates.procedureLaterality;
-      if (updates.procedureType !== undefined) updateData.procedureType = updates.procedureType;
-      if (updates.anatomicalRegionId !== undefined) updateData.anatomicalRegionId = updates.anatomicalRegionId;
-      if (updates.additionalNotes !== undefined) updateData.additionalNotes = updates.additionalNotes;
-      if (updates.additional_notes !== undefined) updateData.additionalNotes = updates.additional_notes;
-      if (updates.complexity !== undefined) updateData.complexity = updates.complexity;
-      if (updates.statusId !== undefined) updateData.statusId = updates.statusId;
-      if (updates.receivedValue !== undefined) updateData.receivedValue = updates.receivedValue;
+      if (updates.hospitalId !== undefined)
+        updateData.hospitalId = updates.hospitalId;
+      if (updates.clinicalIndication !== undefined)
+        updateData.clinicalIndication = updates.clinicalIndication;
+      if (updates.clinical_indication !== undefined)
+        updateData.clinicalIndication = updates.clinical_indication;
+      if (updates.clinicalJustification !== undefined)
+        updateData.clinicalJustification = updates.clinicalJustification;
+      if (updates.clinical_justification !== undefined)
+        updateData.clinicalJustification = updates.clinical_justification;
+      if (updates.procedureLaterality !== undefined)
+        updateData.procedureLaterality = updates.procedureLaterality;
+      if (updates.procedureType !== undefined)
+        updateData.procedureType = updates.procedureType;
+      if (updates.anatomicalRegionId !== undefined)
+        updateData.anatomicalRegionId = updates.anatomicalRegionId;
+      if (updates.additionalNotes !== undefined)
+        updateData.additionalNotes = updates.additionalNotes;
+      if (updates.additional_notes !== undefined)
+        updateData.additionalNotes = updates.additional_notes;
+      if (updates.complexity !== undefined)
+        updateData.complexity = updates.complexity;
+      if (updates.statusId !== undefined)
+        updateData.statusId = updates.statusId;
+      if (updates.receivedValue !== undefined)
+        updateData.receivedValue = updates.receivedValue;
       if (updates.attachments !== undefined) {
-        console.log("🔍 STORAGE - Atualizando attachments:", updates.attachments);
+        console.log(
+          "🔍 STORAGE - Atualizando attachments:",
+          updates.attachments,
+        );
         updateData.attachments = updates.attachments;
       }
-      if (updates.procedureDate !== undefined) updateData.procedureDate = updates.procedureDate;
-      
+      if (updates.procedureDate !== undefined)
+        updateData.procedureDate = updates.procedureDate;
+
       // Sempre atualizar timestamp
       updateData.updatedAt = new Date();
-      
+
       console.log("Fields to update:", Object.keys(updateData));
-      
+
       const [updatedOrder] = await db
         .update(medicalOrders)
         .set(updateData)
         .where(eq(medicalOrders.id, id))
         .returning();
-      
+
       if (!updatedOrder) {
         throw new Error("Pedido não encontrado ou não foi possível atualizar");
       }
-      
+
       console.log("Update successful:", updatedOrder.id);
       return updatedOrder;
-      
     } catch (error) {
       console.error("Erro ao atualizar pedido médico:", error);
       throw new Error("Erro ao atualizar pedido médico");
     }
   }
 
-  async updateMedicalOrderStatus(id: number, statusId: number): Promise<MedicalOrder | undefined> {
+  async updateMedicalOrderStatus(
+    id: number,
+    statusId: number,
+  ): Promise<MedicalOrder | undefined> {
     // Buscar o status_code baseado no statusId para manter compatibilidade
-    const status = await db.select().from(orderStatuses).where(eq(orderStatuses.id, statusId)).limit(1);
+    const status = await db
+      .select()
+      .from(orderStatuses)
+      .where(eq(orderStatuses.id, statusId))
+      .limit(1);
     const statusCode = status[0]?.code || "em_preenchimento";
 
     const [updatedOrder] = await db
       .update(medicalOrders)
-      .set({ 
+      .set({
         statusId,
         statusCode, // Manter por compatibilidade
-        updatedAt: new Date() 
+        updatedAt: new Date(),
       })
       .where(eq(medicalOrders.id, id))
       .returning();
-    
+
     return updatedOrder;
   }
 
   async deleteMedicalOrder(id: number): Promise<boolean> {
     try {
       console.log(`[Storage] Deletando pedido médico ID: ${id}`);
-      
+
       // Verificar se o pedido existe antes de deletar
       const existingOrder = await db
         .select({ id: medicalOrders.id, statusId: medicalOrders.statusId })
         .from(medicalOrders)
         .where(eq(medicalOrders.id, id))
         .limit(1);
-      
+
       if (existingOrder.length === 0) {
         console.log(`[Storage] Pedido médico ID ${id} não encontrado`);
         return false;
       }
-      
+
       // Validar que o pedido está em status "em_preenchimento" (statusId = 1)
       if (existingOrder[0].statusId !== 1) {
-        console.log(`[Storage] Pedido médico ID ${id} não pode ser deletado - Status: ${existingOrder[0].statusId}`);
+        console.log(
+          `[Storage] Pedido médico ID ${id} não pode ser deletado - Status: ${existingOrder[0].statusId}`,
+        );
         return false;
       }
-      
+
       // Deletar o pedido (CASCADE deletará automaticamente registros relacionados)
       const deletedRows = await db
         .delete(medicalOrders)
         .where(eq(medicalOrders.id, id));
-      
+
       const success = deletedRows.rowCount > 0;
-      
+
       if (success) {
         console.log(`[Storage] Pedido médico ID ${id} deletado com sucesso`);
       } else {
         console.log(`[Storage] Falha ao deletar pedido médico ID ${id}`);
       }
-      
+
       return success;
-      
     } catch (error) {
       console.error(`[Storage] Erro ao deletar pedido médico ID ${id}:`, error);
       return false;
     }
   }
 
-  async getMedicalOrderInProgressByUser(userId: number): Promise<MedicalOrder | undefined> {
+  async getMedicalOrderInProgressByUser(
+    userId: number,
+  ): Promise<MedicalOrder | undefined> {
     try {
-      console.log(`[Storage] Buscando pedido em andamento para o usuário ID: ${userId}`);
-      
+      console.log(
+        `[Storage] Buscando pedido em andamento para o usuário ID: ${userId}`,
+      );
+
       // Busca o pedido mais recente em preenchimento para o usuário
       const [order] = await db
         .select({
@@ -2119,22 +2608,25 @@ export class DatabaseStorage implements IStorage {
           updatedAt: medicalOrders.updatedAt,
           statusId: medicalOrders.statusId,
           receivedValue: medicalOrders.receivedValue,
-          attachments: medicalOrders.attachments
+          attachments: medicalOrders.attachments,
         })
         .from(medicalOrders)
-        .where(and(
-          eq(medicalOrders.userId, userId),
-          eq(medicalOrders.statusId, 1)
-        ))
+        .where(
+          and(eq(medicalOrders.userId, userId), eq(medicalOrders.statusId, 1)),
+        )
         .orderBy(desc(medicalOrders.updatedAt))
         .limit(1);
-      
+
       if (order) {
-        console.log(`[Storage] Pedido em andamento encontrado: ID ${order.id}, statusId: ${order.statusId}`);
+        console.log(
+          `[Storage] Pedido em andamento encontrado: ID ${order.id}, statusId: ${order.statusId}`,
+        );
       } else {
-        console.log(`[Storage] Nenhum pedido em andamento encontrado para o usuário ID: ${userId}`);
+        console.log(
+          `[Storage] Nenhum pedido em andamento encontrado para o usuário ID: ${userId}`,
+        );
       }
-      
+
       return order || undefined;
     } catch (error) {
       console.error("Erro ao buscar pedido em andamento:", error);
@@ -2146,7 +2638,7 @@ export class DatabaseStorage implements IStorage {
   // Campos retornados: id, patientId, userId, hospitalId, procedureDate, clinicalIndication,
   // clinicalJustification, procedureLaterality, procedureType, additionalNotes, complexity,
   // createdAt, updatedAt, statusId, receivedValue, attachments + hospitalName (JOIN)
-  // 
+  //
   // CONSIDERE usar versões otimizadas para casos específicos:
   // - getMedicalOrdersInProgressForPatientModal(): Para modal de escolha (10 campos)
   // - Criar nova função específica se precisar de subset diferente
@@ -2171,33 +2663,41 @@ export class DatabaseStorage implements IStorage {
           updatedAt: medicalOrders.updatedAt,
           statusId: medicalOrders.statusId,
           receivedValue: medicalOrders.receivedValue,
-          attachments: medicalOrders.attachments
+          attachments: medicalOrders.attachments,
         })
         .from(medicalOrders)
         .where(eq(medicalOrders.patientId, patientId))
         .orderBy(desc(medicalOrders.createdAt));
-      
+
       // Depois, buscamos informações adicionais de hospital para cada pedido
-      const ordersWithDetails = await Promise.all(orders.map(async (order) => {
-        const [hospital] = await db
-          .select({ name: hospitals.name })
-          .from(hospitals)
-          .where(eq(hospitals.id, order.hospitalId));
-        
-        return {
-          ...order,
-          hospitalName: hospital?.name
-        };
-      }));
-      
+      const ordersWithDetails = await Promise.all(
+        orders.map(async (order) => {
+          const [hospital] = await db
+            .select({ name: hospitals.name })
+            .from(hospitals)
+            .where(eq(hospitals.id, order.hospitalId));
+
+          return {
+            ...order,
+            hospitalName: hospital?.name,
+          };
+        }),
+      );
+
       return ordersWithDetails as MedicalOrder[];
     } catch (error) {
-      console.error("Erro ao buscar pedido em andamento para o paciente:", error);
+      console.error(
+        "Erro ao buscar pedido em andamento para o paciente:",
+        error,
+      );
       throw error;
     }
   }
 
-  async getMedicalOrdersInProgressForPatientModal(patientId: number, userId: number): Promise<any[]> {
+  async getMedicalOrdersInProgressForPatientModal(
+    patientId: number,
+    userId: number,
+  ): Promise<any[]> {
     try {
       // Query otimizada que retorna apenas os campos necessários para o modal
       const ordersWithDetails = await db
@@ -2216,15 +2716,19 @@ export class DatabaseStorage implements IStorage {
         .from(medicalOrders)
         .leftJoin(hospitals, eq(medicalOrders.hospitalId, hospitals.id))
         .leftJoin(patients, eq(medicalOrders.patientId, patients.id))
-        .where(and(
-          eq(medicalOrders.patientId, patientId),
-          eq(medicalOrders.userId, userId),
-          eq(medicalOrders.statusId, 1) // Apenas pedidos incompletos
-        ))
+        .where(
+          and(
+            eq(medicalOrders.patientId, patientId),
+            eq(medicalOrders.userId, userId),
+            eq(medicalOrders.statusId, 1), // Apenas pedidos incompletos
+          ),
+        )
         .orderBy(desc(medicalOrders.updatedAt));
-      
-      console.log(`[Storage] Encontrados ${ordersWithDetails.length} pedidos incompletos para modal (paciente: ${patientId}, médico: ${userId})`);
-      
+
+      console.log(
+        `[Storage] Encontrados ${ordersWithDetails.length} pedidos incompletos para modal (paciente: ${patientId}, médico: ${userId})`,
+      );
+
       return ordersWithDetails;
     } catch (error) {
       console.error("Erro ao buscar pedidos para modal:", error);
@@ -2241,22 +2745,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOrderItem(insertItem: InsertOrderItem): Promise<OrderItem> {
-    const [item] = await db
-      .insert(orderItems)
-      .values(insertItem)
-      .returning();
+    const [item] = await db.insert(orderItems).values(insertItem).returning();
     return item;
   }
 
   async deleteOrderItem(id: number): Promise<boolean> {
-    await db
-      .delete(orderItems)
-      .where(eq(orderItems.id, id));
+    await db.delete(orderItems).where(eq(orderItems.id, id));
     return true;
   }
 
   // Scanned document methods
-  async saveScannedDocument(insertDocument: InsertScannedDocument): Promise<ScannedDocument> {
+  async saveScannedDocument(
+    insertDocument: InsertScannedDocument,
+  ): Promise<ScannedDocument> {
     const [document] = await db
       .insert(scannedDocuments)
       .values(insertDocument)
@@ -2274,12 +2775,18 @@ export class DatabaseStorage implements IStorage {
 
   // Hospital methods
   async getHospital(id: number): Promise<Hospital | undefined> {
-    const [hospital] = await db.select().from(hospitals).where(eq(hospitals.id, id));
+    const [hospital] = await db
+      .select()
+      .from(hospitals)
+      .where(eq(hospitals.id, id));
     return hospital || undefined;
   }
 
   async getHospitalByCNPJ(cnpj: string): Promise<Hospital | undefined> {
-    const [hospital] = await db.select().from(hospitals).where(eq(hospitals.cnpj, cnpj));
+    const [hospital] = await db
+      .select()
+      .from(hospitals)
+      .where(eq(hospitals.cnpj, cnpj));
     return hospital || undefined;
   }
 
@@ -2303,24 +2810,27 @@ export class DatabaseStorage implements IStorage {
     return hospital;
   }
 
-  async updateHospital(id: number, hospitalData: any): Promise<Hospital | undefined> {
+  async updateHospital(
+    id: number,
+    hospitalData: any,
+  ): Promise<Hospital | undefined> {
     // Buscar hospital atual para verificar campos existentes
     const [currentHospital] = await db
       .select()
       .from(hospitals)
       .where(eq(hospitals.id, id));
-    
+
     if (!currentHospital) {
       console.error(`Hospital com ID ${id} não encontrado para atualização`);
       return undefined;
     }
-    
+
     console.log("Hospital atual:", currentHospital);
     console.log("Dados recebidos para atualização:", hospitalData);
-    
+
     // Convertemos os dados para o formato do banco de dados (snake_case)
     const dbData: any = {};
-    
+
     // Campos simples
     if (hospitalData.name !== undefined) dbData.name = hospitalData.name;
     if (hospitalData.cnpj !== undefined) dbData.cnpj = hospitalData.cnpj;
@@ -2328,56 +2838,70 @@ export class DatabaseStorage implements IStorage {
     if (hospitalData.cnes !== undefined) dbData.cnes = hospitalData.cnes;
     if (hospitalData.city !== undefined) dbData.city = hospitalData.city;
     if (hospitalData.cep !== undefined) dbData.cep = hospitalData.cep;
-    if (hospitalData.address !== undefined) dbData.address = hospitalData.address;
+    if (hospitalData.address !== undefined)
+      dbData.address = hospitalData.address;
     if (hospitalData.number !== undefined) dbData.number = hospitalData.number;
-    
+
     // Campos IBGE
-    if (hospitalData.ibge_state_code !== undefined) dbData.ibge_state_code = hospitalData.ibge_state_code;
-    if (hospitalData.ibge_city_code !== undefined) dbData.ibge_city_code = hospitalData.ibge_city_code;
-    
+    if (hospitalData.ibge_state_code !== undefined)
+      dbData.ibge_state_code = hospitalData.ibge_state_code;
+    if (hospitalData.ibge_city_code !== undefined)
+      dbData.ibge_city_code = hospitalData.ibge_city_code;
+
     // Campo especial - businessName/business_name (pode vir em qualquer um dos dois formatos)
     if (hospitalData.business_name !== undefined) {
       dbData.business_name = hospitalData.business_name;
-      console.log("Usando business_name do formato snake_case:", hospitalData.business_name);
+      console.log(
+        "Usando business_name do formato snake_case:",
+        hospitalData.business_name,
+      );
     } else if (hospitalData.businessName !== undefined) {
       dbData.business_name = hospitalData.businessName;
-      console.log("Usando businessName do formato camelCase:", hospitalData.businessName);
+      console.log(
+        "Usando businessName do formato camelCase:",
+        hospitalData.businessName,
+      );
     }
-    
+
     // Campo especial - logoUrl/logo_url (pode vir em qualquer um dos dois formatos)
     if (hospitalData.logo_url !== undefined) {
       dbData.logo_url = hospitalData.logo_url;
-      console.log("Usando logo_url do formato snake_case:", hospitalData.logo_url);
+      console.log(
+        "Usando logo_url do formato snake_case:",
+        hospitalData.logo_url,
+      );
     } else if (hospitalData.logoUrl !== undefined) {
       dbData.logo_url = hospitalData.logoUrl;
       console.log("Usando logoUrl do formato camelCase:", hospitalData.logoUrl);
     }
-    
+
     console.log("Dados finais para atualização no banco:", dbData);
-    
+
     // Verificação de alterações
     if (Object.keys(dbData).length === 0) {
       console.warn("Nenhum campo válido para atualização!");
       return currentHospital;
     }
-    
+
     // Atualização direta usando SQL nativo para evitar problemas de mapeamento ORM
     try {
       const query = {
         text: `
           UPDATE hospitals
-          SET ${Object.keys(dbData).map((key, i) => `${key} = $${i + 1}`).join(', ')}
+          SET ${Object.keys(dbData)
+            .map((key, i) => `${key} = $${i + 1}`)
+            .join(", ")}
           WHERE id = $${Object.keys(dbData).length + 1}
           RETURNING *
         `,
-        values: [...Object.values(dbData), id]
+        values: [...Object.values(dbData), id],
       };
-      
+
       console.log("Executando query SQL:", query);
-      
+
       const result = await pool.query(query);
       console.log("Resultado da atualização:", result.rows[0]);
-      
+
       if (result.rows.length > 0) {
         // Convertemos o resultado de volta para o formato camelCase para compatibilidade
         return {
@@ -2391,10 +2915,10 @@ export class DatabaseStorage implements IStorage {
           cep: result.rows[0].cep,
           address: result.rows[0].address,
           number: result.rows[0].number,
-          logoUrl: result.rows[0].logo_url
+          logoUrl: result.rows[0].logo_url,
         };
       }
-      
+
       return undefined;
     } catch (error) {
       console.error("Erro ao executar a atualização SQL:", error);
@@ -2403,36 +2927,48 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteHospital(id: number): Promise<boolean> {
-    await db
-      .delete(hospitals)
-      .where(eq(hospitals.id, id));
+    await db.delete(hospitals).where(eq(hospitals.id, id));
     return true;
   }
 
   // Brazilian states methods
   async getBrazilianStates(): Promise<BrazilianState[]> {
-    return await db.select().from(brazilianStates).orderBy(brazilianStates.name);
+    return await db
+      .select()
+      .from(brazilianStates)
+      .orderBy(brazilianStates.name);
   }
 
   // Municipality methods
-  async getMunicipalitiesByState(stateIbgeCode: number): Promise<Municipality[]> {
+  async getMunicipalitiesByState(
+    stateIbgeCode: number,
+  ): Promise<Municipality[]> {
     return await db
       .select()
       .from(municipalities)
-      .innerJoin(brazilianStates, eq(municipalities.stateId, brazilianStates.id))
+      .innerJoin(
+        brazilianStates,
+        eq(municipalities.stateId, brazilianStates.id),
+      )
       .where(eq(brazilianStates.ibgeCode, stateIbgeCode))
       .orderBy(municipalities.name)
-      .then(results => results.map(result => result.municipalities));
+      .then((results) => results.map((result) => result.municipalities));
   }
 
   // CID-10 operations implementation
   async getCidCode(id: number): Promise<CidCode | undefined> {
-    const [cidCode] = await db.select().from(cidCodes).where(eq(cidCodes.id, id));
+    const [cidCode] = await db
+      .select()
+      .from(cidCodes)
+      .where(eq(cidCodes.id, id));
     return cidCode || undefined;
   }
 
   async getCidCodeByCode(code: string): Promise<CidCode | undefined> {
-    const [cidCode] = await db.select().from(cidCodes).where(eq(cidCodes.code, code));
+    const [cidCode] = await db
+      .select()
+      .from(cidCodes)
+      .where(eq(cidCodes.code, code));
     return cidCode || undefined;
   }
 
@@ -2449,7 +2985,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCidCodesByCategory(category: string): Promise<CidCode[]> {
-    return await db.select().from(cidCodes)
+    return await db
+      .select()
+      .from(cidCodes)
       .where(eq(cidCodes.category as any, category))
       .orderBy(cidCodes.code);
   }
@@ -2457,62 +2995,76 @@ export class DatabaseStorage implements IStorage {
   async searchCidCodes(term: string): Promise<CidCode[]> {
     // Buscar todos os códigos CID e filtrar usando normalização
     const allCidCodes = await db.select().from(cidCodes).orderBy(cidCodes.code);
-    
+
     // Normalizar o termo de busca
     const normalizedTerm = normalizeText(term);
-    console.log(`Termo original: "${term}" -> Normalizado: "${normalizedTerm}"`);
-    
+    console.log(
+      `Termo original: "${term}" -> Normalizado: "${normalizedTerm}"`,
+    );
+
     // Filtrar usando normalização de texto
-    const filteredCids = allCidCodes.filter(cid => {
+    const filteredCids = allCidCodes.filter((cid) => {
       const normalizedCode = normalizeText(cid.code);
       const normalizedDescription = normalizeText(cid.description);
-      const match = normalizedCode.includes(normalizedTerm) || normalizedDescription.includes(normalizedTerm);
-      
+      const match =
+        normalizedCode.includes(normalizedTerm) ||
+        normalizedDescription.includes(normalizedTerm);
+
       if (match) {
         console.log(`Match encontrado: ${cid.code} - ${cid.description}`);
       }
-      
+
       return match;
     });
-    
-    console.log(`Encontrados ${filteredCids.length} resultados para termo normalizado "${normalizedTerm}"`);
-    
+
+    console.log(
+      `Encontrados ${filteredCids.length} resultados para termo normalizado "${normalizedTerm}"`,
+    );
+
     // Retornar apenas os primeiros 30 resultados
     return filteredCids.slice(0, 30);
   }
 
   async searchProcedures(term: string): Promise<Procedure[]> {
     // Buscar todos os procedimentos e filtrar usando normalização
-    const allProcedures = await db.select().from(procedures).orderBy(procedures.code);
-    
+    const allProcedures = await db
+      .select()
+      .from(procedures)
+      .orderBy(procedures.code);
+
     // Normalizar o termo de busca
     const normalizedTerm = normalizeText(term);
-    console.log(`Termo original: "${term}" -> Normalizado: "${normalizedTerm}"`);
-    
+    console.log(
+      `Termo original: "${term}" -> Normalizado: "${normalizedTerm}"`,
+    );
+
     // Filtrar usando normalização de texto
-    const filteredProcedures = allProcedures.filter(procedure => {
+    const filteredProcedures = allProcedures.filter((procedure) => {
       const normalizedCode = normalizeText(procedure.code);
       const normalizedName = normalizeText(procedure.name);
-      const normalizedDescription = procedure.description ? normalizeText(procedure.description) : '';
-      
-      const match = normalizedCode.includes(normalizedTerm) || 
-                   normalizedName.includes(normalizedTerm) || 
-                   normalizedDescription.includes(normalizedTerm);
-      
+      const normalizedDescription = procedure.description
+        ? normalizeText(procedure.description)
+        : "";
+
+      const match =
+        normalizedCode.includes(normalizedTerm) ||
+        normalizedName.includes(normalizedTerm) ||
+        normalizedDescription.includes(normalizedTerm);
+
       if (match) {
         console.log(`Match encontrado: ${procedure.code} - ${procedure.name}`);
       }
-      
+
       return match;
     });
-    
-    console.log(`Encontrados ${filteredProcedures.length} procedimentos para termo normalizado "${normalizedTerm}"`);
-    
+
+    console.log(
+      `Encontrados ${filteredProcedures.length} procedimentos para termo normalizado "${normalizedTerm}"`,
+    );
+
     // Retornar apenas os primeiros 30 resultados
     return filteredProcedures.slice(0, 30);
   }
-
-
 
   async createCidCode(insertCidCode: InsertCidCode): Promise<CidCode> {
     const [cidCode] = await db
@@ -2522,7 +3074,10 @@ export class DatabaseStorage implements IStorage {
     return cidCode;
   }
 
-  async updateCidCode(id: number, cidCodeData: Partial<InsertCidCode>): Promise<CidCode | undefined> {
+  async updateCidCode(
+    id: number,
+    cidCodeData: Partial<InsertCidCode>,
+  ): Promise<CidCode | undefined> {
     const [updated] = await db
       .update(cidCodes)
       .set(cidCodeData)
@@ -2532,19 +3087,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCidCode(id: number): Promise<boolean> {
-    await db
-      .delete(cidCodes)
-      .where(eq(cidCodes.id, id));
+    await db.delete(cidCodes).where(eq(cidCodes.id, id));
     return true;
   }
-  
+
   // Supplier operations
   async getSupplier(id: number): Promise<Supplier | undefined> {
     try {
-      const [supplier] = await db.select().from(suppliers).where(eq(suppliers.id, id));
+      const [supplier] = await db
+        .select()
+        .from(suppliers)
+        .where(eq(suppliers.id, id));
       return supplier;
     } catch (error) {
-      console.error('Erro ao buscar fornecedor:', error);
+      console.error("Erro ao buscar fornecedor:", error);
       return undefined;
     }
   }
@@ -2552,34 +3108,40 @@ export class DatabaseStorage implements IStorage {
   async getSupplierByCnpj(cnpj: string): Promise<Supplier | undefined> {
     try {
       // Removemos caracteres não numéricos para permitir busca com ou sem formatação
-      const cleanCNPJ = cnpj.replace(/\D/g, '');
-      
+      const cleanCNPJ = cnpj.replace(/\D/g, "");
+
       // Buscamos fornecedores e então filtramos pelo CNPJ limpo
       const allSuppliers = await db.select().from(suppliers);
-      const supplier = allSuppliers.find(s => s.cnpj.replace(/\D/g, '') === cleanCNPJ);
-      
+      const supplier = allSuppliers.find(
+        (s) => s.cnpj.replace(/\D/g, "") === cleanCNPJ,
+      );
+
       return supplier;
     } catch (error) {
-      console.error('Erro ao buscar fornecedor por CNPJ:', error);
+      console.error("Erro ao buscar fornecedor por CNPJ:", error);
       return undefined;
     }
   }
 
-  async getSuppliers(municipalityId?: number, active?: boolean, search?: string): Promise<Supplier[]> {
+  async getSuppliers(
+    municipalityId?: number,
+    active?: boolean,
+    search?: string,
+  ): Promise<Supplier[]> {
     try {
       let query = db.select().from(suppliers);
-      
+
       // Construir condições de filtro
       const conditions = [];
-      
+
       if (municipalityId !== undefined) {
         conditions.push(eq(suppliers.municipalityId, municipalityId));
       }
-      
+
       if (active !== undefined) {
         conditions.push(eq(suppliers.active, active));
       }
-      
+
       if (search) {
         const searchTerm = `%${search}%`;
         conditions.push(
@@ -2587,77 +3149,90 @@ export class DatabaseStorage implements IStorage {
             ilike(suppliers.companyName, searchTerm),
             ilike(suppliers.tradeName, searchTerm),
             ilike(suppliers.cnpj, searchTerm),
-            ilike(suppliers.anvisaCode, searchTerm)
-          )
+            ilike(suppliers.anvisaCode, searchTerm),
+          ),
         );
       }
-      
+
       // Aplicar condições se existirem
       if (conditions.length > 0) {
         query = query.where(and(...conditions));
       }
-      
+
       // Ordenar por nome da empresa
       return await query.orderBy(suppliers.companyName);
     } catch (error) {
-      console.error('Erro ao buscar fornecedores:', error);
+      console.error("Erro ao buscar fornecedores:", error);
       return [];
     }
   }
-  
+
   async getActiveSuppliers(): Promise<Supplier[]> {
     try {
-      return await db.select().from(suppliers).where(eq(suppliers.active, true)).orderBy(suppliers.companyName);
+      return await db
+        .select()
+        .from(suppliers)
+        .where(eq(suppliers.active, true))
+        .orderBy(suppliers.companyName);
     } catch (error) {
-      console.error('Erro ao buscar fornecedores ativos:', error);
+      console.error("Erro ao buscar fornecedores ativos:", error);
       return [];
     }
   }
-  
+
   async searchSuppliers(term: string): Promise<Supplier[]> {
     try {
       const normalizedTerm = term.toLowerCase().trim();
-      
+
       // Buscar todos os fornecedores e filtrar na aplicação
       const allSuppliers = await db.select().from(suppliers);
-      
-      return allSuppliers.filter(supplier => {
-        const nameMatch = supplier.companyName.toLowerCase().includes(normalizedTerm);
-        const tradeNameMatch = supplier.tradeName?.toLowerCase()?.includes(normalizedTerm) || false;
-        const cnpjMatch = supplier.cnpj.replace(/\D/g, '').includes(normalizedTerm.replace(/\D/g, ''));
+
+      return allSuppliers.filter((supplier) => {
+        const nameMatch = supplier.companyName
+          .toLowerCase()
+          .includes(normalizedTerm);
+        const tradeNameMatch =
+          supplier.tradeName?.toLowerCase()?.includes(normalizedTerm) || false;
+        const cnpjMatch = supplier.cnpj
+          .replace(/\D/g, "")
+          .includes(normalizedTerm.replace(/\D/g, ""));
         return nameMatch || tradeNameMatch || cnpjMatch;
       });
     } catch (error) {
-      console.error('Erro ao buscar fornecedores:', error);
+      console.error("Erro ao buscar fornecedores:", error);
       return [];
     }
   }
 
   async createSupplier(supplier: InsertSupplier): Promise<Supplier> {
     try {
-      const [created] = await db
-        .insert(suppliers)
-        .values(supplier)
-        .returning();
+      const [created] = await db.insert(suppliers).values(supplier).returning();
       return created;
     } catch (error) {
-      console.error('Erro ao criar fornecedor:', error);
+      console.error("Erro ao criar fornecedor:", error);
       throw error;
     }
   }
 
-  async updateSupplier(id: number, supplierData: Partial<InsertSupplier>): Promise<Supplier | undefined> {
+  async updateSupplier(
+    id: number,
+    supplierData: Partial<InsertSupplier>,
+  ): Promise<Supplier | undefined> {
     try {
       // Se o CNPJ está sendo atualizado, verificar se já existe em outro fornecedor
       if (supplierData.cnpj) {
         const existingSupplier = await db
           .select()
           .from(suppliers)
-          .where(and(eq(suppliers.cnpj, supplierData.cnpj), ne(suppliers.id, id)))
+          .where(
+            and(eq(suppliers.cnpj, supplierData.cnpj), ne(suppliers.id, id)),
+          )
           .limit(1);
-        
+
         if (existingSupplier.length > 0) {
-          throw new Error(`CNPJ ${supplierData.cnpj} já está sendo usado por outro fornecedor`);
+          throw new Error(
+            `CNPJ ${supplierData.cnpj} já está sendo usado por outro fornecedor`,
+          );
         }
       }
 
@@ -2665,13 +3240,13 @@ export class DatabaseStorage implements IStorage {
         .update(suppliers)
         .set({
           ...supplierData,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(suppliers.id, id))
         .returning();
       return updated;
     } catch (error) {
-      console.error('Erro ao atualizar fornecedor:', error);
+      console.error("Erro ao atualizar fornecedor:", error);
       if (error instanceof Error) {
         throw error;
       }
@@ -2681,16 +3256,14 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSupplier(id: number): Promise<boolean> {
     try {
-      await db
-        .delete(suppliers)
-        .where(eq(suppliers.id, id));
+      await db.delete(suppliers).where(eq(suppliers.id, id));
       return true;
     } catch (error) {
-      console.error('Erro ao excluir fornecedor:', error);
+      console.error("Erro ao excluir fornecedor:", error);
       return false;
     }
   }
-  
+
   // Método auxiliar para retornar o município pelo ID
   async getMunicipality(id: number): Promise<any | undefined> {
     try {
@@ -2702,7 +3275,7 @@ export class DatabaseStorage implements IStorage {
 
       return result;
     } catch (error) {
-      console.error('Erro ao buscar município:', error);
+      console.error("Erro ao buscar município:", error);
       return undefined;
     }
   }
@@ -2721,59 +3294,57 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .select({ count: sql<number>`count(*)` })
       .from(notifications)
-      .where(and(
-        eq(notifications.userId, userId),
-        eq(notifications.read, false)
-      ));
-    
+      .where(
+        and(eq(notifications.userId, userId), eq(notifications.read, false)),
+      );
+
     return result[0]?.count || 0;
   }
 
-  async createNotification(notification: InsertNotification): Promise<Notification> {
+  async createNotification(
+    notification: InsertNotification,
+  ): Promise<Notification> {
     const [created] = await db
       .insert(notifications)
       .values(notification)
       .returning();
-    
+
     return created;
   }
 
   async markNotificationAsRead(id: number): Promise<Notification | undefined> {
     const [updated] = await db
       .update(notifications)
-      .set({ 
+      .set({
         read: true,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(notifications.id, id))
       .returning();
-    
+
     return updated;
   }
 
   async markAllNotificationsAsRead(userId: number): Promise<boolean> {
     await db
       .update(notifications)
-      .set({ 
+      .set({
         read: true,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
-      .where(and(
-        eq(notifications.userId, userId),
-        eq(notifications.read, false)
-      ));
-    
+      .where(
+        and(eq(notifications.userId, userId), eq(notifications.read, false)),
+      );
+
     return true;
   }
 
   async deleteNotification(id: number): Promise<boolean> {
-    await db
-      .delete(notifications)
-      .where(eq(notifications.id, id));
-    
+    await db.delete(notifications).where(eq(notifications.id, id));
+
     return true;
   }
-  
+
   // Implementação das operações do "Fale Conosco"
   async getContactMessage(id: number): Promise<ContactMessage | undefined> {
     try {
@@ -2781,14 +3352,14 @@ export class DatabaseStorage implements IStorage {
         .select()
         .from(contactMessages)
         .where(eq(contactMessages.id, id));
-      
+
       return message;
     } catch (error) {
       console.error("Erro ao buscar mensagem de contato:", error);
       throw new Error("Failed to fetch contact message");
     }
   }
-  
+
   async getContactMessages(): Promise<ContactMessage[]> {
     try {
       return await db
@@ -2800,7 +3371,7 @@ export class DatabaseStorage implements IStorage {
       throw new Error("Failed to fetch contact messages");
     }
   }
-  
+
   async getPendingContactMessages(): Promise<ContactMessage[]> {
     try {
       return await db
@@ -2813,8 +3384,10 @@ export class DatabaseStorage implements IStorage {
       throw new Error("Failed to fetch pending contact messages");
     }
   }
-  
-  async createContactMessage(message: InsertContactMessage): Promise<ContactMessage> {
+
+  async createContactMessage(
+    message: InsertContactMessage,
+  ): Promise<ContactMessage> {
     try {
       const [newMessage] = await db
         .insert(contactMessages)
@@ -2822,36 +3395,43 @@ export class DatabaseStorage implements IStorage {
           ...message,
           status: "pending",
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .returning();
-      
+
       return newMessage;
     } catch (error) {
       console.error("Erro ao criar mensagem de contato:", error);
       throw new Error("Failed to create contact message");
     }
   }
-  
-  async updateContactMessageStatus(id: number, status: string): Promise<ContactMessage | undefined> {
+
+  async updateContactMessageStatus(
+    id: number,
+    status: string,
+  ): Promise<ContactMessage | undefined> {
     try {
       const [updatedMessage] = await db
         .update(contactMessages)
         .set({
           status,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(contactMessages.id, id))
         .returning();
-      
+
       return updatedMessage;
     } catch (error) {
       console.error("Erro ao atualizar status da mensagem de contato:", error);
       throw new Error("Failed to update contact message status");
     }
   }
-  
-  async respondToContactMessage(id: number, responseMessage: string, respondedById: number): Promise<ContactMessage | undefined> {
+
+  async respondToContactMessage(
+    id: number,
+    responseMessage: string,
+    respondedById: number,
+  ): Promise<ContactMessage | undefined> {
     try {
       const [updatedMessage] = await db
         .update(contactMessages)
@@ -2860,24 +3440,22 @@ export class DatabaseStorage implements IStorage {
           respondedById,
           responseDate: new Date(),
           status: "responded",
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(contactMessages.id, id))
         .returning();
-      
+
       return updatedMessage;
     } catch (error) {
       console.error("Erro ao responder mensagem de contato:", error);
       throw new Error("Failed to respond to contact message");
     }
   }
-  
+
   async deleteContactMessage(id: number): Promise<boolean> {
     try {
-      await db
-        .delete(contactMessages)
-        .where(eq(contactMessages.id, id));
-        
+      await db.delete(contactMessages).where(eq(contactMessages.id, id));
+
       return true;
     } catch (error) {
       console.error("Erro ao excluir mensagem de contato:", error);
@@ -2885,104 +3463,122 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  
   // Implementação das operações Doctor-Hospital
   async getDoctorHospitals(userId: number): Promise<any[]> {
     // Primeiro buscar as associações simples, igual aos pacientes
-    const associations = await db.select().from(doctorHospitals).where(eq(doctorHospitals.userId, userId));
-    
+    const associations = await db
+      .select()
+      .from(doctorHospitals)
+      .where(eq(doctorHospitals.userId, userId));
+
     // Depois buscar os detalhes dos hospitais para cada associação
     const result = [];
     for (const association of associations) {
-      const hospital = await db.select().from(hospitals).where(eq(hospitals.id, association.hospitalId)).limit(1);
+      const hospital = await db
+        .select()
+        .from(hospitals)
+        .where(eq(hospitals.id, association.hospitalId))
+        .limit(1);
       result.push({
         ...association,
-        hospitalName: hospital[0]?.name || `Hospital ${association.hospitalId}`
+        hospitalName: hospital[0]?.name || `Hospital ${association.hospitalId}`,
       });
     }
-    
+
     return result;
   }
-  
-  async addDoctorHospital(insertDoctorHospital: InsertDoctorHospital): Promise<DoctorHospital> {
+
+  async addDoctorHospital(
+    insertDoctorHospital: InsertDoctorHospital,
+  ): Promise<DoctorHospital> {
     const [doctorHospital] = await db
       .insert(doctorHospitals)
       .values(insertDoctorHospital)
       .returning();
     return doctorHospital;
   }
-  
-  async removeDoctorHospital(userId: number, hospitalId: number): Promise<boolean> {
+
+  async removeDoctorHospital(
+    userId: number,
+    hospitalId: number,
+  ): Promise<boolean> {
     const result = await db
       .delete(doctorHospitals)
       .where(
         and(
           eq(doctorHospitals.userId, userId),
-          eq(doctorHospitals.hospitalId, hospitalId)
-        )
+          eq(doctorHospitals.hospitalId, hospitalId),
+        ),
       );
     return true;
   }
-  
-  async updateDoctorHospitals(userId: number, hospitalIds: number[]): Promise<DoctorHospital[]> {
+
+  async updateDoctorHospitals(
+    userId: number,
+    hospitalIds: number[],
+  ): Promise<DoctorHospital[]> {
     // Primeiro, remove todos os vínculos existentes
-    await db
-      .delete(doctorHospitals)
-      .where(eq(doctorHospitals.userId, userId));
-    
+    await db.delete(doctorHospitals).where(eq(doctorHospitals.userId, userId));
+
     // Se não houver hospitais para adicionar, retorna array vazio
     if (!hospitalIds.length) {
       return [];
     }
-    
+
     // Adiciona os novos vínculos
-    const inserts = hospitalIds.map(hospitalId => ({
+    const inserts = hospitalIds.map((hospitalId) => ({
       userId,
-      hospitalId
+      hospitalId,
     }));
-    
-    return await db
-      .insert(doctorHospitals)
-      .values(inserts)
-      .returning();
+
+    return await db.insert(doctorHospitals).values(inserts).returning();
   }
-  
+
   // Implementação das operações Doctor-Patient
   async getDoctorPatients(doctorId: number): Promise<DoctorPatient[]> {
-    return await db.select().from(doctorPatients).where(eq(doctorPatients.doctorId, doctorId));
+    return await db
+      .select()
+      .from(doctorPatients)
+      .where(eq(doctorPatients.doctorId, doctorId));
   }
-  
-  async getDoctorPatientsWithDetails(doctorId: number): Promise<{ patientId: number, patientName: string, associatedAt: Date }[]> {
+
+  async getDoctorPatientsWithDetails(
+    doctorId: number,
+  ): Promise<{ patientId: number; patientName: string; associatedAt: Date }[]> {
     const result = await db
       .select({
         patientId: doctorPatients.patientId,
         patientName: patients.fullName,
-        associatedAt: doctorPatients.associatedAt
+        associatedAt: doctorPatients.associatedAt,
       })
       .from(doctorPatients)
       .innerJoin(patients, eq(doctorPatients.patientId, patients.id))
       .where(eq(doctorPatients.doctorId, doctorId))
       .orderBy(patients.fullName);
-      
+
     return result;
   }
-  
-  async getPatientDoctors(patientId: number): Promise<{ doctorId: number, doctorName: string, associatedAt: Date }[]> {
+
+  async getPatientDoctors(
+    patientId: number,
+  ): Promise<{ doctorId: number; doctorName: string; associatedAt: Date }[]> {
     const result = await db
       .select({
         doctorId: doctorPatients.doctorId,
         doctorName: users.name,
-        associatedAt: doctorPatients.associatedAt
+        associatedAt: doctorPatients.associatedAt,
       })
       .from(doctorPatients)
       .innerJoin(users, eq(doctorPatients.doctorId, users.id))
       .where(eq(doctorPatients.patientId, patientId))
       .orderBy(users.name);
-      
+
     return result;
   }
-  
-  async addDoctorPatient(doctorPatient: InsertDoctorPatient): Promise<DoctorPatient> {
+
+  async addDoctorPatient(
+    doctorPatient: InsertDoctorPatient,
+  ): Promise<DoctorPatient> {
     try {
       // Verificar se a associação já existe
       const existing = await db
@@ -2991,65 +3587,73 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             eq(doctorPatients.doctorId, doctorPatient.doctorId),
-            eq(doctorPatients.patientId, doctorPatient.patientId)
-          )
+            eq(doctorPatients.patientId, doctorPatient.patientId),
+          ),
         );
-      
+
       // Se já existe, retorna a associação existente
       if (existing.length > 0) {
         return existing[0];
       }
-      
+
       // Caso contrário, cria uma nova associação
       const [created] = await db
         .insert(doctorPatients)
         .values(doctorPatient)
         .returning();
-        
+
       return created;
     } catch (error) {
-      console.error('Erro ao criar associação médico-paciente:', error);
+      console.error("Erro ao criar associação médico-paciente:", error);
       throw error;
     }
   }
-  
-  async updateDoctorPatient(id: number, isActive: boolean): Promise<DoctorPatient | undefined> {
+
+  async updateDoctorPatient(
+    id: number,
+    isActive: boolean,
+  ): Promise<DoctorPatient | undefined> {
     try {
       const [updated] = await db
         .update(doctorPatients)
         .set({
-          isActive
+          isActive,
         })
         .where(eq(doctorPatients.id, id))
         .returning();
-        
+
       return updated;
     } catch (error) {
-      console.error('Erro ao atualizar associação médico-paciente:', error);
+      console.error("Erro ao atualizar associação médico-paciente:", error);
       return undefined;
     }
   }
-  
-  async removeDoctorPatient(doctorId: number, patientId: number): Promise<boolean> {
+
+  async removeDoctorPatient(
+    doctorId: number,
+    patientId: number,
+  ): Promise<boolean> {
     try {
       await db
         .delete(doctorPatients)
         .where(
           and(
             eq(doctorPatients.doctorId, doctorId),
-            eq(doctorPatients.patientId, patientId)
-          )
+            eq(doctorPatients.patientId, patientId),
+          ),
         );
-        
+
       return true;
     } catch (error) {
-      console.error('Erro ao remover associação médico-paciente:', error);
+      console.error("Erro ao remover associação médico-paciente:", error);
       return false;
     }
   }
 
   // Health Insurance Provider methods
-  async getHealthInsuranceProvider(id: number): Promise<HealthInsuranceProvider | undefined> {
+  async getHealthInsuranceProvider(
+    id: number,
+  ): Promise<HealthInsuranceProvider | undefined> {
     try {
       const [provider] = await db
         .select()
@@ -3062,7 +3666,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getHealthInsuranceProviderByCnpj(cnpj: string): Promise<HealthInsuranceProvider | undefined> {
+  async getHealthInsuranceProviderByCnpj(
+    cnpj: string,
+  ): Promise<HealthInsuranceProvider | undefined> {
     try {
       const [provider] = await db
         .select()
@@ -3075,7 +3681,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getHealthInsuranceProviderByAnsCode(ansCode: string): Promise<HealthInsuranceProvider | undefined> {
+  async getHealthInsuranceProviderByAnsCode(
+    ansCode: string,
+  ): Promise<HealthInsuranceProvider | undefined> {
     try {
       const [provider] = await db
         .select()
@@ -3088,14 +3696,16 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getHealthInsuranceProviders(activeOnly: boolean = false): Promise<HealthInsuranceProvider[]> {
+  async getHealthInsuranceProviders(
+    activeOnly: boolean = false,
+  ): Promise<HealthInsuranceProvider[]> {
     try {
       let query = db.select().from(healthInsuranceProviders);
-      
+
       if (activeOnly) {
         query = query.where(eq(healthInsuranceProviders.active, true));
       }
-      
+
       return await query.orderBy(healthInsuranceProviders.name);
     } catch (error) {
       console.error("Erro ao buscar operadoras de saúde:", error);
@@ -3103,7 +3713,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createHealthInsuranceProvider(provider: InsertHealthInsuranceProvider): Promise<HealthInsuranceProvider> {
+  async createHealthInsuranceProvider(
+    provider: InsertHealthInsuranceProvider,
+  ): Promise<HealthInsuranceProvider> {
     try {
       const [newProvider] = await db
         .insert(healthInsuranceProviders)
@@ -3116,7 +3728,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateHealthInsuranceProvider(id: number, updates: Partial<InsertHealthInsuranceProvider>): Promise<HealthInsuranceProvider | undefined> {
+  async updateHealthInsuranceProvider(
+    id: number,
+    updates: Partial<InsertHealthInsuranceProvider>,
+  ): Promise<HealthInsuranceProvider | undefined> {
     try {
       const [updatedProvider] = await db
         .update(healthInsuranceProviders)
@@ -3147,9 +3762,10 @@ export class DatabaseStorage implements IStorage {
   // Contar total de pedidos médicos
   async countAllMedicalOrders(): Promise<number> {
     try {
-      const result = await db.select({ count: sql`count(*)` })
+      const result = await db
+        .select({ count: sql`count(*)` })
         .from(medicalOrders)
-        .where(notInArray(medicalOrders.statusId, [5, 7]));  // Excluir canceladas e rejeitadas
+        .where(notInArray(medicalOrders.statusId, [5, 7])); // Excluir canceladas e rejeitadas
       return Number(result[0].count) || 0;
     } catch (error) {
       console.error("Erro ao contar todos os pedidos médicos:", error);
@@ -3160,12 +3776,15 @@ export class DatabaseStorage implements IStorage {
   // Contar pedidos de um médico específico
   async countMedicalOrdersByDoctor(doctorId: number): Promise<number> {
     try {
-      const result = await db.select({ count: sql`count(*)` })
+      const result = await db
+        .select({ count: sql`count(*)` })
         .from(medicalOrders)
-        .where(and(
-          eq(medicalOrders.userId, doctorId),
-          notInArray(medicalOrders.statusId, [5, 7])  // Excluir canceladas e rejeitadas
-        ));
+        .where(
+          and(
+            eq(medicalOrders.userId, doctorId),
+            notInArray(medicalOrders.statusId, [5, 7]), // Excluir canceladas e rejeitadas
+          ),
+        );
       return Number(result[0].count) || 0;
     } catch (error) {
       console.error(`Erro ao contar pedidos do médico ${doctorId}:`, error);
@@ -3176,8 +3795,7 @@ export class DatabaseStorage implements IStorage {
   // Contar total de pacientes no sistema
   async countAllPatients(): Promise<number> {
     try {
-      const result = await db.select({ count: sql`count(*)` })
-        .from(patients);
+      const result = await db.select({ count: sql`count(*)` }).from(patients);
       return Number(result[0].count) || 0;
     } catch (error) {
       console.error("Erro ao contar todos os pacientes:", error);
@@ -3189,7 +3807,8 @@ export class DatabaseStorage implements IStorage {
   async countPatientsByDoctor(doctorId: number): Promise<number> {
     try {
       // Encontra pacientes vinculados ao médico na tabela doctorPatients
-      const result = await db.select({ count: sql`count(*)` })
+      const result = await db
+        .select({ count: sql`count(*)` })
         .from(doctorPatients)
         .where(eq(doctorPatients.doctorId, doctorId));
       return Number(result[0].count) || 0;
@@ -3200,7 +3819,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Obter estatísticas de performance por médico (quantidade de pedidos por médico)
-  async getDoctorPerformanceStats(): Promise<Array<{name: string, value: number}>> {
+  async getDoctorPerformanceStats(): Promise<
+    Array<{ name: string; value: number }>
+  > {
     try {
       // Consulta SQL direta com nomes de campos conhecidos
       const result = await db.execute(sql`
@@ -3210,38 +3831,43 @@ export class DatabaseStorage implements IStorage {
         GROUP BY u.name
         ORDER BY count DESC
       `);
-      
+
       console.log("Resultado da consulta de estatísticas por médico:", result);
-      
+
       // Verificamos se temos um resultado e se tem rows
       if (result && result.rows && result.rows.length > 0) {
         console.log("USANDO DADOS REAIS DE MÉDICOS:", result.rows);
         // Formato esperado pela UI: {name: string, value: number}
-        return result.rows.map(row => ({
+        return result.rows.map((row) => ({
           name: row.name || "Desconhecido",
-          value: Number(row.count) || 0
+          value: Number(row.count) || 0,
         }));
       } else {
         console.log("Sem dados de médicos, retornando dados simulados");
         return [
           { name: "Dr. Ricardo Silva", value: 42 },
           { name: "Dra. Maria Santos", value: 38 },
-          { name: "Dr. Carlos Mendes", value: 29 }
+          { name: "Dr. Carlos Mendes", value: 29 },
         ];
       }
     } catch (error) {
-      console.error("Erro ao obter estatísticas de performance por médico:", error);
+      console.error(
+        "Erro ao obter estatísticas de performance por médico:",
+        error,
+      );
       // Retornar dados simulados
       return [
         { name: "Dr. Ricardo Silva", value: 42 },
         { name: "Dra. Maria Santos", value: 38 },
-        { name: "Dr. Carlos Mendes", value: 29 }
+        { name: "Dr. Carlos Mendes", value: 29 },
       ];
     }
   }
 
   // Obter estatísticas de volume por hospital (quantidade de pedidos por hospital)
-  async getHospitalVolumeStats(): Promise<Array<{name: string, value: number}>> {
+  async getHospitalVolumeStats(): Promise<
+    Array<{ name: string; value: number }>
+  > {
     try {
       // Consulta SQL direta com nomes de campos conhecidos
       const result = await db.execute(sql`
@@ -3251,51 +3877,67 @@ export class DatabaseStorage implements IStorage {
         GROUP BY h.name
         ORDER BY count DESC
       `);
-      
-      console.log("Resultado da consulta de estatísticas por hospital:", result);
-      
-      // Verificamos se temos um resultado e se tem rows sdfdsfds
+
+      console.log(
+        "Resultado da consulta de estatísticas por hospital:",
+        result,
+      );
+
+      // Verificamos se temos um resultado e se tem rows
       if (result && result.rows && result.rows.length > 0) {
         console.log("USANDO DADOS REAIS DE HOSPITAIS:", result.rows);
         // Formato esperado pela UI: {name: string, value: number}
-        return result.rows.map(row => ({
+        return result.rows.map((row) => ({
           name: row.name || "Desconhecido",
-          value: Number(row.count) || 0
+          value: Number(row.count) || 0,
         }));
       } else {
         console.log("Sem dados de hospitais, retornando array vazio");
         return [];
       }
     } catch (error) {
-      console.error("Erro ao obter estatísticas de volume por hospital:", error);
+      console.error(
+        "Erro ao obter estatísticas de volume por hospital:",
+        error,
+      );
       // Retornar array vazio em vez de dados simulados
       return [];
     }
   }
-  
+
   // Obter estatísticas de volume de cirurgias por período (semana, mês, ano)
-  async getSurgeriesByPeriod(period: 'weekly' | 'monthly' | 'annual', userId?: number): Promise<Array<{name: string, solicitadas: number, realizadas: number, canceladas: number}>> {
+  async getSurgeriesByPeriod(
+    period: "weekly" | "monthly" | "annual",
+    userId?: number,
+  ): Promise<
+    Array<{
+      name: string;
+      solicitadas: number;
+      realizadas: number;
+      canceladas: number;
+    }>
+  > {
     try {
-      let dateFormat = '';
-      let dateQuery = '';
-      
+      let dateFormat = "";
+      let dateQuery = "";
+
       // Definir formato de data com base no período
-      if (period === 'weekly') {
+      if (period === "weekly") {
         // Formato para dia da semana
-        dateFormat = 'dy'; // Abreviação do dia da semana
-        dateQuery = 'NOW() - INTERVAL \'7 days\'';
-      } else if (period === 'monthly') {
+        dateFormat = "dy"; // Abreviação do dia da semana
+        dateQuery = "NOW() - INTERVAL '7 days'";
+      } else if (period === "monthly") {
         // Formato para mês
-        dateFormat = 'mon'; // Abreviação do mês
-        dateQuery = 'NOW() - INTERVAL \'6 months\'';
-      } else if (period === 'annual') {
+        dateFormat = "mon"; // Abreviação do mês
+        dateQuery = "NOW() - INTERVAL '6 months'";
+      } else if (period === "annual") {
         // Formato para ano
-        dateFormat = 'yyyy'; // Ano de 4 dígitos
-        dateQuery = 'NOW() - INTERVAL \'4 years\'';
+        dateFormat = "yyyy"; // Ano de 4 dígitos
+        dateQuery = "NOW() - INTERVAL '4 years'";
       }
-      
+
       let query;
-      
+
       if (userId) {
         // Consulta para um médico específico
         query = sql`
@@ -3405,70 +4047,78 @@ export class DatabaseStorage implements IStorage {
             END
         `;
       }
-      
+
       const result = await db.execute(query);
-      
+
       if (result && result.rows && result.rows.length > 0) {
-        console.log(`USANDO DADOS REAIS DE CIRURGIAS POR PERÍODO (${period}):`, result.rows);
-        
+        console.log(
+          `USANDO DADOS REAIS DE CIRURGIAS POR PERÍODO (${period}):`,
+          result.rows,
+        );
+
         // Mapear os resultados para o formato esperado
-        return result.rows.map(row => ({
+        return result.rows.map((row) => ({
           name: this.translatePeriodName(row.name, period),
           solicitadas: Number(row.solicitadas) || 0,
           realizadas: Number(row.realizadas) || 0,
-          canceladas: Number(row.canceladas) || 0
+          canceladas: Number(row.canceladas) || 0,
         }));
       }
-      
+
       console.log(`Sem dados para o período ${period}, retornando array vazio`);
       return [];
     } catch (error) {
-      console.error(`Erro ao obter estatísticas de volume por período (${period}):`, error);
+      console.error(
+        `Erro ao obter estatísticas de volume por período (${period}):`,
+        error,
+      );
       return [];
     }
   }
-  
+
   // Função auxiliar para traduzir nomes de períodos em inglês para português
   private translatePeriodName(name: string, period: string): string {
     // Tradução de dias da semana (em inglês) para português
     const weekDayTranslations: Record<string, string> = {
-      'Mon': 'Seg',
-      'Tue': 'Ter',
-      'Wed': 'Qua',
-      'Thu': 'Qui',
-      'Fri': 'Sex',
-      'Sat': 'Sáb',
-      'Sun': 'Dom'
+      Mon: "Seg",
+      Tue: "Ter",
+      Wed: "Qua",
+      Thu: "Qui",
+      Fri: "Sex",
+      Sat: "Sáb",
+      Sun: "Dom",
     };
-    
+
     // Tradução de meses (em inglês) para português
     const monthTranslations: Record<string, string> = {
-      'Jan': 'Jan',
-      'Feb': 'Fev',
-      'Mar': 'Mar',
-      'Apr': 'Abr',
-      'May': 'Mai',
-      'Jun': 'Jun',
-      'Jul': 'Jul',
-      'Aug': 'Ago',
-      'Sep': 'Set',
-      'Oct': 'Out',
-      'Nov': 'Nov',
-      'Dec': 'Dez'
+      Jan: "Jan",
+      Feb: "Fev",
+      Mar: "Mar",
+      Apr: "Abr",
+      May: "Mai",
+      Jun: "Jun",
+      Jul: "Jul",
+      Aug: "Ago",
+      Sep: "Set",
+      Oct: "Out",
+      Nov: "Nov",
+      Dec: "Dez",
     };
-    
-    if (period === 'weekly' && weekDayTranslations[name]) {
+
+    if (period === "weekly" && weekDayTranslations[name]) {
       return weekDayTranslations[name];
-    } else if (period === 'monthly' && monthTranslations[name]) {
+    } else if (period === "monthly" && monthTranslations[name]) {
       return monthTranslations[name];
     }
-    
+
     // Se não for um dia ou mês conhecido, ou for ano, retorna o nome original
     return name;
   }
 
   // Obter estatísticas de volume por hospital para um médico específico
-  async getHospitalVolumeStatsByDoctor(doctorId: number): Promise<Array<{hospitalName: string, orderCount: number}>> {
+  async getHospitalVolumeStatsByDoctor(
+    doctorId: number,
+  ): Promise<Array<{ hospitalName: string; orderCount: number }>> {
     try {
       // Query para contar pedidos por hospital para um médico específico
       // Usando "hospital_id" e "user_id" em vez de "hospitalId" e "doctorId"
@@ -3480,107 +4130,113 @@ export class DatabaseStorage implements IStorage {
         GROUP BY h.name
         ORDER BY count(m.id) DESC
       `);
-      
+
       // Acessar o resultado corretamente (Drizzle pode retornar um objeto com rows)
       const rows = result.rows || result;
-      
+
       // Verificar se é array antes de mapear
       if (!Array.isArray(rows)) {
         console.error("Resultado não é um array:", rows);
         throw new Error("Resultado da query não é um array");
       }
-      
+
       // Mapear e formatar os resultados
-      return rows.map(row => ({
+      return rows.map((row) => ({
         hospitalName: row.hospitalName as string,
-        orderCount: Number(row.orderCount) || 0
+        orderCount: Number(row.orderCount) || 0,
       }));
     } catch (error) {
-      console.error(`Erro ao obter estatísticas de volume por hospital para o médico ${doctorId}:`, error);
+      console.error(
+        `Erro ao obter estatísticas de volume por hospital para o médico ${doctorId}:`,
+        error,
+      );
       // Retornar dados simulados para não quebrar a interface
       return [
         { hospitalName: "Hospital São Lucas", orderCount: 12 },
         { hospitalName: "Hospital Santa Teresa", orderCount: 8 },
-        { hospitalName: "Hospital Central", orderCount: 7 }
+        { hospitalName: "Hospital Central", orderCount: 7 },
       ];
     }
   }
 
   // Obter pedidos médicos para relatórios com filtros opcionais
   async getMedicalOrdersForReporting(filters: {
-    statusCode?: string | null,
-    startDate?: string | null,
-    endDate?: string | null,
-    hospitalId?: number | null,
-    complexity?: string | null
+    statusCode?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    hospitalId?: number | null;
+    complexity?: string | null;
   }): Promise<MedicalOrder[]> {
     try {
-      const { statusCode, startDate, endDate, hospitalId, complexity } = filters;
-      
+      const { statusCode, startDate, endDate, hospitalId, complexity } =
+        filters;
+
       // Construir condições dinâmicas baseadas nos filtros
       let conditions = [];
-      
+
       if (statusCode) {
         // Converter statusCode para statusId correspondente
         const statusMapping = {
-          'em_preenchimento': 1,
-          'em_avaliacao': 2,
-          'aceito': 3,
-          'autorizado_parcial': 4,
-          'pendencia': 5,
-          'cirurgia_realizada': 6,
-          'cancelado': 7,
-          'aguardando_envio': 8,
-          'recebido': 9
+          em_preenchimento: 1,
+          em_avaliacao: 2,
+          aceito: 3,
+          autorizado_parcial: 4,
+          pendencia: 5,
+          cirurgia_realizada: 6,
+          cancelado: 7,
+          aguardando_envio: 8,
+          recebido: 9,
         };
         const statusId = statusMapping[statusCode] || null;
         if (statusId) {
           conditions.push(eq(medicalOrders.statusId, statusId));
         }
       }
-      
+
       if (startDate) {
         conditions.push(sql`${medicalOrders.createdAt} >= ${startDate}`);
       }
-      
+
       if (endDate) {
         conditions.push(sql`${medicalOrders.createdAt} <= ${endDate}`);
       }
-      
+
       if (hospitalId) {
         conditions.push(eq(medicalOrders.hospitalId, hospitalId));
       }
-      
+
       if (complexity) {
         conditions.push(eq(medicalOrders.complexity, complexity));
       }
-      
+
       // Executar a query com as condições montadas especificando colunas válidas
-      let query = db.select({
-        id: medicalOrders.id,
-        patientId: medicalOrders.patientId,
-        userId: medicalOrders.userId,
-        hospitalId: medicalOrders.hospitalId,
-        procedureDate: medicalOrders.procedureDate,
-        clinicalIndication: medicalOrders.clinicalIndication,
-        clinicalJustification: medicalOrders.clinicalJustification,
-        procedureLaterality: medicalOrders.procedureLaterality,
-        procedureType: medicalOrders.procedureType,
-        additionalNotes: medicalOrders.additionalNotes,
-        complexity: medicalOrders.complexity,
-        createdAt: medicalOrders.createdAt,
-        updatedAt: medicalOrders.updatedAt,
-        statusId: medicalOrders.statusId,
-        receivedValue: medicalOrders.receivedValue,
-        attachments: medicalOrders.attachments
-      }).from(medicalOrders);
-      
+      let query = db
+        .select({
+          id: medicalOrders.id,
+          patientId: medicalOrders.patientId,
+          userId: medicalOrders.userId,
+          hospitalId: medicalOrders.hospitalId,
+          procedureDate: medicalOrders.procedureDate,
+          clinicalIndication: medicalOrders.clinicalIndication,
+          clinicalJustification: medicalOrders.clinicalJustification,
+          procedureLaterality: medicalOrders.procedureLaterality,
+          procedureType: medicalOrders.procedureType,
+          additionalNotes: medicalOrders.additionalNotes,
+          complexity: medicalOrders.complexity,
+          createdAt: medicalOrders.createdAt,
+          updatedAt: medicalOrders.updatedAt,
+          statusId: medicalOrders.statusId,
+          receivedValue: medicalOrders.receivedValue,
+          attachments: medicalOrders.attachments,
+        })
+        .from(medicalOrders);
+
       if (conditions.length > 0) {
         query = query.where(and(...conditions));
       }
-      
+
       query = query.orderBy(desc(medicalOrders.createdAt));
-      
+
       const orders = await query;
       return orders;
     } catch (error) {
@@ -3589,30 +4245,39 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Obter pedidos médicos de um médico específico para relatórios com filtros opcionais
+  // Obter pedidos médicos de um médico específico para relatórios com filtros opcionais fdsfds
   async getMedicalOrdersForReportingByDoctor(
     doctorId: number,
     filters: {
-      statusCode?: string | null,
-      startDate?: string | null,
-      endDate?: string | null,
-      hospitalId?: number | null,
-      complexity?: string | null
-    }
+      statusCode?: string | null;
+      startDate?: string | null;
+      endDate?: string | null;
+      hospitalId?: number | null;
+      complexity?: string | null;
+    },
   ): Promise<MedicalOrder[]> {
     try {
-      console.log(`Buscando pedidos para médico ${doctorId} com filtros:`, filters);
-      
+      console.log(
+        `Buscando pedidos para médico ${doctorId} com filtros:`,
+        filters,
+      );
+
       // Fazer uma query simples apenas com userId para testar
-      const orders = await db.select()
+      const orders = await db
+        .select()
         .from(medicalOrders)
         .where(eq(medicalOrders.userId, doctorId))
         .orderBy(desc(medicalOrders.createdAt));
-      
-      console.log(`Encontrados ${orders.length} pedidos para médico ${doctorId}`);
+
+      console.log(
+        `Encontrados ${orders.length} pedidos para médico ${doctorId}`,
+      );
       return orders;
     } catch (error) {
-      console.error(`Erro ao obter pedidos do médico ${doctorId} para relatórios:`, error);
+      console.error(
+        `Erro ao obter pedidos do médico ${doctorId} para relatórios:`,
+        error,
+      );
       return [];
     }
   }
@@ -3629,20 +4294,27 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getHealthInsurancePlansByProvider(ansCode: string): Promise<HealthInsurancePlan[]> {
+  async getHealthInsurancePlansByProvider(
+    ansCode: string,
+  ): Promise<HealthInsurancePlan[]> {
     try {
       return await db
         .select()
         .from(healthInsurancePlans)
         .where(eq(healthInsurancePlans.registroAns, ansCode))
-        .orderBy(healthInsurancePlans.segmentacao, healthInsurancePlans.acomodacao);
+        .orderBy(
+          healthInsurancePlans.segmentacao,
+          healthInsurancePlans.acomodacao,
+        );
     } catch (error) {
       console.error("Erro ao buscar planos por operadora:", error);
       return [];
     }
   }
 
-  async getHealthInsurancePlan(id: number): Promise<HealthInsurancePlan | undefined> {
+  async getHealthInsurancePlan(
+    id: number,
+  ): Promise<HealthInsurancePlan | undefined> {
     try {
       const [plan] = await db
         .select()
@@ -3655,7 +4327,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createHealthInsurancePlan(plan: InsertHealthInsurancePlan): Promise<HealthInsurancePlan> {
+  async createHealthInsurancePlan(
+    plan: InsertHealthInsurancePlan,
+  ): Promise<HealthInsurancePlan> {
     try {
       const [newPlan] = await db
         .insert(healthInsurancePlans)
@@ -3668,7 +4342,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateHealthInsurancePlan(id: number, plan: Partial<InsertHealthInsurancePlan>): Promise<HealthInsurancePlan | undefined> {
+  async updateHealthInsurancePlan(
+    id: number,
+    plan: Partial<InsertHealthInsurancePlan>,
+  ): Promise<HealthInsurancePlan | undefined> {
     try {
       const [updatedPlan] = await db
         .update(healthInsurancePlans)
@@ -3695,13 +4372,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // === MÉTODOS DE RECURSOS (APPEALS) ===
-  
+
   async createAppeal(appeal: InsertAppeal): Promise<Appeal> {
     try {
-      const [newAppeal] = await db
-        .insert(appeals)
-        .values(appeal)
-        .returning();
+      const [newAppeal] = await db.insert(appeals).values(appeal).returning();
       return newAppeal;
     } catch (error) {
       console.error("Erro ao criar recurso:", error);
@@ -3722,13 +4396,17 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateAppealStatus(appealId: number, status: string, reviewerNotes?: string): Promise<Appeal | undefined> {
+  async updateAppealStatus(
+    appealId: number,
+    status: string,
+    reviewerNotes?: string,
+  ): Promise<Appeal | undefined> {
     try {
       const updateData: any = {
         status,
         updatedAt: new Date(),
       };
-      
+
       if (reviewerNotes) {
         updateData.reviewerNotes = reviewerNotes;
         updateData.reviewedAt = new Date();
@@ -3739,7 +4417,7 @@ export class DatabaseStorage implements IStorage {
         .set(updateData)
         .where(eq(appeals.id, appealId))
         .returning();
-        
+
       return updatedAppeal;
     } catch (error) {
       console.error("Erro ao atualizar status do recurso:", error);
@@ -3753,8 +4431,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ==== MÉTODOS CRUD PARA MEDICAL ORDER PROCEDURES ====
-  
-  async getMedicalOrderProcedures(orderId: number): Promise<MedicalOrderProcedure[]> {
+
+  async getMedicalOrderProcedures(
+    orderId: number,
+  ): Promise<MedicalOrderProcedure[]> {
     try {
       const procedures = await db
         .select({
@@ -3770,8 +4450,11 @@ export class DatabaseStorage implements IStorage {
         })
         .from(medicalOrderProcedures)
         .where(eq(medicalOrderProcedures.orderId, orderId))
-        .orderBy(desc(medicalOrderProcedures.isMain), medicalOrderProcedures.id);
-      
+        .orderBy(
+          desc(medicalOrderProcedures.isMain),
+          medicalOrderProcedures.id,
+        );
+
       return procedures;
     } catch (error) {
       console.error("Erro ao buscar procedimentos do pedido:", error);
@@ -3779,16 +4462,21 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createMedicalOrderProcedure(procedure: InsertMedicalOrderProcedure): Promise<MedicalOrderProcedure> {
+  async createMedicalOrderProcedure(
+    procedure: InsertMedicalOrderProcedure,
+  ): Promise<MedicalOrderProcedure> {
     const [newProcedure] = await db
       .insert(medicalOrderProcedures)
       .values(procedure)
       .returning();
-    
+
     return newProcedure;
   }
 
-  async updateMedicalOrderProcedure(id: number, updates: Partial<InsertMedicalOrderProcedure>): Promise<MedicalOrderProcedure | undefined> {
+  async updateMedicalOrderProcedure(
+    id: number,
+    updates: Partial<InsertMedicalOrderProcedure>,
+  ): Promise<MedicalOrderProcedure | undefined> {
     try {
       const [updatedProcedure] = await db
         .update(medicalOrderProcedures)
@@ -3798,9 +4486,9 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(medicalOrderProcedures.id, id))
         .returning();
-      
+
       // Não há mais sincronização - usar apenas medical_order_procedures
-      
+
       return updatedProcedure;
     } catch (error) {
       console.error("Erro ao atualizar procedimento:", error);
@@ -3815,7 +4503,7 @@ export class DatabaseStorage implements IStorage {
       const result = await db
         .delete(medicalOrderProcedures)
         .where(eq(medicalOrderProcedures.id, id));
-      
+
       return result.rowCount > 0;
     } catch (error) {
       console.error("Erro ao deletar procedimento:", error);
@@ -3823,7 +4511,11 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateProcedureApprovalStatus(id: number, quantityApproved: number, status: string): Promise<MedicalOrderProcedure | undefined> {
+  async updateProcedureApprovalStatus(
+    id: number,
+    quantityApproved: number,
+    status: string,
+  ): Promise<MedicalOrderProcedure | undefined> {
     try {
       const [updatedProcedure] = await db
         .update(medicalOrderProcedures)
@@ -3834,46 +4526,46 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(medicalOrderProcedures.id, id))
         .returning();
-      
+
       return updatedProcedure;
     } catch (error) {
       console.error("Erro ao atualizar status de aprovação:", error);
       return undefined;
     }
   }
-  
+
   // ==== MÉTODOS CRUD PARA CID-10 ====
-  
+
   async getCidCodes(search?: string, category?: string): Promise<CidCode[]> {
     try {
       let query = db.select().from(cidCodes);
-      
+
       const conditions = [];
-      
+
       if (search) {
         conditions.push(
           or(
             ilike(cidCodes.code, `%${search}%`),
-            ilike(cidCodes.description, `%${search}%`)
-          )
+            ilike(cidCodes.description, `%${search}%`),
+          ),
         );
       }
-      
+
       if (category) {
         conditions.push(eq(cidCodes.category, category));
       }
-      
+
       if (conditions.length > 0) {
         query = query.where(and(...conditions));
       }
-      
+
       return await query.orderBy(cidCodes.code);
     } catch (error) {
       console.error("Erro ao buscar códigos CID-10:", error);
       return [];
     }
   }
-  
+
   async getCidCode(id: number): Promise<CidCode | undefined> {
     try {
       const [cidCode] = await db
@@ -3887,7 +4579,7 @@ export class DatabaseStorage implements IStorage {
       return undefined;
     }
   }
-  
+
   async createCidCode(cidCode: InsertCidCode): Promise<CidCode> {
     try {
       const [newCidCode] = await db
@@ -3900,14 +4592,17 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
-  
-  async updateCidCode(id: number, updates: Partial<InsertCidCode>): Promise<CidCode | undefined> {
+
+  async updateCidCode(
+    id: number,
+    updates: Partial<InsertCidCode>,
+  ): Promise<CidCode | undefined> {
     try {
       const [updatedCidCode] = await db
         .update(cidCodes)
         .set({
           ...updates,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(cidCodes.id, id))
         .returning();
@@ -3917,12 +4612,10 @@ export class DatabaseStorage implements IStorage {
       return undefined;
     }
   }
-  
+
   async deleteCidCode(id: number): Promise<boolean> {
     try {
-      await db
-        .delete(cidCodes)
-        .where(eq(cidCodes.id, id));
+      await db.delete(cidCodes).where(eq(cidCodes.id, id));
       return true;
     } catch (error) {
       console.error("Erro ao excluir código CID-10:", error);
@@ -3933,7 +4626,10 @@ export class DatabaseStorage implements IStorage {
   // Medical Specialty methods
   async getMedicalSpecialties(): Promise<MedicalSpecialty[]> {
     try {
-      return await db.select().from(medicalSpecialties).where(eq(medicalSpecialties.isActive, true));
+      return await db
+        .select()
+        .from(medicalSpecialties)
+        .where(eq(medicalSpecialties.isActive, true));
     } catch (error) {
       console.error("Erro ao buscar especialidades médicas:", error);
       return [];
@@ -3942,7 +4638,10 @@ export class DatabaseStorage implements IStorage {
 
   async getMedicalSpecialty(id: number): Promise<MedicalSpecialty | undefined> {
     try {
-      const [specialty] = await db.select().from(medicalSpecialties).where(eq(medicalSpecialties.id, id));
+      const [specialty] = await db
+        .select()
+        .from(medicalSpecialties)
+        .where(eq(medicalSpecialties.id, id));
       return specialty || undefined;
     } catch (error) {
       console.error("Erro ao buscar especialidade médica:", error);
@@ -3950,9 +4649,14 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getMedicalSpecialtyByName(name: string): Promise<MedicalSpecialty | undefined> {
+  async getMedicalSpecialtyByName(
+    name: string,
+  ): Promise<MedicalSpecialty | undefined> {
     try {
-      const [specialty] = await db.select().from(medicalSpecialties).where(eq(medicalSpecialties.name, name));
+      const [specialty] = await db
+        .select()
+        .from(medicalSpecialties)
+        .where(eq(medicalSpecialties.name, name));
       return specialty || undefined;
     } catch (error) {
       console.error("Erro ao buscar especialidade médica por nome:", error);
@@ -3960,7 +4664,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createMedicalSpecialty(specialty: InsertMedicalSpecialty): Promise<MedicalSpecialty> {
+  async createMedicalSpecialty(
+    specialty: InsertMedicalSpecialty,
+  ): Promise<MedicalSpecialty> {
     try {
       const [newSpecialty] = await db
         .insert(medicalSpecialties)
@@ -3987,7 +4693,10 @@ export class DatabaseStorage implements IStorage {
   async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
     try {
       // Retorna apenas planos ativos para usuários comuns
-      return await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.isActive, true));
+      return await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.isActive, true));
     } catch (error) {
       console.error("Erro ao buscar planos de assinatura ativos:", error);
       return [];
@@ -3996,7 +4705,10 @@ export class DatabaseStorage implements IStorage {
 
   async getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined> {
     try {
-      const [plan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, id));
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.id, id));
       return plan || undefined;
     } catch (error) {
       console.error("Erro ao buscar plano de assinatura:", error);
@@ -4004,9 +4716,14 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getSubscriptionPlanByName(name: string): Promise<SubscriptionPlan | undefined> {
+  async getSubscriptionPlanByName(
+    name: string,
+  ): Promise<SubscriptionPlan | undefined> {
     try {
-      const [plan] = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.name, name));
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.name, name));
       return plan || undefined;
     } catch (error) {
       console.error("Erro ao buscar plano por nome:", error);
@@ -4014,7 +4731,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan> {
+  async createSubscriptionPlan(
+    plan: InsertSubscriptionPlan,
+  ): Promise<SubscriptionPlan> {
     try {
       const [newPlan] = await db
         .insert(subscriptionPlans)
@@ -4027,19 +4746,25 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateSubscriptionPlan(id: number, plan: InsertSubscriptionPlan): Promise<SubscriptionPlan> {
+  async updateSubscriptionPlan(
+    id: number,
+    plan: InsertSubscriptionPlan,
+  ): Promise<SubscriptionPlan> {
     try {
       // Filtrar dados para evitar violação de unique constraint em campos do Stripe
       const updateData: any = { ...plan, updatedAt: new Date() };
-      
+
       // Se os campos de pagamento estão vazios/nulos, remover do update para manter valor existente
-      if (!updateData.productId || updateData.productId.trim() === '') {
+      if (!updateData.productId || updateData.productId.trim() === "") {
         delete updateData.productId;
       }
-      if (!updateData.priceIdMonthly || updateData.priceIdMonthly.trim() === '') {
+      if (
+        !updateData.priceIdMonthly ||
+        updateData.priceIdMonthly.trim() === ""
+      ) {
         delete updateData.priceIdMonthly;
       }
-      if (!updateData.priceIdYearly || updateData.priceIdYearly.trim() === '') {
+      if (!updateData.priceIdYearly || updateData.priceIdYearly.trim() === "") {
         delete updateData.priceIdYearly;
       }
 
@@ -4048,11 +4773,11 @@ export class DatabaseStorage implements IStorage {
         .set(updateData)
         .where(eq(subscriptionPlans.id, id))
         .returning();
-      
+
       if (!updatedPlan) {
         throw new Error("Plano não encontrado");
       }
-      
+
       return updatedPlan;
     } catch (error) {
       console.error("Erro ao atualizar plano de assinatura:", error);
@@ -4074,14 +4799,16 @@ export class DatabaseStorage implements IStorage {
       const [result] = await db
         .select({ count: count() })
         .from(userSubscriptions)
-        .where(and(
-          eq(userSubscriptions.planId, planId),
-          or(
-            eq(userSubscriptions.status, 'active'),
-            eq(userSubscriptions.status, 'trial')
-          )
-        ));
-      
+        .where(
+          and(
+            eq(userSubscriptions.planId, planId),
+            or(
+              eq(userSubscriptions.status, "active"),
+              eq(userSubscriptions.status, "trial"),
+            ),
+          ),
+        );
+
       return (result?.count || 0) > 0;
     } catch (error) {
       console.error("Erro ao verificar assinaturas ativas:", error);
@@ -4100,17 +4827,17 @@ export class DatabaseStorage implements IStorage {
       // Alternar o status
       const [updatedPlan] = await db
         .update(subscriptionPlans)
-        .set({ 
+        .set({
           isActive: !currentPlan.isActive,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(subscriptionPlans.id, id))
         .returning();
-      
+
       if (!updatedPlan) {
         throw new Error("Falha ao atualizar status do plano");
       }
-      
+
       return updatedPlan;
     } catch (error) {
       console.error("Erro ao alternar status do plano:", error);
@@ -4119,7 +4846,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // User Subscriptions methods
-  async getUserSubscription(userId: number): Promise<UserSubscription | undefined> {
+  async getUserSubscription(
+    userId: number,
+  ): Promise<UserSubscription | undefined> {
     try {
       const [subscription] = await db
         .select()
@@ -4132,19 +4861,24 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getUserSubscriptionWithPlan(userId: number): Promise<(UserSubscription & { plan: SubscriptionPlan }) | undefined> {
+  async getUserSubscriptionWithPlan(
+    userId: number,
+  ): Promise<(UserSubscription & { plan: SubscriptionPlan }) | undefined> {
     try {
       const [result] = await db
         .select()
         .from(userSubscriptions)
-        .leftJoin(subscriptionPlans, eq(userSubscriptions.planId, subscriptionPlans.id))
+        .leftJoin(
+          subscriptionPlans,
+          eq(userSubscriptions.planId, subscriptionPlans.id),
+        )
         .where(eq(userSubscriptions.userId, userId));
-      
+
       if (!result || !result.subscription_plans) return undefined;
-      
+
       return {
         ...result.user_subscriptions,
-        plan: result.subscription_plans
+        plan: result.subscription_plans,
       };
     } catch (error) {
       console.error("Erro ao buscar assinatura com plano:", error);
@@ -4152,20 +4886,32 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getUserSubscriptionByProviderSubscriptionId(providerSubscriptionId: string): Promise<UserSubscription | undefined> {
+  async getUserSubscriptionByProviderSubscriptionId(
+    providerSubscriptionId: string,
+  ): Promise<UserSubscription | undefined> {
     try {
       const [subscription] = await db
         .select()
         .from(userSubscriptions)
-        .where(eq(userSubscriptions.paymentProviderSubscriptionId, providerSubscriptionId));
+        .where(
+          eq(
+            userSubscriptions.paymentProviderSubscriptionId,
+            providerSubscriptionId,
+          ),
+        );
       return subscription || undefined;
     } catch (error) {
-      console.error("Erro ao buscar assinatura por provider subscription ID:", error);
+      console.error(
+        "Erro ao buscar assinatura por provider subscription ID:",
+        error,
+      );
       return undefined;
     }
   }
 
-  async createUserSubscription(subscription: InsertUserSubscription): Promise<UserSubscription> {
+  async createUserSubscription(
+    subscription: InsertUserSubscription,
+  ): Promise<UserSubscription> {
     try {
       const [newSubscription] = await db
         .insert(userSubscriptions)
@@ -4178,7 +4924,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateUserSubscription(id: number, updates: Partial<InsertUserSubscription>): Promise<UserSubscription | undefined> {
+  async updateUserSubscription(
+    id: number,
+    updates: Partial<InsertUserSubscription>,
+  ): Promise<UserSubscription | undefined> {
     try {
       const [subscription] = await db
         .update(userSubscriptions)
@@ -4195,9 +4944,9 @@ export class DatabaseStorage implements IStorage {
   async createTrialSubscription(userId: number): Promise<UserSubscription> {
     try {
       // Get trial plan
-      const trialPlan = await this.getSubscriptionPlanByName('Trial');
+      const trialPlan = await this.getSubscriptionPlanByName("Trial");
       if (!trialPlan) {
-        throw new Error('Plano Trial não encontrado');
+        throw new Error("Plano Trial não encontrado");
       }
 
       // Calculate trial end date
@@ -4207,9 +4956,9 @@ export class DatabaseStorage implements IStorage {
       return await this.createUserSubscription({
         userId,
         planId: trialPlan.id,
-        status: 'trial',
+        status: "trial",
         trialEndsAt,
-        paymentProvider: 'none',
+        paymentProvider: "none",
       });
     } catch (error) {
       console.error("Erro ao criar assinatura trial:", error);
@@ -4217,28 +4966,34 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async isUserSubscriptionValid(userId: number): Promise<{ valid: boolean; reason?: string; subscription?: UserSubscription & { plan: SubscriptionPlan } }> {
+  async isUserSubscriptionValid(
+    userId: number,
+  ): Promise<{
+    valid: boolean;
+    reason?: string;
+    subscription?: UserSubscription & { plan: SubscriptionPlan };
+  }> {
     try {
       const subscription = await this.getUserSubscriptionWithPlan(userId);
-      
+
       if (!subscription) {
-        return { valid: false, reason: 'no_subscription' };
+        return { valid: false, reason: "no_subscription" };
       }
 
       const now = new Date();
 
       // Check trial
-      if (subscription.status === 'trial') {
+      if (subscription.status === "trial") {
         if (subscription.trialEndsAt && subscription.trialEndsAt < now) {
-          return { valid: false, reason: 'trial_expired', subscription };
+          return { valid: false, reason: "trial_expired", subscription };
         }
         return { valid: true, subscription };
       }
 
       // Check active subscription
-      if (subscription.status === 'active') {
+      if (subscription.status === "active") {
         if (subscription.expiresAt && subscription.expiresAt < now) {
-          return { valid: false, reason: 'subscription_expired', subscription };
+          return { valid: false, reason: "subscription_expired", subscription };
         }
         return { valid: true, subscription };
       }
@@ -4247,12 +5002,14 @@ export class DatabaseStorage implements IStorage {
       return { valid: false, reason: subscription.status, subscription };
     } catch (error) {
       console.error("Erro ao validar assinatura:", error);
-      return { valid: false, reason: 'error' };
+      return { valid: false, reason: "error" };
     }
   }
 
   // Subscription Payments methods
-  async createSubscriptionPayment(payment: InsertSubscriptionPayment): Promise<SubscriptionPayment> {
+  async createSubscriptionPayment(
+    payment: InsertSubscriptionPayment,
+  ): Promise<SubscriptionPayment> {
     try {
       const [newPayment] = await db
         .insert(subscriptionPayments)
@@ -4265,7 +5022,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getSubscriptionPayments(subscriptionId: number): Promise<SubscriptionPayment[]> {
+  async getSubscriptionPayments(
+    subscriptionId: number,
+  ): Promise<SubscriptionPayment[]> {
     try {
       return await db
         .select()
@@ -4292,45 +5051,48 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async validateDiscountCode(code: string, planId: number): Promise<{ valid: boolean; discount?: DiscountCode; reason?: string }> {
+  async validateDiscountCode(
+    code: string,
+    planId: number,
+  ): Promise<{ valid: boolean; discount?: DiscountCode; reason?: string }> {
     try {
       const discount = await this.getDiscountCode(code);
-      
+
       if (!discount) {
-        return { valid: false, reason: 'not_found' };
+        return { valid: false, reason: "not_found" };
       }
 
       if (!discount.isActive) {
-        return { valid: false, reason: 'inactive', discount };
+        return { valid: false, reason: "inactive", discount };
       }
 
       const now = new Date();
-      
+
       // Verificar validade
       if (discount.validFrom && discount.validFrom > now) {
-        return { valid: false, reason: 'not_started', discount };
+        return { valid: false, reason: "not_started", discount };
       }
-      
+
       if (discount.validUntil && discount.validUntil < now) {
-        return { valid: false, reason: 'expired', discount };
+        return { valid: false, reason: "expired", discount };
       }
 
       // Verificar limites de uso
       if (discount.maxUses && discount.currentUses >= discount.maxUses) {
-        return { valid: false, reason: 'max_uses_reached', discount };
+        return { valid: false, reason: "max_uses_reached", discount };
       }
 
       // Verificar se plano é aplicável
       if (discount.applicablePlans && discount.applicablePlans.length > 0) {
         if (!discount.applicablePlans.includes(planId)) {
-          return { valid: false, reason: 'plan_not_applicable', discount };
+          return { valid: false, reason: "plan_not_applicable", discount };
         }
       }
 
       return { valid: true, discount };
     } catch (error) {
       console.error("Erro ao validar código de desconto:", error);
-      return { valid: false, reason: 'error' };
+      return { valid: false, reason: "error" };
     }
   }
 
@@ -4338,9 +5100,9 @@ export class DatabaseStorage implements IStorage {
     try {
       const [updated] = await db
         .update(discountCodes)
-        .set({ 
+        .set({
           currentUses: sql`${discountCodes.currentUses} + 1`,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(discountCodes.code, code.toUpperCase()))
         .returning();
@@ -4351,51 +5113,64 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  calculateDiscountedPrice(originalPrice: number, discount: DiscountCode): { finalPrice: number; discountAmount: number } {
+  calculateDiscountedPrice(
+    originalPrice: number,
+    discount: DiscountCode,
+  ): { finalPrice: number; discountAmount: number } {
     let discountAmount = 0;
-    
-    if (discount.discountType === 'percentage') {
-      discountAmount = Math.round((originalPrice * discount.discountValue) / 100);
-    } else if (discount.discountType === 'fixed_amount') {
+
+    if (discount.discountType === "percentage") {
+      discountAmount = Math.round(
+        (originalPrice * discount.discountValue) / 100,
+      );
+    } else if (discount.discountType === "fixed_amount") {
       discountAmount = discount.discountValue;
     }
-    
+
     // Garantir que o desconto não seja maior que o preço original
     discountAmount = Math.min(discountAmount, originalPrice);
-    
+
     const finalPrice = Math.max(0, originalPrice - discountAmount);
-    
+
     return { finalPrice, discountAmount };
   }
 
-  async createLifetimeSubscription(userId: number, discountCode?: string): Promise<UserSubscription> {
+  async createLifetimeSubscription(
+    userId: number,
+    discountCode?: string,
+  ): Promise<UserSubscription> {
     try {
       // Get lifetime plan
-      const lifetimePlan = await this.getSubscriptionPlanByName('Lifetime');
+      const lifetimePlan = await this.getSubscriptionPlanByName("Lifetime");
       if (!lifetimePlan) {
-        throw new Error('Plano Lifetime não encontrado');
+        throw new Error("Plano Lifetime não encontrado");
       }
 
       let subscriptionData: any = {
         userId,
         planId: lifetimePlan.id,
-        status: 'lifetime',
+        status: "lifetime",
         expiresAt: null, // NULL = nunca expira
-        paymentProvider: 'none',
+        paymentProvider: "none",
         originalPrice: 0,
         finalPrice: 0,
       };
 
       // Aplicar código de desconto se fornecido
       if (discountCode) {
-        const validation = await this.validateDiscountCode(discountCode, lifetimePlan.id);
+        const validation = await this.validateDiscountCode(
+          discountCode,
+          lifetimePlan.id,
+        );
         if (validation.valid && validation.discount) {
           await this.applyDiscountCode(discountCode);
           subscriptionData.discountCode = discountCode;
-          subscriptionData.discountDescription = validation.discount.description;
-          
-          if (validation.discount.discountType === 'percentage') {
-            subscriptionData.discountPercent = validation.discount.discountValue;
+          subscriptionData.discountDescription =
+            validation.discount.description;
+
+          if (validation.discount.discountType === "percentage") {
+            subscriptionData.discountPercent =
+              validation.discount.discountValue;
           } else {
             subscriptionData.discountAmount = validation.discount.discountValue;
           }
@@ -4410,33 +5185,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Atualizar método de validação para incluir lifetime
-  async isUserSubscriptionValid(userId: number): Promise<{ valid: boolean; reason?: string; subscription?: UserSubscription & { plan: SubscriptionPlan } }> {
+  async isUserSubscriptionValid(
+    userId: number,
+  ): Promise<{
+    valid: boolean;
+    reason?: string;
+    subscription?: UserSubscription & { plan: SubscriptionPlan };
+  }> {
     try {
       const subscription = await this.getUserSubscriptionWithPlan(userId);
-      
+
       if (!subscription) {
-        return { valid: false, reason: 'no_subscription' };
+        return { valid: false, reason: "no_subscription" };
       }
 
       const now = new Date();
 
       // Check lifetime (nunca expira)
-      if (subscription.status === 'lifetime') {
+      if (subscription.status === "lifetime") {
         return { valid: true, subscription };
       }
 
       // Check trial
-      if (subscription.status === 'trial') {
+      if (subscription.status === "trial") {
         if (subscription.trialEndsAt && subscription.trialEndsAt < now) {
-          return { valid: false, reason: 'trial_expired', subscription };
+          return { valid: false, reason: "trial_expired", subscription };
         }
         return { valid: true, subscription };
       }
 
       // Check active subscription
-      if (subscription.status === 'active') {
+      if (subscription.status === "active") {
         if (subscription.expiresAt && subscription.expiresAt < now) {
-          return { valid: false, reason: 'subscription_expired', subscription };
+          return { valid: false, reason: "subscription_expired", subscription };
         }
         return { valid: true, subscription };
       }
@@ -4445,31 +5226,35 @@ export class DatabaseStorage implements IStorage {
       return { valid: false, reason: subscription.status, subscription };
     } catch (error) {
       console.error("Erro ao validar assinatura:", error);
-      return { valid: false, reason: 'error' };
+      return { valid: false, reason: "error" };
     }
   }
 
   // Promotional Pricing methods
   async createPromotionalSubscription(
-    userId: number, 
-    planId: number, 
-    promotionalDiscountPercent: number, 
-    promotionalDurationMonths: number, 
-    description?: string
+    userId: number,
+    planId: number,
+    promotionalDiscountPercent: number,
+    promotionalDurationMonths: number,
+    description?: string,
   ): Promise<UserSubscription> {
     try {
       const plan = await this.getSubscriptionPlan(planId);
       if (!plan) {
-        throw new Error('Plano não encontrado');
+        throw new Error("Plano não encontrado");
       }
 
       const originalPrice = plan.priceMonthly;
-      const promotionalPrice = Math.round(originalPrice * (1 - promotionalDiscountPercent / 100));
-      
+      const promotionalPrice = Math.round(
+        originalPrice * (1 - promotionalDiscountPercent / 100),
+      );
+
       // Calcular data de fim da promoção
       const promotionalEndsAt = new Date();
-      promotionalEndsAt.setMonth(promotionalEndsAt.getMonth() + promotionalDurationMonths);
-      
+      promotionalEndsAt.setMonth(
+        promotionalEndsAt.getMonth() + promotionalDurationMonths,
+      );
+
       // Data de expiração normal (1 mês após início)
       const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + 1);
@@ -4477,14 +5262,16 @@ export class DatabaseStorage implements IStorage {
       const subscriptionData = {
         userId,
         planId,
-        status: 'active',
+        status: "active",
         originalPrice,
         finalPrice: promotionalPrice,
         promotionalPrice,
         promotionalEndsAt,
-        promotionalDescription: description || `${promotionalDiscountPercent}% de desconto por ${promotionalDurationMonths} meses`,
+        promotionalDescription:
+          description ||
+          `${promotionalDiscountPercent}% de desconto por ${promotionalDurationMonths} meses`,
         expiresAt,
-        paymentProvider: 'none', // Será atualizado quando integrar pagamento
+        paymentProvider: "none", // Será atualizado quando integrar pagamento
       };
 
       return await this.createUserSubscription(subscriptionData);
@@ -4494,31 +5281,33 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getCurrentSubscriptionPrice(userId: number): Promise<{ 
-    currentPrice: number; 
-    isPromotional: boolean; 
-    promotionalEndsAt?: Date; 
-    originalPrice: number 
+  async getCurrentSubscriptionPrice(userId: number): Promise<{
+    currentPrice: number;
+    isPromotional: boolean;
+    promotionalEndsAt?: Date;
+    originalPrice: number;
   }> {
     try {
       const subscription = await this.getUserSubscriptionWithPlan(userId);
-      
+
       if (!subscription) {
-        throw new Error('Assinatura não encontrada');
+        throw new Error("Assinatura não encontrada");
       }
 
       const now = new Date();
       const originalPrice = subscription.plan.priceMonthly;
 
       // Verificar se está em período promocional
-      if (subscription.promotionalPrice && 
-          subscription.promotionalEndsAt && 
-          subscription.promotionalEndsAt > now) {
+      if (
+        subscription.promotionalPrice &&
+        subscription.promotionalEndsAt &&
+        subscription.promotionalEndsAt > now
+      ) {
         return {
           currentPrice: subscription.promotionalPrice,
           isPromotional: true,
           promotionalEndsAt: subscription.promotionalEndsAt,
-          originalPrice
+          originalPrice,
         };
       }
 
@@ -4526,7 +5315,7 @@ export class DatabaseStorage implements IStorage {
       return {
         currentPrice: originalPrice,
         isPromotional: false,
-        originalPrice
+        originalPrice,
       };
     } catch (error) {
       console.error("Erro ao obter preço atual:", error);
@@ -4534,21 +5323,24 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async checkPromotionalExpiry(userId: number): Promise<{ expired: boolean; subscription?: UserSubscription }> {
+  async checkPromotionalExpiry(
+    userId: number,
+  ): Promise<{ expired: boolean; subscription?: UserSubscription }> {
     try {
       const subscription = await this.getUserSubscription(userId);
-      
+
       if (!subscription) {
         return { expired: false };
       }
 
       const now = new Date();
-      
+
       // Verificar se promoção expirou
-      if (subscription.promotionalPrice && 
-          subscription.promotionalEndsAt && 
-          subscription.promotionalEndsAt <= now) {
-        
+      if (
+        subscription.promotionalPrice &&
+        subscription.promotionalEndsAt &&
+        subscription.promotionalEndsAt <= now
+      ) {
         // Atualizar assinatura para preço normal
         const plan = await this.getSubscriptionPlan(subscription.planId);
         if (plan) {
@@ -4556,10 +5348,10 @@ export class DatabaseStorage implements IStorage {
             finalPrice: plan.priceMonthly,
             promotionalPrice: null,
             promotionalEndsAt: null,
-            promotionalDescription: null
+            promotionalDescription: null,
           });
         }
-        
+
         return { expired: true, subscription };
       }
 
@@ -4571,19 +5363,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Método helper para verificar se assinatura precisa de renovação de preço
-  async processSubscriptionPriceUpdate(userId: number): Promise<{ priceChanged: boolean; newPrice?: number; oldPrice?: number }> {
+  async processSubscriptionPriceUpdate(
+    userId: number,
+  ): Promise<{ priceChanged: boolean; newPrice?: number; oldPrice?: number }> {
     try {
       const expiry = await this.checkPromotionalExpiry(userId);
-      
+
       if (expiry.expired && expiry.subscription) {
         const plan = await this.getSubscriptionPlan(expiry.subscription.planId);
         return {
           priceChanged: true,
           newPrice: plan?.priceMonthly,
-          oldPrice: expiry.subscription.promotionalPrice || undefined
+          oldPrice: expiry.subscription.promotionalPrice || undefined,
         };
       }
-      
+
       return { priceChanged: false };
     } catch (error) {
       console.error("Erro ao processar atualização de preço:", error);
@@ -4595,23 +5389,35 @@ export class DatabaseStorage implements IStorage {
   async getTodayScheduledSurgeriesCount(doctorId: number): Promise<number> {
     try {
       const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-      
-      const result = await db.select({ count: sql<number>`count(*)` })
+      const startOfDay = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+      );
+      const endOfDay = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() + 1,
+      );
+
+      const result = await db
+        .select({ count: sql<number>`count(*)` })
         .from(surgeryAppointments)
         .where(
           and(
             eq(surgeryAppointments.doctorId, doctorId),
             gte(surgeryAppointments.scheduledDate, startOfDay),
             lt(surgeryAppointments.scheduledDate, endOfDay),
-            inArray(surgeryAppointments.status, ['agendado', 'confirmado'])
-          )
+            inArray(surgeryAppointments.status, ["agendado", "confirmado"]),
+          ),
         );
-      
+
       return Number(result[0]?.count) || 0;
     } catch (error) {
-      console.error(`Erro ao contar cirurgias agendadas para hoje do médico ${doctorId}:`, error);
+      console.error(
+        `Erro ao contar cirurgias agendadas para hoje do médico ${doctorId}:`,
+        error,
+      );
       return 0;
     }
   }
@@ -4620,18 +5426,22 @@ export class DatabaseStorage implements IStorage {
   async getPendingAuthorizationOrdersCount(doctorId: number): Promise<number> {
     try {
       // Status 8 = aguardando_envio, Status 2 = em_avaliacao
-      const result = await db.select({ count: sql<number>`count(*)` })
+      const result = await db
+        .select({ count: sql<number>`count(*)` })
         .from(medicalOrders)
         .where(
           and(
             eq(medicalOrders.userId, doctorId),
-            inArray(medicalOrders.statusId, [8, 2]) // aguardando_envio e em_avaliacao
-          )
+            inArray(medicalOrders.statusId, [8, 2]), // aguardando_envio e em_avaliacao
+          ),
         );
-      
+
       return Number(result[0]?.count) || 0;
     } catch (error) {
-      console.error(`Erro ao contar pedidos aguardando autorização do médico ${doctorId}:`, error);
+      console.error(
+        `Erro ao contar pedidos aguardando autorização do médico ${doctorId}:`,
+        error,
+      );
       return 0;
     }
   }
@@ -4641,27 +5451,36 @@ export class DatabaseStorage implements IStorage {
     try {
       // Status 3 = aceito, Status 4 = autorizado_parcial
       // Pedidos que estão autorizados mas não têm data de procedimento definida
-      const result = await db.select({ count: sql<number>`count(*)` })
+      const result = await db
+        .select({ count: sql<number>`count(*)` })
         .from(medicalOrders)
         .where(
           and(
             eq(medicalOrders.userId, doctorId),
             inArray(medicalOrders.statusId, [3, 4]), // aceito e autorizado_parcial
-            isNull(medicalOrders.procedureDate)
-          )
+            isNull(medicalOrders.procedureDate),
+          ),
         );
-      
+
       return Number(result[0]?.count) || 0;
     } catch (error) {
-      console.error(`Erro ao contar pedidos aguardando agendamento do médico ${doctorId}:`, error);
+      console.error(
+        `Erro ao contar pedidos aguardando agendamento do médico ${doctorId}:`,
+        error,
+      );
       return 0;
     }
   }
 
   // === Incomplete Registrations (Lead Tracking) ===
-  async createIncompleteRegistration(data: InsertIncompleteRegistration): Promise<IncompleteRegistration> {
-    console.log('📧 Criando registro de lead incompleto:', { email: data.email, step: data.currentStep });
-    
+  async createIncompleteRegistration(
+    data: InsertIncompleteRegistration,
+  ): Promise<IncompleteRegistration> {
+    console.log("📧 Criando registro de lead incompleto:", {
+      email: data.email,
+      step: data.currentStep,
+    });
+
     // Verificar se já existe um registro para este email
     const existing = await db
       .select()
@@ -4672,14 +5491,27 @@ export class DatabaseStorage implements IStorage {
     if (existing.length > 0) {
       // Atualizar registro existente - merge inteligente (não sobrescrever dados existentes com null)
       const existingData = existing[0];
-      
+
       // Extrair dados adicionais (CRM, endereço, etc.) que não são campos básicos
-      const { email, firstName, lastName, cpf, phone, username, selectedPlanId, currentStep, userAgent, ipAddress, source, ...additionalData } = data;
-      
+      const {
+        email,
+        firstName,
+        lastName,
+        cpf,
+        phone,
+        username,
+        selectedPlanId,
+        currentStep,
+        userAgent,
+        ipAddress,
+        source,
+        ...additionalData
+      } = data;
+
       // Merge do userDataJson existente com novos dados
       const existingUserData = existingData.userDataJson || {};
       const mergedUserData = { ...existingUserData, ...additionalData };
-      
+
       const mergedData = {
         firstName: data.firstName || existingData.firstName,
         lastName: data.lastName || existingData.lastName,
@@ -4692,38 +5524,60 @@ export class DatabaseStorage implements IStorage {
         ipAddress: data.ipAddress || existingData.ipAddress,
         source: data.source || existingData.source,
         // Salvar dados extras como JSON
-        userDataJson: Object.keys(mergedUserData).length > 0 ? mergedUserData : {},
+        userDataJson:
+          Object.keys(mergedUserData).length > 0 ? mergedUserData : {},
         updatedAt: new Date(),
       };
-      
+
       const updated = await db
         .update(incompleteRegistrations)
         .set(mergedData)
         .where(eq(incompleteRegistrations.email, data.email))
         .returning();
-      
+
       return updated[0];
     } else {
       // Criar novo registro
       // Extrair dados adicionais (CRM, endereço, etc.) que não são campos básicos
-      const { email, firstName, lastName, cpf, phone, username, selectedPlanId, currentStep, userAgent, ipAddress, source, ...additionalData } = data;
-      
+      const {
+        email,
+        firstName,
+        lastName,
+        cpf,
+        phone,
+        username,
+        selectedPlanId,
+        currentStep,
+        userAgent,
+        ipAddress,
+        source,
+        ...additionalData
+      } = data;
+
       const newRegistration = {
         ...data,
         // Salvar dados extras como JSON
-        userDataJson: Object.keys(additionalData).length > 0 ? additionalData : {},
+        userDataJson:
+          Object.keys(additionalData).length > 0 ? additionalData : {},
         createdAt: new Date(),
-        lastActivityAt: new Date()
+        lastActivityAt: new Date(),
       };
-      
-      const result = await db.insert(incompleteRegistrations).values(newRegistration).returning();
+
+      const result = await db
+        .insert(incompleteRegistrations)
+        .values(newRegistration)
+        .returning();
       return result[0];
     }
   }
 
-  async updateIncompleteRegistrationStep(email: string, step: string, additionalData?: Partial<InsertIncompleteRegistration>): Promise<void> {
-    console.log('📧 Atualizando step do lead:', { email, step });
-    
+  async updateIncompleteRegistrationStep(
+    email: string,
+    step: string,
+    additionalData?: Partial<InsertIncompleteRegistration>,
+  ): Promise<void> {
+    console.log("📧 Atualizando step do lead:", { email, step });
+
     await db
       .update(incompleteRegistrations)
       .set({
@@ -4735,8 +5589,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markRegistrationCompleted(email: string): Promise<void> {
-    console.log('📧 Marcando registro como completado:', { email });
-    
+    console.log("📧 Marcando registro como completado:", { email });
+
     await db
       .update(incompleteRegistrations)
       .set({
@@ -4746,10 +5600,12 @@ export class DatabaseStorage implements IStorage {
       .where(eq(incompleteRegistrations.email, email));
   }
 
-  async getAbandonedRegistrations(daysOld: number = 1): Promise<IncompleteRegistration[]> {
+  async getAbandonedRegistrations(
+    daysOld: number = 1,
+  ): Promise<IncompleteRegistration[]> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysOld);
-    
+
     return await db
       .select()
       .from(incompleteRegistrations)
@@ -4757,8 +5613,8 @@ export class DatabaseStorage implements IStorage {
         and(
           isNull(incompleteRegistrations.completedAt), // Não completado
           isNull(incompleteRegistrations.abandonedAt), // Não marcado como abandonado
-          lt(incompleteRegistrations.createdAt, cutoffDate) // Mais antigo que X dias
-        )
+          lt(incompleteRegistrations.createdAt, cutoffDate), // Mais antigo que X dias
+        ),
       )
       .orderBy(desc(incompleteRegistrations.createdAt));
   }
@@ -4782,7 +5638,7 @@ export class DatabaseStorage implements IStorage {
       .groupBy(
         incompleteRegistrations.currentStep,
         incompleteRegistrations.completedAt,
-        incompleteRegistrations.abandonedAt
+        incompleteRegistrations.abandonedAt,
       );
 
     const result = {
@@ -4794,22 +5650,22 @@ export class DatabaseStorage implements IStorage {
       completed: 0,
     };
 
-    stats.forEach(stat => {
+    stats.forEach((stat) => {
       result.total += stat.count;
-      
+
       if (stat.completedAt) {
         result.completed += stat.count;
       } else if (stat.abandonedAt) {
         result.abandoned += stat.count;
       } else {
         switch (stat.currentStep) {
-          case 'form_completed':
+          case "form_completed":
             result.formCompleted += stat.count;
             break;
-          case 'plan_selected':
+          case "plan_selected":
             result.planSelected += stat.count;
             break;
-          case 'checkout_started':
+          case "checkout_started":
             result.checkoutStarted += stat.count;
             break;
         }
@@ -4819,53 +5675,59 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getIncompleteRegistrationByEmail(email: string): Promise<IncompleteRegistration | undefined> {
-    console.log('🔍 Buscando registro incompleto por email:', email);
-    
+  async getIncompleteRegistrationByEmail(
+    email: string,
+  ): Promise<IncompleteRegistration | undefined> {
+    console.log("🔍 Buscando registro incompleto por email:", email);
+
     const result = await db
       .select()
       .from(incompleteRegistrations)
       .where(eq(incompleteRegistrations.email, email))
       .limit(1);
-    
+
     return result[0];
   }
 
-  async getIncompleteRegistrationByToken(regToken: string): Promise<IncompleteRegistration | undefined> {
-    console.log('🔍 Buscando registro incompleto por token:', regToken);
-    
+  async getIncompleteRegistrationByToken(
+    regToken: string,
+  ): Promise<IncompleteRegistration | undefined> {
+    console.log("🔍 Buscando registro incompleto por token:", regToken);
+
     const result = await db
       .select()
       .from(incompleteRegistrations)
       .where(eq(incompleteRegistrations.regToken, regToken))
       .limit(1);
-    
+
     return result[0];
   }
 
-  async updateIncompleteRegistration(id: number, updates: Partial<InsertIncompleteRegistration>): Promise<IncompleteRegistration> {
-    console.log('📝 Atualizando registro incompleto:', { id, updates });
-    
+  async updateIncompleteRegistration(
+    id: number,
+    updates: Partial<InsertIncompleteRegistration>,
+  ): Promise<IncompleteRegistration> {
+    console.log("📝 Atualizando registro incompleto:", { id, updates });
+
     const result = await db
       .update(incompleteRegistrations)
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(incompleteRegistrations.id, id))
       .returning();
-    
+
     return result[0];
   }
 
   async deleteIncompleteRegistration(id: number): Promise<boolean> {
-    console.log('🗑️ Deletando registro incompleto:', { id });
-    
+    console.log("🗑️ Deletando registro incompleto:", { id });
+
     const result = await db
       .delete(incompleteRegistrations)
       .where(eq(incompleteRegistrations.id, id))
       .returning();
-    
+
     return result.length > 0;
   }
-
 }
 
 export const storage = new DatabaseStorage();
