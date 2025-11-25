@@ -5,7 +5,7 @@ import { setupAuth, hasPermission, isAuthenticated, checkTrialStatus } from "./a
 import Stripe from "stripe";
 import { WHATSAPP_CONFIG } from "../shared/config";
 
-// Middleware personalizado para relatórios que funciona com autenticação fff
+// Middleware personalizado para relatórios que funciona com autenticação
 function reportAuth(req: any, res: any, next: any) {
   console.log("🔍 Verificação de autenticação reportAuth:", {
     isAuthenticated: req.isAuthenticated ? req.isAuthenticated() : false,
@@ -20,7 +20,7 @@ function reportAuth(req: any, res: any, next: any) {
     return next();
   }
   
-  // Usuário não autenticado - retornar erro 401 fffff
+  // Usuário não autenticado - retornar erro 401
   console.log(`❌ Usuário não autenticado - negando acesso`);
   return res.status(401).json({ error: "Usuário não autenticado" });
 }
@@ -12832,7 +12832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // 5. Clonar justificativas clínicas específicas
+      // 5. Clonar justificativas clínicas específicas - CRIAR CÓPIAS INDEPENDENTES
       const justificationAssociations = await db
         .select()
         .from(surgicalApproachJustifications)
@@ -12844,19 +12844,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const justAssoc of justificationAssociations) {
         if (justAssoc.justificationId) {
           try {
-            await db
-              .insert(surgicalApproachJustifications)
-              .values({
-                surgicalProcedureId: targetProcedureId,
-                surgicalApproachId: targetApproachId,
-                justificationId: justAssoc.justificationId,
-                isPreferred: justAssoc.isPreferred,
-                customNotes: justAssoc.customNotes || "Justificativa clonada automaticamente",
-              })
-              .onConflictDoNothing();
-            counters.justifications++;
+            // Buscar o conteúdo completo da justificativa original
+            const originalJustification = await db
+              .select()
+              .from(clinicalJustifications)
+              .where(eq(clinicalJustifications.id, justAssoc.justificationId))
+              .limit(1);
+
+            if (originalJustification.length > 0) {
+              // Criar uma NOVA justificativa independente com o mesmo conteúdo
+              const newJustification = await db
+                .insert(clinicalJustifications)
+                .values({
+                  content: originalJustification[0].content,
+                  isActive: originalJustification[0].isActive ?? true,
+                  createdBy: originalJustification[0].createdBy,
+                })
+                .returning();
+
+              if (newJustification.length > 0) {
+                // Associar a NOVA justificativa à conduta clonada
+                await db
+                  .insert(surgicalApproachJustifications)
+                  .values({
+                    surgicalProcedureId: targetProcedureId,
+                    surgicalApproachId: targetApproachId,
+                    justificationId: newJustification[0].id,
+                    isPreferred: justAssoc.isPreferred ?? false,
+                    customNotes: justAssoc.customNotes,
+                  })
+                  .onConflictDoNothing();
+                
+                console.log(`✅ Justificativa clonada: criada nova justificativa ID ${newJustification[0].id} (original: ${justAssoc.justificationId})`);
+                counters.justifications++;
+              } else {
+                console.error(`❌ Erro ao criar nova justificativa - nenhum registro retornado`);
+              }
+            } else {
+              console.warn(`⚠️ Justificativa original ${justAssoc.justificationId} não encontrada - pulando`);
+            }
           } catch (error) {
-            console.log(`Justificativa ${justAssoc.justificationId} já associada à conduta ${targetApproachId} do procedimento ${targetProcedureId}`);
+            console.error(`❌ Erro ao clonar justificativa ${justAssoc.justificationId}:`, error);
           }
         }
       }
@@ -13189,6 +13217,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/admin/approach-cbhpm/{procedureId}/{approachId}/{cbhpmId}/quantity - Atualizar quantidade de CBHPM
+  app.patch("/api/admin/approach-cbhpm/:procedureId/:approachId/:cbhpmId/quantity", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const procedureId = parseInt(req.params.procedureId);
+      const approachId = parseInt(req.params.approachId);
+      const cbhpmId = parseInt(req.params.cbhpmId);
+      const { quantity } = req.body;
+      
+      if (quantity === undefined || quantity === null) {
+        return res.status(400).json({ message: "Quantidade é obrigatória" });
+      }
+
+      const quantityNum = Number(quantity);
+      if (!Number.isFinite(quantityNum) || !Number.isInteger(quantityNum) || quantityNum < 1) {
+        return res.status(400).json({ message: "Quantidade deve ser um número inteiro válido maior que 0" });
+      }
+      
+      console.log(`🔄 Atualizando quantidade do CBHPM ${cbhpmId} na conduta ${approachId} para ${quantityNum}`);
+
+      // Atualizar a quantidade
+      const result = await db
+        .update(surgicalApproachProcedures)
+        .set({ 
+          quantity: quantityNum,
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(surgicalApproachProcedures.surgicalProcedureId, procedureId),
+          eq(surgicalApproachProcedures.surgicalApproachId, approachId),
+          eq(surgicalApproachProcedures.procedureId, cbhpmId)
+        ))
+        .returning();
+
+      if (result.length === 0) {
+        return res.status(404).json({ message: "Associação CBHPM não encontrada" });
+      }
+
+      console.log(`✅ Quantidade do CBHPM ${cbhpmId} atualizada com sucesso`);
+      res.json({ message: "Quantidade atualizada com sucesso", data: result[0] });
+    } catch (error) {
+      console.error("Erro ao atualizar quantidade do CBHPM:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
   // === APIs para gerenciar OPME nas condutas ===
   
   // POST /api/admin/approach-opme - Adicionar OPME a uma conduta
@@ -13255,6 +13328,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "OPME removido com sucesso" });
     } catch (error) {
       console.error("Erro ao remover OPME:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  // PATCH /api/admin/approach-opme/{procedureId}/{approachId}/{opmeId}/quantity - Atualizar quantidade de OPME
+  app.patch("/api/admin/approach-opme/:procedureId/:approachId/:opmeId/quantity", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const procedureId = parseInt(req.params.procedureId);
+      const approachId = parseInt(req.params.approachId);
+      const opmeId = parseInt(req.params.opmeId);
+      const { quantity } = req.body;
+      
+      if (quantity === undefined || quantity === null) {
+        return res.status(400).json({ message: "Quantidade é obrigatória" });
+      }
+
+      const quantityNum = Number(quantity);
+      if (!Number.isFinite(quantityNum) || !Number.isInteger(quantityNum) || quantityNum < 1) {
+        return res.status(400).json({ message: "Quantidade deve ser um número inteiro válido maior que 0" });
+      }
+      
+      console.log(`🔄 Atualizando quantidade do OPME ${opmeId} na conduta ${approachId} para ${quantityNum}`);
+
+      // Atualizar a quantidade
+      const result = await db
+        .update(surgicalApproachOpmeItems)
+        .set({ 
+          quantity: quantityNum,
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(surgicalApproachOpmeItems.surgicalProcedureId, procedureId),
+          eq(surgicalApproachOpmeItems.surgicalApproachId, approachId),
+          eq(surgicalApproachOpmeItems.opmeItemId, opmeId)
+        ))
+        .returning();
+
+      if (result.length === 0) {
+        return res.status(404).json({ message: "Associação OPME não encontrada" });
+      }
+
+      console.log(`✅ Quantidade do OPME ${opmeId} atualizada com sucesso`);
+      res.json({ message: "Quantidade atualizada com sucesso", data: result[0] });
+    } catch (error) {
+      console.error("Erro ao atualizar quantidade do OPME:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   });
@@ -15356,10 +15474,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Health check endpoint para Docker
+  // Health check endpoint para Docker ewrew
   app.get('/api/health', async (req, res) => {
     try {
-      // Verificar conectividade com banco de dados
+      // Verificar conectividade com banco de dados afdas
       const dbCheck = await db.select({ count: count() }).from(users);
       
       res.json({ 
