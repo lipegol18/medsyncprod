@@ -1,6 +1,6 @@
 import {
   patients, type Patient, type InsertPatient,
-  healthInsuranceProviders, type HealthInsuranceProvider, type InsertHealthInsuranceProvider,
+  healthInsuranceProviders, type Healt\hInsuranceProvider, type InsertHealthInsuranceProvider,
   healthInsurancePlans, type HealthInsurancePlan, type InsertHealthInsurancePlan,
   opmeItems, type OpmeItem, type InsertOpmeItem,
   opmeSuppliers, type OpmeSupplier, type InsertOpmeSupplier,
@@ -60,7 +60,7 @@ function hexToTailwindClasses(hexColor: string) {
   const g = parseInt(hex.substr(2, 2), 16);
   const b = parseInt(hex.substr(4, 2), 16);
 
-  // Determinar cor principal baseada nos valores RGB dasdsad
+  // Determinar cor principal baseada nos valores RGB
   const max = Math.max(r, g, b);
   const isGrayish = Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30;
   
@@ -3254,7 +3254,7 @@ export class DatabaseStorage implements IStorage {
       
       console.log("Resultado da consulta de estatísticas por hospital:", result);
       
-      // Verificamos se temos um resultado e se tem rows
+      // Verificamos se temos um resultado e se tem rows sdfdsfds
       if (result && result.rows && result.rows.length > 0) {
         console.log("USANDO DADOS REAIS DE HOSPITAIS:", result.rows);
         // Formato esperado pela UI: {name: string, value: number}
