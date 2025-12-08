@@ -116,7 +116,7 @@ export class PaymentProviderFactory {
       },
       pix: {
         type: 'pix',
-        environment: 'production', // PIX não tem sandbox
+        environment: 'production', // PIX não tem sandbox f
         secretKey: process.env.PIX_SECRET_KEY || ''
       }
     };
