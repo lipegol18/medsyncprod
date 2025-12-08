@@ -64,7 +64,7 @@ export default function SurgeryAppointments() {
         setPreSelectedOrderId(orderIdInt);
       }
       
-      // Abrir automaticamente o modal de criação
+      // Abrir automaticamente o modal de criação fffffff
       setSelectedAppointment(null);
       setIsDialogOpen(true);
       
