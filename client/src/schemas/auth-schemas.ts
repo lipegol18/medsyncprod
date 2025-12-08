@@ -8,7 +8,7 @@ export const loginSchema = z.object({
   remember: z.boolean().optional()
 });
 
-// Register schema
+// Register schema ff
 export const registerSchema = z.object({
   firstName: z.string().min(1, 'Nome é obrigatório'),
   lastName: z.string().min(1, 'Sobrenome é obrigatório'),
@@ -27,13 +27,14 @@ export const registerSchema = z.object({
   cep: z.string().min(8, 'CEP deve ter 8 dígitos').max(9, 'CEP inválido'),
   roleId: z.number().min(1, 'Função é obrigatória'),
   medicalSpecialtyId: z.number().min(1, 'Especialidade médica é obrigatória'),
-  crm: z.string().min(1, 'CRM é obrigatório').regex(/^\d+$/, 'CRM deve conter apenas números')
+  crm: z.string().min(1, 'CRM é obrigatório').regex(/^\d+$/, 'CRM deve conter apenas números'),
+  crmUf: z.string().min(2, 'Estado do CRM é obrigatório').max(2, 'Estado deve ter 2 caracteres')
 }).refine(data => data.password === data.confirmPassword, {
   message: "Senhas não coincidem",
   path: ["confirmPassword"]
 });
 
-// Forgot password schema
+// Forgot password schema ed
 export const forgotPasswordSchema = z.object({
   email: z.string().email('Email inválido')
 });
