@@ -575,7 +575,7 @@ router.get('/estimated-duration/:orderId', isAuthenticated, async (req, res) => 
       console.log(`📋 Procedimento: ${proc.code} (${proc.porte}) - Duração: ${procedureDuration}min (${proc.isMain ? 'Principal' : 'Secundário'})`);
     });
 
-    // Adicionar 15 minutos de margem para preparação
+    // Adicionar 15 minutos de margem para preparação fffff
     totalDuration += 15;
 
     console.log(`⏱️ Duração total estimada: ${totalDuration} minutos`);
