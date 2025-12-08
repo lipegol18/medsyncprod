@@ -2489,6 +2489,18 @@ export class DatabaseStorage implements IStorage {
       }
       if (updates.procedureDate !== undefined)
         updateData.procedureDate = updates.procedureDate;
+      if (updates.cbhpmAdditionalNotes !== undefined)
+        updateData.cbhpmAdditionalNotes = updates.cbhpmAdditionalNotes;
+      if ((updates as any).cbhpm_additional_notes !== undefined)
+        updateData.cbhpmAdditionalNotes = (updates as any).cbhpm_additional_notes;
+      if (updates.opmeAdditionalNotes !== undefined)
+        updateData.opmeAdditionalNotes = updates.opmeAdditionalNotes;
+      if ((updates as any).opme_additional_notes !== undefined)
+        updateData.opmeAdditionalNotes = (updates as any).opme_additional_notes;
+      if (updates.supplierAdditionalNotes !== undefined)
+        updateData.supplierAdditionalNotes = updates.supplierAdditionalNotes;
+      if ((updates as any).supplier_additional_notes !== undefined)
+        updateData.supplierAdditionalNotes = (updates as any).supplier_additional_notes;
 
       // Sempre atualizar timestamp
       updateData.updatedAt = new Date();
@@ -4245,7 +4257,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Obter pedidos médicos de um médico específico para relatórios com filtros opcionais fdsfds
+  // Obter pedidos médicos de um médico específico para relatórios com filtros opcionais
   async getMedicalOrdersForReportingByDoctor(
     doctorId: number,
     filters: {
@@ -4534,7 +4546,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // ==== MÉTODOS CRUD PARA CID-10 ====
+  // ==== MÉTODOS CRUD PARA CID-10 ==== dd
 
   async getCidCodes(search?: string, category?: string): Promise<CidCode[]> {
     try {
