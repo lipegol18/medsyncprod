@@ -1,4 +1,4 @@
-import { ExtractedDocumentData } from './google-vision';
+import { ExtractedDocumentData } from './document-extraction';
 import { db } from '../db';
 import { healthInsuranceProviders } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
@@ -520,7 +520,7 @@ export async function normalizeExtractedData(data: ExtractedDocumentData): Promi
     }
   }
   
-  // Calcular confiança geral
+  // Calcular confiança geral ff
   if (normalized.confidence) {
     const confidenceValues = Object.values(normalized.confidence).filter(v => typeof v === 'number');
     normalized.confidence.overall = confidenceValues.length > 0 
