@@ -11,17 +11,13 @@ import { useSupportContact } from '@/lib/support-contact';
 import { ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
 
 interface RegisterModalProps {
-  onSubmit: (data: RegisterFormType) => void;
   onSwitchToLogin: () => void;
-  isLoading: boolean;
   validationErrors: Record<string, string>;
   onFieldValidation: (field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string) => void;
 }
 
 export function RegisterModal({
-  onSubmit,
   onSwitchToLogin,
-  isLoading,
   validationErrors,
   onFieldValidation
 }: RegisterModalProps) {
@@ -44,13 +40,13 @@ export function RegisterModal({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // Buscar planos de assinatura  adasdsadsadas
+  // Buscar planos de assinatura
   const { data: plans } = useQuery<SubscriptionPlan[]>({
     queryKey: ["/api/subscriptions/plans"],
   });
 
   // Buscar desconto automático ativo
-  const { data: automaticDiscountResponse } = useQuery({
+  const { data: automaticDiscountResponse } = useQuery<{ success: boolean; data: any }>({
     queryKey: ['/api/discount-codes/automatic'],
   });
 
@@ -182,12 +178,12 @@ export function RegisterModal({
           username: data.username,
           // Dados CRM
           medicalSpecialtyId: data.medicalSpecialtyId,
-          crmNumber: data.crmNumber,
-          crmState: data.crmState,
+          crm: data.crm,
+          crmUf: data.crmUf,
           // Dados de endereço
-          zipCode: data.zipCode,
+          cep: data.cep,
           address: data.address,
-          addressNumber: data.addressNumber,
+          number: data.number,
           complement: data.complement,
           neighborhood: data.neighborhood,
           city: data.city,
@@ -209,39 +205,12 @@ export function RegisterModal({
     setCurrentStep('pricing');
   };
 
-  const handleBackToForm = async () => {
-    // Carregar dados salvos se existir email
-    if (formData?.email) {
-      try {
-        console.log('🔍 Carregando dados salvos para email:', formData.email);
-        
-        const response = await fetch(`/api/incomplete-registration/${encodeURIComponent(formData.email)}`);
-        
-        if (response.ok) {
-          const result = await response.json();
-          
-          if (result.success && result.data) {
-            console.log('✅ Dados carregados:', result.data);
-            setPreloadedFormData(result.data);
-            
-            // Se houver plano selecionado salvo, restaurar também
-            if (result.selectedPlanId) {
-              setSelectedPlanId(result.selectedPlanId);
-            }
-          }
-        } else {
-          console.log('ℹ️ Nenhum dado salvo encontrado, mantendo dados atuais');
-          // Se não encontrar dados salvos, usar os dados atuais do formData
-          setPreloadedFormData(formData);
-        }
-      } catch (error) {
-        console.error('❌ Erro ao carregar dados salvos:', error);
-        // Em caso de erro, usar os dados atuais do formData
-        setPreloadedFormData(formData);
-      }
-    } else {
-      // Se não houver email, limpar dados pré-carregados
-      setPreloadedFormData(null);
+  const handleBackToForm = () => {
+    // Usar diretamente os dados do formData que já contém todos os campos preenchidos
+    // Não buscar da API pois ela retorna dados incompletos (sem CRM, endereço, etc.)
+    if (formData) {
+      console.log('🔙 Voltando ao formulário com dados locais:', formData);
+      setPreloadedFormData(formData);
     }
     
     setCurrentStep('form');
@@ -400,7 +369,7 @@ export function RegisterModal({
         <RegisterForm 
           onSubmit={handleFormSubmit}
           onSwitchToLogin={onSwitchToLogin}
-          isLoading={isLoading}
+          isLoading={false}
           validationErrors={validationErrors}
           onFieldValidation={onFieldValidation}
           defaultValues={preloadedFormData || formData || undefined}
@@ -563,11 +532,28 @@ export function RegisterModal({
             </div>
           )}
 
-          {/* Cupom Promocional Disponível */}
-          {automaticDiscount && (
-            <p className="text-sm font-bold text-blue-900">
-              Ativar o desconto de {getDiscountPercentage()}% com o código {automaticDiscount.code} na próxima tela de pagamento.
-            </p>
+          {/* Informações sobre Cupom Promocional */}
+          {automaticDiscount && billingInterval === 'yearly' && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+              <p className="text-sm font-bold text-emerald-700 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                Desconto de {getDiscountPercentage()}% aplicado automaticamente no plano anual!
+              </p>
+              <p className="text-xs text-emerald-600 mt-1">
+                O código {automaticDiscount.code} será aplicado automaticamente no checkout.
+              </p>
+            </div>
+          )}
+          {automaticDiscount && billingInterval === 'monthly' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm font-bold text-blue-700">
+                Código promocional disponível: {automaticDiscount.code}
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Insira o código na próxima tela de pagamento para obter {getDiscountPercentage()}% de desconto.
+                Você também pode usar outros códigos promocionais que possua.
+              </p>
+            </div>
           )}
 
           {/* Botões de Ação */}
@@ -854,14 +840,14 @@ export function RegisterModal({
     );
   }
 
-  // Fallback: retornar ao formulário se currentStep não for reconhecido
+  // Fallback: rfffetornar ao formulário se currentStep não for reconhecido dsds
   return (
     <div>
       <ProgressIndicator />
       <RegisterForm 
         onSubmit={handleFormSubmit}
         onSwitchToLogin={onSwitchToLogin}
-        isLoading={isLoading}
+        isLoading={false}
         validationErrors={validationErrors}
         onFieldValidation={onFieldValidation}
         defaultValues={preloadedFormData || formData || undefined}
