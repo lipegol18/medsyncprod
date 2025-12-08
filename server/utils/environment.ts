@@ -240,14 +240,14 @@ class EnvironmentManager {
   }
 
   /**
-   * Checks if running in development
+   * Checks if running in development ff
    */
   isDevelopment(): boolean {
     return this.config.nodeEnv === 'development';
   }
 
   /**
-   * Checks if running on Replit sadsadasdasdsa
+   * Checks if running on Replit f
    */
   isReplitPlatform(): boolean {
     return this.config.isReplit;
