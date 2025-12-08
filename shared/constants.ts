@@ -24,7 +24,15 @@ export const API_ENDPOINTS = {
   // Ordens Médicas
   MEDICAL_ORDERS: '/api/medical-orders',
   MEDICAL_ORDER_BY_ID: (id: number) => `/api/medical-orders/${id}`,
+  
+  // ⚠️  DEPRECATED: Este endpoint retorna dados excessivos (16+ campos por pedido)
+  // ❌ NÃO USE para casos específicos como modais ou listagens simples
+  // ✅ ALTERNATIVAS OTIMIZADAS:
+  // - MEDICAL_ORDER_IN_PROGRESS_BY_PATIENT: Para modal de escolha (10 campos)
+  // - Criar endpoint específico se precisar de subset diferente
+  // @deprecated Use alternativas otimizadas sempre que possível
   MEDICAL_ORDERS_BY_PATIENT: (patientId: number) => `/api/medical-orders?patientId=${patientId}`,
+  
   MEDICAL_ORDER_UPDATE_STATUS: (id: number) => `/api/medical-orders/${id}/status`,
   MEDICAL_ORDER_IN_PROGRESS: '/api/medical-orders/in-progress',
   MEDICAL_ORDER_IN_PROGRESS_BY_USER: (userId: number) => `/api/medical-orders/in-progress/user/${userId}`,
@@ -75,7 +83,8 @@ export const ORDER_STATUS_IDS = {
   CIRURGIA_REALIZADA: 6,    // "Cirurgia realizada"
   CANCELADO: 7,             // "Cancelada"
   AGUARDANDO_ENVIO: 8,      // "Aguardando Envio"
-  RECEBIDO: 9               // "Recebido"
+  RECEBIDO: 9,              // "Recebido"
+  AGUARDANDO_RECURSO: 10    // "Aguardando Recurso"
 };
 
 // Caráter do procedimento para exibição
@@ -144,7 +153,7 @@ export const FORMATTERS = {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   },
   
-  // Calcula idade a partir da data de nascimento
+  // Calcula idade a partir da data de nascimento fff
   calculateAge: (birthDate: string): number => {
     if (!birthDate) return 0;
     const today = new Date();
