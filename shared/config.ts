@@ -1,6 +1,6 @@
 /**
  * Configurações centralizadas do sistema MedSync
- * Edite este arquivo para alterar as configurações globais
+ * Edite este arquivo para alterar as configurações globais ff
  */
 
 // Configurações do WhatsApp para suporte
@@ -8,7 +8,7 @@ export const WHATSAPP_CONFIG = {
   // Número padrão para suporte geral
   default: "5521999991905",
   
-  // Números específicos por contexto asdad
+  // Números específicos por contexto
   contexts: {
     // Brasil - suporte local
     br: "5521999991905",
@@ -115,7 +115,7 @@ export async function sendToN8NWebhook(
   });
 }
 
-// Outras configurações do sistema podem ser adicionadas aqui futuramente dfdsfdsfds
+// Outras configurações do sistema podem ser adicionadas aqui futuramente
 export const SYSTEM_CONFIG = {
   // Email de suporte
   supportEmail: "medsync.suporte@gmail.com",
