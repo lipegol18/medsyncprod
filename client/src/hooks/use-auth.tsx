@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext } from "react";
+import React, { createContext, ReactNode, useContext } from "react";
 import {
   useQuery,
   useMutation,
@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query";
 import { insertUserSchema, User as SelectUser, type InsertUser } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { useToast, ToastPresets } from "@/hooks/use-toast";
 
 type AuthContextType = {
   user: SelectUser | null;
@@ -24,6 +24,12 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  
+  // Configurar filtro global de toasts - mostrar apenas erros
+  React.useEffect(() => {
+    console.log("🎛️ Configurando filtro global de toasts: APENAS ERROS");
+    ToastPresets.errorsOnly();
+  }, []);
   const {
     data: user,
     error,
@@ -93,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("🔐 Frontend - Erro ao verificar sessão:", error);
       }
       
-      // Invalidar queries para forçar refresh
+      // Invalidar queries para forçar refresh ff
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       
       toast({
@@ -116,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await apiRequest("/api/register", "POST", userData);
     },
     onSuccess: (response: any) => {
-      // Não defina os dados do usuário no cache, pois ele não está ativo
+      // Não defina os dados do usuário no cache, pois ele não está ativo gggg
       // e não deve ser considerado como logado
       toast({
         title: "Registro realizado com sucesso",
