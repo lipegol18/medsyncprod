@@ -47,14 +47,12 @@ import { RegisterModal } from "@/components/auth/register-modal";
 import { ForgotPasswordModal } from "@/components/auth/forgot-password-modal";
 import {
   type LoginForm,
-  type RegisterForm,
   type ForgotPasswordForm,
   type ResetPasswordForm,
 } from "@/schemas/auth-schemas";
 import MedSyncLogo from "@/assets/medsync-logo-new.svg";
 import MedSyncLogoGray from "@/assets/logos/Medsync_Logo_Gray.svg";
 import MedSyncLogoWhite from "@/assets/logos/Medsync_Logo_White.svg";
-import blueSectionImage from "@assets/image_1753726436254.png";
 import sectionDoctorImage from "@/assets/section_doctor_image.png";
 import sectionYStylized from "@/assets/section_y_stylized.svg";
 import iconHome1 from "@/assets/icons/icon_home_1.svg";
@@ -172,48 +170,6 @@ export default function AuthPage() {
     },
   });
 
-  const registerMutation = useMutation({
-    mutationFn: async (data: RegisterForm) => {
-      // Preparar dados para o backend (que espera 'name' em vez de firstName + lastName)
-      const backendData = {
-        ...data,
-        name: `${data.firstName} ${data.lastName}`,
-      };
-
-      // Enviar para a API interna primeiro
-      const result = await apiRequest("/api/register", "POST", backendData);
-
-      // WEBHOOK COMENTADO: Não está na documentação oficial N8N
-      // Se precisar ser reativado, adicionar na configuração shared/config.ts
-      // fetch("https://lipegol18.app.n8n.cloud/webhook/validar-crm", {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      //   body: JSON.stringify(data),
-      // })
-      //   .then((response) => {
-      //     console.log("Webhook n8n executado:", response.status);
-      //   })
-      //   .catch((error) => {
-      //     console.warn("Webhook n8n falhou:", error);
-      //   });
-
-      return result;
-    },
-    onSuccess: () => {
-      toast({ title: "Registrossss realizado com sucesso!" });
-      setModalType("login");
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro no registro",
-        description: error.message || "Erro ao criar conta",
-        variant: "destructive",
-      });
-    },
-  });
-
   const forgotPasswordMutation = useMutation({
     mutationFn: async (data: ForgotPasswordForm) => {
       // Fazer a chamada para a API interna
@@ -323,48 +279,6 @@ export default function AuthPage() {
   // Modal handlers
   const handleLoginSubmit = (data: LoginForm) => {
     loginMutation.mutate(data);
-  };
-
-  const handleRegisterSubmit = async (data: RegisterForm) => {
-    // Limpar erros de validação anteriores
-    setValidationErrors({});
-
-    // Validar unicidade de todos os campos obrigatórios
-    const validationPromises = [
-      validateUnique("cpf", onlyNumbers(data.cpf)),
-      validateUnique("crm", data.crm.toString()),
-      validateUnique("phone", data.phone),
-      validateUnique("email", data.email),
-      validateUnique("username", data.username),
-    ];
-
-    const [cpfUnique, crmUnique, phoneUnique, emailUnique, usernameUnique] =
-      await Promise.all(validationPromises);
-
-    const errors: Record<string, string> = {};
-    if (!cpfUnique) errors.cpf = "CPF já está em uso";
-    if (!crmUnique) errors.crm = "CRM já está em uso";
-    if (!phoneUnique) errors.phone = "Telefone já está em uso";
-    if (!emailUnique) errors.email = "Email já está em uso";
-    if (!usernameUnique) errors.username = "Username já está em uso";
-
-    if (Object.keys(errors).length > 0) {
-      setValidationErrors(errors);
-      toast({
-        title: "Erro no registro",
-        description:
-          "Alguns campos já estão em uso. Verifique e tente novamente.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Normalizar CPF removendo formatação antes de enviar
-    const normalizedData = {
-      ...data,
-      cpf: onlyNumbers(data.cpf),
-    };
-    registerMutation.mutate(normalizedData);
   };
 
   const handleForgotPasswordSubmit = (data: ForgotPasswordForm) => {
@@ -722,9 +636,7 @@ export default function AuthPage() {
               />
             ) : modalType === "register" ? (
               <RegisterModal
-                onSubmit={handleRegisterSubmit}
                 onSwitchToLogin={() => setModalType("login")}
-                isLoading={registerMutation.isPending}
                 validationErrors={validationErrors}
                 onFieldValidation={handleFieldValidation}
               />
@@ -744,7 +656,7 @@ export default function AuthPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Botão flutuante do WhatsApp */}
+      {/* Botão flutuante do WhatsApp ff */}
       <div
         className="fixed bottom-6 right-6 z-50 transform transition-all duration-300 hover:scale-110"
         onClick={() => {
