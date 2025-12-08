@@ -48,10 +48,10 @@ import { relationalOrderService } from "./relational-services";
 import { randomUUID } from "crypto";
 import { getPaymentProvider } from "./payments";
 import { db, pool } from "./db";
-import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans, medicalSpecialties, userSubscriptions, discountCodes, insertDiscountCodeSchema, webhookEvents } from "../shared/schema";
+import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans, medicalSpecialties, userSubscriptions, discountCodes, insertDiscountCodeSchema, webhookEvents, surgeryAppointments } from "../shared/schema";
 import { eq, and, or, isNull, sql, desc, asc, not, ne, count, isNotNull } from "drizzle-orm";
 import { normalizeText } from "./utils/normalize";
-import { extractTextFromImage, processIdentityDocument, processInsuranceCard } from "./services/google-vision";
+import { documentExtractionService } from "./services/document-extraction";
 import { normalizeExtractedData } from "./services/data-normalizer";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -2429,35 +2429,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ? await storage.getUser(order.userId)
               : null;
               
-            // Buscar CIDs relacionados ao pedido
-            let orderCids = [];
+            // Buscar CIDs relacionados ao pedido (incluindo associações de procedimento/conduta)
+            let orderCids: any[] = [];
             try {
               const cidData = await db.select({
                 id: cidCodes.id,
                 code: cidCodes.code,
                 description: cidCodes.description,
-                category: cidCodes.category
+                category: cidCodes.category,
+                // Incluir IDs de associação
+                surgicalApproachId: medicalOrderCids.surgicalApproachId,
+                surgicalProcedureId: medicalOrderCids.surgicalProcedureId
               })
               .from(medicalOrderCids)
               .leftJoin(cidCodes, eq(medicalOrderCids.cidCodeId, cidCodes.id))
               .where(eq(medicalOrderCids.orderId, order.id));
               
-              orderCids = cidData.filter(cid => cid.id !== null);
+              // Enriquecer com dados da conduta e procedimento cirúrgico
+              const enrichedCidData = await Promise.all(cidData.filter(cid => cid.id !== null).map(async (cid) => {
+                let surgicalApproach = null;
+                let surgicalProcedure = null;
+                
+                if (cid.surgicalApproachId) {
+                  const approachData = await db.select().from(surgicalApproaches).where(eq(surgicalApproaches.id, cid.surgicalApproachId));
+                  if (approachData.length > 0) {
+                    surgicalApproach = { id: approachData[0].id, name: approachData[0].name };
+                  }
+                }
+                
+                if (cid.surgicalProcedureId) {
+                  const procedureData = await db.select().from(surgicalProcedures).where(eq(surgicalProcedures.id, cid.surgicalProcedureId));
+                  if (procedureData.length > 0) {
+                    surgicalProcedure = { id: procedureData[0].id, name: procedureData[0].name };
+                  }
+                }
+                
+                return {
+                  cid: {
+                    id: cid.id,
+                    code: cid.code,
+                    description: cid.description,
+                    category: cid.category
+                  },
+                  surgicalApproach,
+                  surgicalProcedure,
+                  surgicalApproachId: cid.surgicalApproachId,
+                  surgicalProcedureId: cid.surgicalProcedureId
+                };
+              }));
+              
+              orderCids = enrichedCidData;
             } catch (error) {
               console.log(`Erro ao buscar CIDs para pedido ${order.id}:`, error);
             }
             
-            // Buscar condutas cirúrgicas relacionadas ao pedido
+            // Buscar condutas cirúrgicas relacionadas ao pedido (com procedimento associado)
             let orderApproaches = [];
             try {
               const approachData = await db.select({
                 id: surgicalApproaches.id,
                 name: surgicalApproaches.name,
                 description: surgicalApproaches.description,
-                isPrimary: medicalOrderSurgicalApproaches.isPrimary
+                isPrimary: medicalOrderSurgicalApproaches.isPrimary,
+                surgicalProcedureId: medicalOrderSurgicalApproaches.surgicalProcedureId,
+                procedureName: surgicalProcedures.name
               })
               .from(medicalOrderSurgicalApproaches)
               .leftJoin(surgicalApproaches, eq(medicalOrderSurgicalApproaches.surgicalApproachId, surgicalApproaches.id))
+              .leftJoin(surgicalProcedures, eq(medicalOrderSurgicalApproaches.surgicalProcedureId, surgicalProcedures.id))
               .where(eq(medicalOrderSurgicalApproaches.medicalOrderId, order.id))
               .orderBy(medicalOrderSurgicalApproaches.isPrimary);
               
@@ -2594,35 +2633,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const usersData = await db.select().from(users).where(eq(users.id, order.userId));
         const userData = usersData[0];
 
-        // Buscar CIDs relacionados ao pedido
+        // Buscar CIDs relacionados ao pedido (incluindo associações de procedimento/conduta)
         let orderCids: any[] = [];
         try {
           const cidData = await db.select({
             id: cidCodes.id,
             code: cidCodes.code,
             description: cidCodes.description,
-            category: cidCodes.category
+            category: cidCodes.category,
+            // Incluir IDs de associação
+            surgicalApproachId: medicalOrderCids.surgicalApproachId,
+            surgicalProcedureId: medicalOrderCids.surgicalProcedureId
           })
           .from(medicalOrderCids)
           .leftJoin(cidCodes, eq(medicalOrderCids.cidCodeId, cidCodes.id))
           .where(eq(medicalOrderCids.orderId, order.id));
           
-          orderCids = cidData.filter(cid => cid.id !== null);
+          // Enriquecer com dados da conduta e procedimento cirúrgico
+          const enrichedCidData = await Promise.all(cidData.filter(cid => cid.id !== null).map(async (cid) => {
+            let surgicalApproach = null;
+            let surgicalProcedure = null;
+            
+            if (cid.surgicalApproachId) {
+              const approachData = await db.select().from(surgicalApproaches).where(eq(surgicalApproaches.id, cid.surgicalApproachId));
+              if (approachData.length > 0) {
+                surgicalApproach = { id: approachData[0].id, name: approachData[0].name };
+              }
+            }
+            
+            if (cid.surgicalProcedureId) {
+              const procedureData = await db.select().from(surgicalProcedures).where(eq(surgicalProcedures.id, cid.surgicalProcedureId));
+              if (procedureData.length > 0) {
+                surgicalProcedure = { id: procedureData[0].id, name: procedureData[0].name };
+              }
+            }
+            
+            return {
+              cid: {
+                id: cid.id,
+                code: cid.code,
+                description: cid.description,
+                category: cid.category
+              },
+              surgicalApproach,
+              surgicalProcedure,
+              surgicalApproachId: cid.surgicalApproachId,
+              surgicalProcedureId: cid.surgicalProcedureId
+            };
+          }));
+          
+          orderCids = enrichedCidData;
         } catch (error) {
           console.log(`Erro ao buscar CIDs para pedido ${order.id}:`, error);
         }
 
-        // Buscar condutas cirúrgicas relacionadas ao pedido
+        // Buscar condutas cirúrgicas relacionadas ao pedido (com procedimento associado)
         let orderApproaches: any[] = [];
         try {
           const approachData = await db.select({
             id: surgicalApproaches.id,
             name: surgicalApproaches.name,
             description: surgicalApproaches.description,
-            isPrimary: medicalOrderSurgicalApproaches.isPrimary
+            isPrimary: medicalOrderSurgicalApproaches.isPrimary,
+            surgicalProcedureId: medicalOrderSurgicalApproaches.surgicalProcedureId,
+            procedureName: surgicalProcedures.name
           })
           .from(medicalOrderSurgicalApproaches)
           .leftJoin(surgicalApproaches, eq(medicalOrderSurgicalApproaches.surgicalApproachId, surgicalApproaches.id))
+          .leftJoin(surgicalProcedures, eq(medicalOrderSurgicalApproaches.surgicalProcedureId, surgicalProcedures.id))
           .where(eq(medicalOrderSurgicalApproaches.medicalOrderId, order.id))
           .orderBy(medicalOrderSurgicalApproaches.isPrimary);
           
@@ -2649,6 +2727,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           orderProcedures = procedureData;
         } catch (error) {
           console.log(`Erro ao buscar procedimentos cirúrgicos para pedido ${order.id}:`, error);
+        }
+
+        // Buscar agendamento cirúrgico para este pedido (se existir)
+        let surgeryAppointment = null;
+        try {
+          const appointmentData = await db
+            .select({
+              id: surgeryAppointments.id,
+              scheduledDate: surgeryAppointments.scheduledDate,
+              scheduledTime: surgeryAppointments.scheduledTime,
+              status: surgeryAppointments.status,
+              estimatedDuration: surgeryAppointments.estimatedDuration,
+              surgeryRoom: surgeryAppointments.surgeryRoom,
+            })
+            .from(surgeryAppointments)
+            .where(eq(surgeryAppointments.medicalOrderId, order.id))
+            .orderBy(desc(surgeryAppointments.createdAt))
+            .limit(1);
+          
+          if (appointmentData.length > 0) {
+            surgeryAppointment = appointmentData[0];
+          }
+        } catch (error) {
+          console.log(`Erro ao buscar agendamento cirúrgico para pedido ${order.id}:`, error);
         }
 
         // Mapeamento manual baseado na tabela order_statuses real
@@ -2700,6 +2802,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // ✅ CAMPOS ADICIONADOS: clinicalIndication e additionalNotes para edição
           clinicalIndication: order.clinicalIndication || "",
           additionalNotes: order.additionalNotes || "",
+          // ✅ OBSERVAÇÕES ADICIONAIS: Campos para notas após CBHPM, OPME e Fornecedores
+          cbhpmAdditionalNotes: order.cbhpmAdditionalNotes || "",
+          opmeAdditionalNotes: order.opmeAdditionalNotes || "",
+          supplierAdditionalNotes: order.supplierAdditionalNotes || "",
           // ✅ REGIÃO ANATÔMICA: Incluir anatomicalRegionId para persistência visual
           anatomicalRegionId: order.anatomicalRegionId || null,
           // **CRÍTICO**: Incluir attachments para correção do bug de finalização
@@ -2715,7 +2821,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           hospital: hospitalData ? {
             name: hospitalData.name,
             logoUrl: hospitalData.logoUrl
-          } : null
+          } : null,
+          // ✅ AGENDAMENTO CIRÚRGICO: Incluir dados do agendamento para validação de status
+          surgeryAppointment: surgeryAppointment
         };
 
         console.log(`✅ Pedido médico ${orderId} encontrado com statusColorClasses:`, !!enrichedOrder.statusColorClasses);
@@ -2765,10 +2873,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           procedureCustoOperacional: procedures.custoOperacional,
           procedurePorteAnestesista: procedures.porteAnestesista,
           procedureNumeroAuxiliares: procedures.numeroAuxiliares,
-          procedureActive: procedures.active
+          procedureActive: procedures.active,
+          // Dados de associação procedimento cirúrgico + conduta
+          surgicalApproachId: medicalOrderProcedures.surgicalApproachId,
+          surgicalProcedureId: medicalOrderProcedures.surgicalProcedureId,
+          surgicalApproachName: surgicalApproaches.name,
+          surgicalProcedureName: surgicalProcedures.name
         })
         .from(medicalOrderProcedures)
         .leftJoin(procedures, eq(medicalOrderProcedures.procedureId, procedures.id))
+        .leftJoin(surgicalApproaches, eq(medicalOrderProcedures.surgicalApproachId, surgicalApproaches.id))
+        .leftJoin(surgicalProcedures, eq(medicalOrderProcedures.surgicalProcedureId, surgicalProcedures.id))
         .where(eq(medicalOrderProcedures.orderId, orderId));
 
         console.log(`Encontrados ${orderProcedures.length} procedimentos para pedido ${orderId}`);
@@ -2838,6 +2953,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             numeroAuxiliares: proc.procedureNumeroAuxiliares,
             active: proc.procedureActive
           },
+          // Dados de associação procedimento cirúrgico + conduta
+          surgicalApproachId: proc.surgicalApproachId,
+          surgicalProcedureId: proc.surgicalProcedureId,
+          surgicalApproachName: proc.surgicalApproachName,
+          surgicalProcedureName: proc.surgicalProcedureName,
           createdAt: proc.createdAt,
           updatedAt: proc.updatedAt
         }));
@@ -6986,11 +7106,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             registrationDate: opmeItems.registrationDate,
             expirationDate: opmeItems.expirationDate,
             isValid: opmeItems.isValid
-          }
+          },
+          // Dados de associação procedimento cirúrgico + conduta
+          surgicalApproachId: medicalOrderOpmeItems.surgicalApproachId,
+          surgicalProcedureId: medicalOrderOpmeItems.surgicalProcedureId,
+          surgicalApproachName: surgicalApproaches.name,
+          surgicalProcedureName: surgicalProcedures.name
         })
         .from(medicalOrderOpmeItems)
         .innerJoin(opmeItems, eq(medicalOrderOpmeItems.opmeItemId, opmeItems.id))
         .leftJoin(procedures, eq(medicalOrderOpmeItems.procedureId, procedures.id))
+        .leftJoin(surgicalApproaches, eq(medicalOrderOpmeItems.surgicalApproachId, surgicalApproaches.id))
+        .leftJoin(surgicalProcedures, eq(medicalOrderOpmeItems.surgicalProcedureId, surgicalProcedures.id))
         .where(eq(medicalOrderOpmeItems.orderId, orderId))
         .orderBy(medicalOrderOpmeItems.id);
 
@@ -7870,69 +7997,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return;
             
           } else {
-            console.log('❌ ROTA: Falha na nova arquitetura:', result.errors?.join(', ') || 'Erro desconhecido');
-            console.log('🔄 ROTA: Iniciando fallback para sistema legado...');
-            console.log('⚠️ ROTA: ATENÇÃO - Sistema caindo para legacy devido a falha na nova arquitetura');
+            console.log('❌ ROTA: Falha na extração de documento de identidade:', result.errors?.join(', ') || 'Erro desconhecido');
             
-            // Fallback para sistema antigo se nova arquitetura falhar
-            console.log('🔄 FALLBACK: Extraindo texto com Google Vision...');
-            extractedText = await extractTextFromImage(imageBuffer);
-            console.log('📝 FALLBACK: Texto extraído (primeiros 200 chars):', extractedText.substring(0, 200));
-            
-            console.log('🔄 FALLBACK: Processando com sistema legado...');
-            processedData = processIdentityDocument(extractedText);
-            console.log('📋 FALLBACK: Dados processados pelo sistema legado:', processedData);
-            
-            const normalizedData = await normalizeExtractedData(processedData);
-            console.log('✅ FALLBACK: Dados normalizados:', normalizedData);
-            
-            res.json({
-              success: true,
-              extractedText,
-              data: normalizedData,
+            res.status(500).json({
+              success: false,
+              error: 'Falha no processamento do documento de identidade',
+              errors: result.errors,
               metadata: {
-                architecture: 'legacy',
-                fallback: true,
-                reason: result.errors?.join(', ') || 'Nova arquitetura falhou',
-                version: '1.0'
+                architecture: 'unified',
+                version: '2.0'
               }
             });
           }
           
         } catch (error) {
-          console.error('❌ Erro na nova arquitetura:', error);
+          console.error('❌ Erro na extração de documento:', error);
           
-          // Fallback para sistema antigo
-          console.log('🔄 Usando sistema antigo como fallback...');
-          extractedText = await extractTextFromImage(imageBuffer);
-          processedData = processIdentityDocument(extractedText);
-          
-          const normalizedData = await normalizeExtractedData(processedData);
-          
-          res.json({
-            success: true,
-            extractedText,
-            data: normalizedData,
+          res.status(500).json({
+            success: false,
+            error: 'Erro interno na extração do documento',
+            details: error instanceof Error ? error.message : 'Erro desconhecido',
             metadata: {
-              architecture: 'legacy',
-              fallback: true,
-              error: error instanceof Error ? error.message : 'Erro desconhecido',
-              version: '1.0'
+              architecture: 'unified',
+              version: '2.0'
             }
           });
         }
         
       } else if (documentType === 'insurance') {
-        console.log('🆕 FORÇANDO nova arquitetura modular para carteirinha...');
+        console.log('📋 Processando carteirinha com arquitetura modular...');
         
         try {
-          // Importar dinamicamente o novo sistema
-          const { documentExtractionService } = await import('./services/document-extraction/index');
-          
-          console.log('✅ Serviço de extração importado com sucesso');
-          
-          // Usar a nova arquitetura modular
-          console.log('🔄 Iniciando processamento com nova arquitetura...');
           const result = await documentExtractionService.processInsuranceCard(imageBuffer);
           
           console.log('📋 Resultado da nova arquitetura:', result.success ? '✅ SUCESSO' : '❌ FALHA');
@@ -9932,7 +10027,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/medical-order-surgical-approaches - Criar nova associação
   app.post("/api/medical-order-surgical-approaches",  async (req: Request, res: Response) => {
     try {
-      const { medicalOrderId, surgicalApproachId, isPrimary } = req.body;
+      const { medicalOrderId, surgicalApproachId, surgicalProcedureId, isPrimary } = req.body;
 
       // Validar dados obrigatórios
       if (!medicalOrderId || !surgicalApproachId) {
@@ -9955,22 +10050,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Conduta cirúrgica não encontrada" });
       }
 
-      // Verificar se associação já existe
+      // Verificar se associação já existe (considerando também o surgicalProcedureId)
       const existingAssociation = await db.select().from(medicalOrderSurgicalApproaches)
         .where(and(
           eq(medicalOrderSurgicalApproaches.medicalOrderId, medicalOrderId),
-          eq(medicalOrderSurgicalApproaches.surgicalApproachId, surgicalApproachId)
+          eq(medicalOrderSurgicalApproaches.surgicalApproachId, surgicalApproachId),
+          surgicalProcedureId 
+            ? eq(medicalOrderSurgicalApproaches.surgicalProcedureId, surgicalProcedureId)
+            : isNull(medicalOrderSurgicalApproaches.surgicalProcedureId)
         ));
       
       let resultAssociation;
       
       if (existingAssociation.length > 0) {
         // Atualizar associação existente (UPSERT)
-        console.log(`Atualizando associação existente: Pedido ${medicalOrderId} - Conduta ${surgicalApproachId}`);
+        console.log(`Atualizando associação existente: Pedido ${medicalOrderId} - Conduta ${surgicalApproachId} - Procedimento ${surgicalProcedureId}`);
         
         const [updatedAssociation] = await db.update(medicalOrderSurgicalApproaches)
           .set({
             isPrimary: isPrimary || false,
+            surgicalProcedureId: surgicalProcedureId ? parseInt(surgicalProcedureId) : null,
             updatedAt: new Date()
           })
           .where(eq(medicalOrderSurgicalApproaches.id, existingAssociation[0].id))
@@ -9980,11 +10079,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Associação atualizada: ID ${updatedAssociation.id}`);
       } else {
         // Criar nova associação
-        console.log(`Criando nova associação: Pedido ${medicalOrderId} - Conduta ${surgicalApproachId}`);
+        console.log(`Criando nova associação: Pedido ${medicalOrderId} - Conduta ${surgicalApproachId} - Procedimento ${surgicalProcedureId}`);
         
         const [newAssociation] = await db.insert(medicalOrderSurgicalApproaches).values({
           medicalOrderId: parseInt(medicalOrderId),
           surgicalApproachId: parseInt(surgicalApproachId),
+          surgicalProcedureId: surgicalProcedureId ? parseInt(surgicalProcedureId) : null,
           isPrimary: isPrimary || false
         }).returning();
         
@@ -10004,7 +10104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/medical-order-surgical-approaches/:id",  async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
-      const { isPrimary } = req.body;
+      const { isPrimary, surgicalProcedureId } = req.body;
 
       if (isNaN(id)) {
         return res.status(400).json({ message: "ID inválido" });
@@ -10022,12 +10122,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedAssociation = await db.update(medicalOrderSurgicalApproaches)
         .set({
           isPrimary: isPrimary !== undefined ? isPrimary : existing[0].isPrimary,
+          surgicalProcedureId: surgicalProcedureId !== undefined 
+            ? (surgicalProcedureId ? parseInt(surgicalProcedureId) : null)
+            : existing[0].surgicalProcedureId,
           updatedAt: new Date()
         })
         .where(eq(medicalOrderSurgicalApproaches.id, id))
         .returning();
 
-      console.log(`Associação pedido-conduta atualizada: ID ${id}`);
+      console.log(`Associação pedido-conduta atualizada: ID ${id} - Procedimento ${surgicalProcedureId}`);
       res.json(updatedAssociation[0]);
     } catch (error) {
       console.error("Erro ao atualizar associação pedido-conduta:", error);
@@ -10378,7 +10481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orderId = parseInt(req.params.id);
       const { surgicalApproaches } = req.body;
 
-      console.log(`🔧 Atualizando condutas cirúrgicas para pedido ${orderId}:`, surgicalApproaches);
+      console.log(`🔧 Atualizando condutas cirúrgicas para pedido ${orderId}:`, JSON.stringify(surgicalApproaches, null, 2));
 
       if (isNaN(orderId)) {
         return res.status(400).json({ message: "ID do pedido inválido" });
@@ -10398,18 +10501,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.delete(medicalOrderSurgicalApproaches).where(eq(medicalOrderSurgicalApproaches.medicalOrderId, orderId));
       console.log(`🗑️ Removidas condutas cirúrgicas existentes para pedido ${orderId}`);
 
-      // Adicionar novas condutas cirúrgicas
+      // Adicionar novas condutas cirúrgicas (agora com surgicalProcedureId)
       if (surgicalApproaches.length > 0) {
         const newApproaches = surgicalApproaches.map((approach: any) => ({
           medicalOrderId: orderId,
           surgicalApproachId: approach.surgicalApproachId,
+          surgicalProcedureId: approach.surgicalProcedureId || null,
           isPrimary: approach.isPrimary || false,
           createdAt: new Date(),
           updatedAt: new Date()
         }));
 
         await db.insert(medicalOrderSurgicalApproaches).values(newApproaches);
-        console.log(`✅ Adicionadas ${surgicalApproaches.length} novas condutas cirúrgicas para pedido ${orderId}`);
+        console.log(`✅ Adicionadas ${surgicalApproaches.length} novas condutas cirúrgicas (com procedimento) para pedido ${orderId}`);
       }
 
       res.json({ 
@@ -10549,6 +10653,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         suppliersWhereConditions.push(eq(surgicalApproachSuppliers.surgicalProcedureId, surgicalProcedureId));
       }
       
+      // Limite de fornecedores para auto-preenchimento (apenas os 3 de maior prioridade)
+      const SUPPLIERS_LIMIT = 3;
+      
       const suppliersData = await db
         .select({
           id: suppliers.id,
@@ -10566,7 +10673,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(surgicalApproachSuppliers)
         .innerJoin(suppliers, eq(surgicalApproachSuppliers.supplierId, suppliers.id))
         .where(and(...suppliersWhereConditions))
-        .orderBy(surgicalApproachSuppliers.priority);
+        .orderBy(surgicalApproachSuppliers.priority)
+        .limit(SUPPLIERS_LIMIT);
 
       // Buscar justificativas clínicas associadas (nova arquitetura: Procedimento + Conduta)
       // Filtrando por conduta cirúrgica E procedimento cirúrgico quando disponível
@@ -11493,34 +11601,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`🔍 Buscando fornecedores para pedido ${orderId}`);
 
-      // Buscar fornecedores do pedido usando Drizzle ORM (simplificado)
+      // Buscar fornecedores do pedido usando Drizzle ORM com joins para procedimento cirúrgico + conduta
       const rawSuppliers = await db
-        .select()
+        .select({
+          orderSupplier: medicalOrderSuppliers,
+          supplier: suppliers,
+          surgicalApproachName: surgicalApproaches.name,
+          surgicalProcedureName: surgicalProcedures.name
+        })
         .from(medicalOrderSuppliers)
         .innerJoin(suppliers, eq(medicalOrderSuppliers.supplierId, suppliers.id))
+        .leftJoin(surgicalApproaches, eq(medicalOrderSuppliers.surgicalApproachId, surgicalApproaches.id))
+        .leftJoin(surgicalProcedures, eq(medicalOrderSuppliers.surgicalProcedureId, surgicalProcedures.id))
         .where(eq(medicalOrderSuppliers.orderId, orderId));
 
       console.log(`📋 Raw suppliers encontrados:`, rawSuppliers.length);
 
       // Mapear os resultados para o formato esperado pelo frontend
       const formattedSuppliers = rawSuppliers.map((row: any) => ({
-        id: row.medical_order_suppliers.id,
-        orderId: row.medical_order_suppliers.orderId,
-        supplierId: row.medical_order_suppliers.supplierId,
-        isApproved: row.medical_order_suppliers.isApproved,
-        approvedBy: row.medical_order_suppliers.approvedBy,
-        approvedAt: row.medical_order_suppliers.approvedAt,
+        id: row.orderSupplier.id,
+        orderId: row.orderSupplier.orderId,
+        supplierId: row.orderSupplier.supplierId,
+        isApproved: row.orderSupplier.isApproved,
+        approvedBy: row.orderSupplier.approvedBy,
+        approvedAt: row.orderSupplier.approvedAt,
+        // Dados de associação procedimento cirúrgico + conduta
+        surgicalApproachId: row.orderSupplier.surgicalApproachId,
+        surgicalProcedureId: row.orderSupplier.surgicalProcedureId,
+        surgicalApproachName: row.surgicalApproachName,
+        surgicalProcedureName: row.surgicalProcedureName,
         supplier: {
-          id: row.suppliers.id,
-          name: row.suppliers.companyName,
-          companyName: row.suppliers.companyName,
-          tradeName: row.suppliers.tradeName,
-          cnpj: row.suppliers.cnpj,
-          phone: row.suppliers.phone,
-          email: row.suppliers.email,
-          address: row.suppliers.address,
-          postalCode: row.suppliers.postalCode,
-          active: row.suppliers.active,
+          id: row.supplier.id,
+          name: row.supplier.companyName,
+          companyName: row.supplier.companyName,
+          tradeName: row.supplier.tradeName,
+          cnpj: row.supplier.cnpj,
+          phone: row.supplier.phone,
+          email: row.supplier.email,
+          address: row.supplier.address,
+          postalCode: row.supplier.postalCode,
+          active: row.supplier.active,
         }
       }));
 
@@ -11618,6 +11738,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/medical-orders/:orderId/suppliers/approve-multiple - Aprovar múltiplos fornecedores
+  app.post('/api/medical-orders/:orderId/suppliers/approve-multiple', isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const orderId = parseInt(req.params.orderId);
+      const { supplierIds } = req.body;
+      const userId = req.user?.id;
+      
+      if (isNaN(orderId)) {
+        return res.status(400).json({ error: 'ID do pedido inválido' });
+      }
+
+      if (!Array.isArray(supplierIds) || supplierIds.length === 0) {
+        return res.status(400).json({ error: 'Lista de fornecedores inválida' });
+      }
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Usuário não autenticado' });
+      }
+
+      console.log(`🎯 Aprovando ${supplierIds.length} fornecedor(es) para pedido ${orderId} por usuário ${userId}`);
+
+      // Verificar se o pedido existe
+      const existingOrder = await storage.getMedicalOrder(orderId);
+      if (!existingOrder) {
+        return res.status(404).json({ error: 'Pedido não encontrado' });
+      }
+
+      // Verificar se todos os supplierIds pertencem ao pedido
+      const existingAssociations = await db
+        .select({ supplierId: medicalOrderSuppliers.supplierId })
+        .from(medicalOrderSuppliers)
+        .where(eq(medicalOrderSuppliers.orderId, orderId));
+      
+      const validSupplierIds = existingAssociations.map(a => a.supplierId);
+      const invalidIds = supplierIds.filter((id: number) => !validSupplierIds.includes(id));
+      
+      if (invalidIds.length > 0) {
+        return res.status(400).json({ 
+          error: 'Um ou mais fornecedores não estão associados a este pedido',
+          invalidSupplierIds: invalidIds
+        });
+      }
+
+      // Desaprovar todos os fornecedores existentes para este pedido
+      await db
+        .update(medicalOrderSuppliers)
+        .set({
+          isApproved: false,
+          approvedBy: null,
+          approvedAt: null
+        })
+        .where(eq(medicalOrderSuppliers.orderId, orderId));
+
+      // Aprovar os fornecedores selecionados
+      const approvedAt = new Date();
+      for (const supplierId of supplierIds) {
+        await db
+          .update(medicalOrderSuppliers)
+          .set({
+            isApproved: true,
+            approvedBy: userId,
+            approvedAt: approvedAt
+          })
+          .where(
+            and(
+              eq(medicalOrderSuppliers.orderId, orderId),
+              eq(medicalOrderSuppliers.supplierId, supplierId)
+            )
+          );
+      }
+
+      console.log(`✅ ${supplierIds.length} fornecedor(es) aprovado(s) com sucesso para pedido ${orderId}`);
+
+      res.json({ 
+        message: supplierIds.length === 1 
+          ? 'Fornecedor aprovado com sucesso'
+          : `${supplierIds.length} fornecedores aprovados com sucesso`,
+        orderId,
+        supplierIds,
+        approvedBy: userId,
+        approvedAt
+      });
+    } catch (error) {
+      console.error('❌ Erro ao aprovar fornecedores:', error);
+      res.status(500).json({ 
+        error: 'Erro ao aprovar fornecedores',
+        message: error.message 
+      });
+    }
+  });
+
   // GET /api/suppliers/search - Buscar fornecedores por nome ou CNPJ
   app.get('/api/suppliers/search', isAuthenticated, async (req: Request, res: Response) => {
     try {
@@ -11708,44 +11919,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Fornecedor já está associado a este pedido' });
       }
 
-      // Verificar se já existe um fornecedor aprovado
-      const existingApproval = await db
-        .select()
-        .from(medicalOrderSuppliers)
-        .where(
-          and(
-            eq(medicalOrderSuppliers.orderId, orderId),
-            eq(medicalOrderSuppliers.isApproved, true)
-          )
-        )
-        .limit(1);
-
-      if (existingApproval.length > 0) {
-        return res.status(400).json({ 
-          error: 'Já existe um fornecedor aprovado para este pedido',
-          approvedSupplierId: existingApproval[0].supplierId
-        });
-      }
-
-      // Adicionar a associação e marcar como aprovado imediatamente
+      // Adicionar a associação como NÃO APROVADO (aguardando aprovação múltipla)
       await db
         .insert(medicalOrderSuppliers)
         .values({
           orderId: orderId,
           supplierId: supplierId,
-          isApproved: true,
-          approvedBy: userId,
-          approvedAt: new Date()
+          isApproved: false,
+          approvedBy: null,
+          approvedAt: null
         });
 
-      console.log(`✅ Fornecedor ${supplierId} adicionado e aprovado para pedido ${orderId}`);
+      console.log(`✅ Fornecedor ${supplierId} adicionado ao pedido ${orderId} (aguardando aprovação)`);
 
       res.json({ 
-        message: 'Fornecedor adicionado e aprovado com sucesso',
+        message: 'Fornecedor adicionado com sucesso',
         orderId,
         supplierId,
-        approvedBy: userId,
-        approvedAt: new Date()
+        isApproved: false
       });
     } catch (error) {
       console.error('❌ Erro ao adicionar fornecedor:', error);
@@ -13705,21 +13896,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return await handleUpgradeFlow(session);
       }
 
-      // FLUXO ANTIGO: Manter compatibilidade 
-      if (!metadata?.flow || metadata.flow !== 'registration') {
-        console.log(`⚠️ Sessão não é de registro (fluxo antigo) - ignorando`);
-        return true;
+      // FLUXO DE REGISTRO: Ativar usuário que completou pagamento durante registro
+      // Detectado quando existe userId e flow=registration no metadata
+      if (metadata?.userId && metadata?.flow === 'registration') {
+        return await handlePendingPaymentFlow(session);
       }
 
-      const planId = parseInt(metadata.planId);
-      const userEmail = metadata.userId; // Email foi usado como userId temporário
-      
-      console.log(`📝 [FLUXO ANTIGO] Registrando subscription: Plan ${planId}, Customer ${customer}, Email ${userEmail}`);
-      console.log(`✅ Checkout session ${session.id} processado para registro (fluxo antigo)`);
-      
+      // FLUXO ANTIGO: Manter compatibilidade para sessões sem metadata específico
+      console.log(`⚠️ Sessão não reconhecida - ignorando: ${JSON.stringify(metadata)}`);
       return true;
     } catch (error: any) {
       console.error(`❌ Erro ao processar checkout session completed:`, error);
+      return false;
+    }
+  }
+
+  // Handler para processar pagamento de usuário com status pending_payment
+  async function handlePendingPaymentFlow(session: any): Promise<boolean> {
+    try {
+      const { customer, subscription, metadata, amount_total } = session;
+      const userId = parseInt(metadata.userId);
+      const planId = parseInt(metadata.planId);
+      const billingInterval = metadata.billingInterval || 'monthly'; // Fallback para mensal
+      
+      console.log(`💳 [REGISTRATION] Processando pagamento para usuário ${userId}, plano ${planId}, intervalo ${billingInterval}`);
+
+      // 1. Buscar assinatura pendente do usuário
+      const [existingSubscription] = await db
+        .select()
+        .from(userSubscriptions)
+        .where(
+          and(
+            eq(userSubscriptions.userId, userId),
+            eq(userSubscriptions.status, 'pending_payment')
+          )
+        )
+        .limit(1);
+
+      if (!existingSubscription) {
+        console.log(`⚠️ [REGISTRATION] Nenhuma assinatura pendente encontrada para usuário ${userId} - pode ter sido processada anteriormente`);
+        return true;
+      }
+
+      // 2. Buscar plano
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlans)
+        .where(eq(subscriptionPlans.id, planId))
+        .limit(1);
+
+      if (!plan) {
+        console.error(`❌ [REGISTRATION] Plano não encontrado: ${planId}`);
+        return false;
+      }
+
+      // 3. Calcular informações de preço e desconto baseado no intervalo
+      const finalPrice = amount_total || 0;
+      const originalPrice = billingInterval === 'yearly' 
+        ? (plan.priceYearly || plan.priceMonthly || 0)
+        : (plan.priceMonthly || 0);
+      const discountAmount = Math.max(0, originalPrice - finalPrice);
+      const discountPercent = originalPrice > 0 ? Math.round((discountAmount / originalPrice) * 100) : 0;
+
+      console.log(`💰 [REGISTRATION] Intervalo: ${billingInterval}, Preço: Original ${originalPrice}, Final ${finalPrice}, Desconto ${discountAmount} (${discountPercent}%)`);
+
+      // 4. Calcular data de expiração baseada no intervalo de cobrança
+      const now = new Date();
+      const expiresAt = new Date(now);
+      if (billingInterval === 'yearly') {
+        expiresAt.setFullYear(expiresAt.getFullYear() + 1); // 1 ano
+      } else {
+        expiresAt.setMonth(expiresAt.getMonth() + 1); // 1 mês
+      }
+      console.log(`📅 [REGISTRATION] Expiração calculada: ${expiresAt.toISOString()}`);
+
+      // 5. Atualizar assinatura para active
+      await db
+        .update(userSubscriptions)
+        .set({
+          status: 'active',
+          planId: planId,
+          startedAt: now,
+          expiresAt: expiresAt,
+          trialEndsAt: null,
+          originalPrice: originalPrice,
+          finalPrice: finalPrice,
+          discountAmount: discountAmount,
+          discountPercent: discountPercent,
+          paymentProvider: 'stripe',
+          paymentProviderCustomerId: customer,
+          paymentProviderSubscriptionId: subscription,
+          updatedAt: now,
+        })
+        .where(eq(userSubscriptions.id, existingSubscription.id));
+
+      // 6. Ativar usuário
+      await db
+        .update(users)
+        .set({ active: true })
+        .where(eq(users.id, userId));
+
+      console.log(`✅ [REGISTRATION] Assinatura ${existingSubscription.id} atualizada para 'active' - usuário ${userId} ativado`);
+      console.log(`🎉 [REGISTRATION] Pagamento de registro concluído com sucesso para usuário ${userId}`);
+      
+      return true;
+    } catch (error: any) {
+      console.error(`❌ [REGISTRATION] Erro ao processar pagamento de registro:`, error);
       return false;
     }
   }
@@ -15474,10 +15756,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Health check endpoint para Docker ewrew
+  // Health check endpoint para Docker
   app.get('/api/health', async (req, res) => {
     try {
-      // Verificar conectividade com banco de dados afdas
+      // Verificar conectividade com banco de dados dddd
       const dbCheck = await db.select({ count: count() }).from(users);
       
       res.json({ 
