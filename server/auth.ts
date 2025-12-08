@@ -14,6 +14,7 @@ import { discountCodes } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { getPaymentProvider } from "./payments";
 import { getStripeCallbacks } from "./utils/environment";
+import { findPromotionCodeByCode } from "./services/discounts/discountService";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -68,10 +69,18 @@ export function setupAuth(app: Express) {
         }
 
         if (!user.active) {
-          return done(null, false, {
-            message:
-              "Conta desativada. Aguarde a ativação por um administrador para acessar o sistema.",
-          });
+          // Verificar se é um usuário com pagamento pendente - permitir login para mostrar modal de pagamento
+          const subscription = await storage.getUserSubscription(user.id);
+          const hasPendingPayment = subscription?.status === 'pending_payment';
+          
+          if (!hasPendingPayment) {
+            return done(null, false, {
+              message:
+                "Conta desativada. Aguarde a ativação por um administrador para acessar o sistema.",
+            });
+          }
+          // Se tem pending_payment, permite login para mostrar modal de pagamento
+          console.log(`🔓 [AUTH] Usuário ${user.id} com pending_payment - permitindo login para recuperação de pagamento`);
         }
 
         if (user.lockoutUntil && new Date(user.lockoutUntil) > new Date()) {
@@ -136,8 +145,15 @@ export function setupAuth(app: Express) {
       }
 
       if (!user.active) {
-        console.log("❌ Usuário inativo durante deserialização:", id);
-        return done(null, false);
+        // Verificar se é usuário com pagamento pendente - permitir sessão para mostrar modal
+        const subscription = await storage.getUserSubscription(user.id);
+        const hasPendingPayment = subscription?.status === 'pending_payment';
+        
+        if (!hasPendingPayment) {
+          console.log("❌ Usuário inativo durante deserialização:", id);
+          return done(null, false);
+        }
+        console.log(`🔓 [AUTH] Usuário ${id} com pending_payment - sessão mantida para recuperação de pagamento`);
       }
 
       console.log(
@@ -520,6 +536,8 @@ export function setupAuth(app: Express) {
           const metadata = {
             userId: user.id.toString(),
             planId: planId.toString(),
+            billingInterval: billingInterval, // Importante para calcular expiração no webhook
+            flow: 'registration', // Identificar fluxo de registro inicial
             ...(discountCode && { discountCodeId: discountCode.id.toString() }),
           };
 
@@ -558,16 +576,44 @@ export function setupAuth(app: Express) {
 
           const { successUrl, cancelUrl } = getStripeCallbacks();
 
+          const priceId = billingInterval === "yearly"
+            ? plan.priceIdYearly
+            : plan.priceIdMonthly;
+
+          if (!priceId) {
+            throw new Error(`Plano ${plan.name} não possui Price ID configurado para ${billingInterval}`);
+          }
+
+          // Configurar desconto baseado no billing interval
+          let promotionCodeId: string | undefined;
+          let allowPromotionCodes = true;
+
+          if (billingInterval === "yearly") {
+            // Plano anual: aplicar WELCOME50 automaticamente e desabilitar entrada manual
+            console.log("📅 Plano ANUAL detectado - buscando código WELCOME50...");
+            
+            const welcomePromo = await findPromotionCodeByCode("WELCOME50");
+            if (welcomePromo && welcomePromo.isActive && welcomePromo.stripePromotionCodeId) {
+              promotionCodeId = welcomePromo.stripePromotionCodeId;
+              allowPromotionCodes = false;
+              console.log(`✅ Código WELCOME50 encontrado e será aplicado automaticamente: ${promotionCodeId}`);
+            } else {
+              console.log("⚠️ Código WELCOME50 não encontrado ou inativo - permitindo códigos manuais");
+            }
+          } else {
+            // Plano mensal: permitir códigos promocionais manuais
+            console.log("📅 Plano MENSAL detectado - códigos promocionais habilitados para entrada manual");
+          }
+
           const checkoutParams = {
-            priceId:
-              billingInterval === "yearly"
-                ? plan.priceIdYearly
-                : plan.priceIdMonthly, // Usar preço baseado no billingInterval
+            priceId,
             mode: "subscription" as const,
-            customerData: customerData, // Dados para criação automática do Customer
+            customerData: customerData,
             successUrl,
             cancelUrl,
             metadata,
+            promotionCodeId,
+            allowPromotionCodes,
           };
 
           console.log("\n🎯 Parâmetros COMPLETOS para Stripe Checkout:");
@@ -576,9 +622,8 @@ export function setupAuth(app: Express) {
           console.log("💰 Price ID Selecionado:", checkoutParams.priceId);
           console.log("🔗 Success URL:", checkoutParams.successUrl);
           console.log("🔗 Cancel URL:", checkoutParams.cancelUrl);
-          console.log(
-            "🎫 Códigos Promocionais: Campo habilitado no checkout (usuário pode digitar manualmente)",
-          );
+          console.log("🎫 Promotion Code ID:", promotionCodeId || "Nenhum (entrada manual permitida)");
+          console.log("🎫 Allow Promotion Codes:", allowPromotionCodes);
           console.log("👤 Customer Email:", customerData.email);
           console.log("📊 Metadata:", metadata);
           console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -597,6 +642,25 @@ export function setupAuth(app: Express) {
           console.log(
             "=========================================================\n",
           );
+
+          // Criar assinatura com status pending_payment para rastrear o checkout abandonado
+          // Proteção contra null - usar fallback para priceMonthly se priceYearly não estiver definido
+          const price = billingInterval === "yearly" 
+            ? (plan.priceYearly || plan.priceMonthly || 0)
+            : (plan.priceMonthly || 0);
+          await storage.createUserSubscription({
+            userId: user.id,
+            planId: planId,
+            status: "pending_payment",
+            startedAt: now,
+            originalPrice: price,
+            finalPrice: price, // Será atualizado pelo webhook com o valor final após desconto
+            paymentProvider: "stripe",
+            paymentProviderSubscriptionId: checkoutSession.id, // Salvar session ID para rastreamento
+            createdAt: now,
+            updatedAt: now,
+          });
+          console.log(`✅ Assinatura criada com status 'pending_payment' para usuário ${user.id}, preço original: ${price}`);
 
           res.status(201).json({
             ...userWithoutPassword,
@@ -1108,16 +1172,6 @@ export async function checkTrialStatus(req: any, res: any, next: any) {
       });
     }
 
-    // Se trial está cancelado
-    if (userSubscription.status === "cancelled") {
-      console.log(`❌ Trial cancelado para usuário ${user.id}`);
-      return res.status(403).json({
-        message:
-          "Sua conta trial foi cancelada. Entre em contato com o suporte.",
-        trialCancelled: true,
-      });
-    }
-
     // Trial ativo, continuar
     if (trialEndDate) {
       console.log(
@@ -1181,7 +1235,7 @@ export function hasPermission(permission: string) {
 }
 
 // Função auxiliar para verificação síncrona de permissões
-// Útil para verificações dentro de outros handlers de rotas   asdasd
+// Útil para verificações dentro de outros handlers de rotas
 export function hasPermissionCheck(req: any, permission: string): boolean {
   if (!req.isAuthenticated() || !req.user) {
     return false;
