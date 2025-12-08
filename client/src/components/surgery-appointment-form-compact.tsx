@@ -332,7 +332,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
   const isLoading = createMutation.isPending || updateMutation.isPending || isCheckingExisting;
 
   return (
-    <div className="max-h-[80vh] overflow-y-auto">
+    <div>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-1.5">
 
@@ -414,7 +414,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
             </Card>
           )}
 
-          {/* Layout principal - Informações do Agendamento */}
+          {/* Layout principal - Informações do Agendamento fds */}
           <div className="space-y-1.5">
             {/* Coluna 1: Informações do Agendamento */}
             <Card className="border-border">
