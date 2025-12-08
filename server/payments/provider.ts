@@ -88,7 +88,7 @@ export interface PaymentProvider {
   updateCoupon(couponId: string, updates: any): Promise<any>;
 
   /**
-   * Excluir/desativar cupom dewqewqewq
+   * Excluir/desativar cupom
    */
   deleteCoupon(couponId: string): Promise<any>;
 
@@ -111,4 +111,14 @@ export interface PaymentProvider {
    * Atualizar código promocional
    */
   updatePromotionCode(promotionCodeId: string, updates: any): Promise<any>;
+
+  /**
+   * Listar códigos promocionais (com paginação automática)
+   */
+  listPromotionCodes(params?: any): Promise<any[]>;
+
+  /**
+   * Listar todos os cupons (com paginação automática)
+   */
+  listAllCoupons(params?: any): Promise<any[]>;
 }
