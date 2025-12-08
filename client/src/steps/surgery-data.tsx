@@ -21,6 +21,10 @@ import {
   Check,
   X,
   ChevronsUpDown,
+  Plus,
+  Trash2,
+  Building2,
+  ClipboardList,
 } from "lucide-react";
 import {
   Command,
@@ -65,6 +69,7 @@ import type { AnatomicalRegion, SurgicalProcedure } from "@shared/schema";
 import { ManufacturerManager } from "@/components/ManufacturerManager";
 import { LoadingLogo } from "@/components/loading-logo";
 import { getAnatomicalRegionIcon } from "@/components/AnatomicalRegionIcons";
+import { RichTextEditor } from "@/components/rich-text-editor";
 
 interface CidCode {
   id: number;
@@ -213,6 +218,87 @@ interface AnatomicalRegion {
   description: string | null;
 }
 
+// 📝 Função utilitária para remover seções de observações quando uma combinação procedimento+conduta é removida
+// Remove seções que começam com ### ProcedureName → ApproachName até o próximo subtítulo ou fim do texto
+// Também suporta formato legado com IDs: ### ProcedureName → ApproachName [PID:x][AID:y]
+const removeSubtitleSection = (
+  notes: string,
+  procedureName: string,
+  approachName: string
+): string => {
+  if (!notes || !procedureName || !approachName) return notes;
+  
+  const lines = notes.split('\n');
+  const result: string[] = [];
+  let skipUntilNextSubtitle = false;
+  
+  // Padrão do subtítulo a remover (escapar caracteres especiais)
+  const escapedProcedure = procedureName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedApproach = approachName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  // Regex para detectar o subtítulo específico (com ou sem IDs)
+  const targetSubtitleRegex = new RegExp(
+    `^###\\s*${escapedProcedure}\\s*→\\s*${escapedApproach}(\\s*\\[PID:\\d+\\]\\[AID:\\d+\\])?\\s*$`
+  );
+  
+  // Regex para detectar qualquer subtítulo (indica nova seção)
+  const anySubtitleRegex = /^###\s*.+\s*→\s*.+/;
+  
+  for (const line of lines) {
+    // Se encontrar o subtítulo alvo, começar a pular linhas
+    if (targetSubtitleRegex.test(line)) {
+      skipUntilNextSubtitle = true;
+      console.log(`🗑️ [REMOVE-SECTION] Removendo seção: ${line}`);
+      continue;
+    }
+    
+    // Se estiver pulando e encontrar outro subtítulo, parar de pular
+    if (skipUntilNextSubtitle && anySubtitleRegex.test(line)) {
+      skipUntilNextSubtitle = false;
+    }
+    
+    // Adicionar linha ao resultado se não estiver pulando
+    if (!skipUntilNextSubtitle) {
+      result.push(line);
+    }
+  }
+  
+  // Limpar linhas vazias extras no início e fim
+  const cleanedResult = result.join('\n').trim();
+  
+  // Remover múltiplas quebras de linha consecutivas (mais de 2)
+  return cleanedResult.replace(/\n{3,}/g, '\n\n');
+};
+
+// Função helper para remover seções de todas as 3 caixas de observações
+const removeObservationSectionsForApproach = (
+  procedureName: string,
+  approachName: string,
+  cbhpmNotes: string,
+  setCbhpmNotes: ((notes: string) => void) | undefined,
+  opmeNotes: string,
+  setOpmeNotes: ((notes: string) => void) | undefined,
+  supplierNotes: string,
+  setSupplierNotes: ((notes: string) => void) | undefined
+) => {
+  console.log(`🧹 [CLEANUP] Removendo observações para: ${procedureName} → ${approachName}`);
+  
+  if (setCbhpmNotes) {
+    const newCbhpmNotes = removeSubtitleSection(cbhpmNotes, procedureName, approachName);
+    setCbhpmNotes(newCbhpmNotes);
+  }
+  
+  if (setOpmeNotes) {
+    const newOpmeNotes = removeSubtitleSection(opmeNotes, procedureName, approachName);
+    setOpmeNotes(newOpmeNotes);
+  }
+  
+  if (setSupplierNotes) {
+    const newSupplierNotes = removeSubtitleSection(supplierNotes, procedureName, approachName);
+    setSupplierNotes(newSupplierNotes);
+  }
+};
+
 interface SurgeryDataProps {
   // Estados para o CID principal (mantidos para compatibilidade)
   cidCode: string;
@@ -309,28 +395,42 @@ interface SurgeryDataProps {
     supplier2: number | null;
     supplier3: number | null;
   }) => void;
-  // Dados completos dos fornecedores (novo padrão unificado)
+  // Dados completos dos fornecedores com associações de conduta (lista dinâmica)
   supplierDetails?: Array<{
     id: number;
     companyName: string;
     tradeName: string | null;
     cnpj: string;
-    municipalityId: number;
+    municipalityId?: number;
     address: string | null;
     phone: string | null;
     email: string | null;
-    active: boolean;
+    active?: boolean;
+    // Campos de associação com conduta cirúrgica
+    sourceApproachId?: number | null;
+    sourceApproachName?: string | null;
+    sourceProcedureId?: number | null;
+    sourceProcedureName?: string | null;
+    manufacturerName?: string | null;
+    isApproved?: boolean;
   }>;
   setSupplierDetails?: (suppliers: Array<{
     id: number;
     companyName: string;
     tradeName: string | null;
     cnpj: string;
-    municipalityId: number;
+    municipalityId?: number;
     address: string | null;
     phone: string | null;
     email: string | null;
-    active: boolean;
+    active?: boolean;
+    // Campos de associação com conduta cirúrgica
+    sourceApproachId?: number | null;
+    sourceApproachName?: string | null;
+    sourceProcedureId?: number | null;
+    sourceProcedureName?: string | null;
+    manufacturerName?: string | null;
+    isApproved?: boolean;
   }>) => void;
   // Campo para sugestão de justificativa clínica
   clinicalJustification?: string;
@@ -369,6 +469,13 @@ interface SurgeryDataProps {
   isEditMode?: boolean;
   // Região anatômica selecionada para o webhook de IA
   selectedAnatomicalRegion?: AnatomicalRegion | null;
+  // Campos de texto livre após procedimentos CBHPM, itens OPME e fornecedores
+  cbhpmAdditionalNotes?: string;
+  setCbhpmAdditionalNotes?: (notes: string) => void;
+  opmeAdditionalNotes?: string;
+  setOpmeAdditionalNotes?: (notes: string) => void;
+  supplierAdditionalNotes?: string;
+  setSupplierAdditionalNotes?: (notes: string) => void;
 }
 
 // Componente para selecionar conduta clínica para um procedimento
@@ -389,13 +496,9 @@ interface ConductSelectorProps {
   }>) => void;
   // Props para auto-preenchimento de itens OPME
   setSelectedOpmeItems?: (items: Array<{ item: any; quantity: number }>) => void;
-  // Props para auto-preenchimento de fornecedores
-  setSelectedSupplier1?: (supplier: any) => void;
-  selectedSupplier1?: any;
-  setSelectedSupplier2?: (supplier: any) => void;
-  selectedSupplier2?: any;
-  setSelectedSupplier3?: (supplier: any) => void;
-  selectedSupplier3?: any;
+  // Props para fornecedores (novo sistema dinâmico)
+  setSupplierDetails?: (suppliers: Array<any>) => void;
+  supplierDetails?: Array<any>;
   // Props para justificativa clínica
   setClinicalJustification?: (justification: string | ((prev: string) => string)) => void;
   // Props para condutas cirúrgicas selecionadas (padrão de salvamento em lote)
@@ -416,6 +519,13 @@ interface ConductSelectorProps {
   }>;
   // Flag para detectar modo de edição e desabilitar auto-preenchimento
   isEditMode?: boolean;
+  // Props para inserir subtítulos automáticos nas caixas de texto de observações
+  cbhpmAdditionalNotes?: string;
+  setCbhpmAdditionalNotes?: (notes: string) => void;
+  opmeAdditionalNotes?: string;
+  setOpmeAdditionalNotes?: (notes: string) => void;
+  supplierAdditionalNotes?: string;
+  setSupplierAdditionalNotes?: (notes: string) => void;
 }
 
 const ConductSelector: React.FC<ConductSelectorProps> = ({
@@ -430,16 +540,18 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
   setProcedureQuantity,
   setSecondaryProcedures,
   setSelectedOpmeItems,
-  setSelectedSupplier1,
-  selectedSupplier1,
-  setSelectedSupplier2,
-  selectedSupplier2,
-  setSelectedSupplier3,
-  selectedSupplier3,
+  setSupplierDetails,
+  supplierDetails = [],
   setClinicalJustification,
   setSelectedSurgicalApproaches,
   selectedSurgicalApproaches = [],
-  isEditMode = false
+  isEditMode = false,
+  cbhpmAdditionalNotes = "",
+  setCbhpmAdditionalNotes,
+  opmeAdditionalNotes = "",
+  setOpmeAdditionalNotes,
+  supplierAdditionalNotes = "",
+  setSupplierAdditionalNotes
 }) => {
   // Debug: verificar se recebemos a prop setSelectedSurgicalApproaches
   console.log("🔧 ConductSelector - Props recebidas:", {
@@ -574,288 +686,280 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
     // O sistema sempre faz MERGE inteligente (soma quantidades, evita duplicatas)
     console.log(`🔄 [ASSOCIACAO-LIVRE] Merge inteligente para: ${conduct.approachName}`);
 
-    // AUTO-PREENCHIMENTO: Buscar CIDs associados ao procedimento + conduta
+    // ⚡ AUTO-PREENCHIMENTO OTIMIZADO: Executar todas as 3 chamadas API em PARALELO
     if (procedureId && conduct.surgicalApproachId) {
-      try {
-        console.log(`🔍 [DEBUG-SELECAO] Buscando CIDs para procedimento ${procedureId} + conduta ${conduct.surgicalApproachId}`);
-        console.log(`🔍 [DEBUG-SELECAO] URL da requisição: /api/surgical-procedure-conduct-cids/procedure/${procedureId}/approach/${conduct.surgicalApproachId}`);
-        
-        const cidResponse = await fetch(`/api/surgical-procedure-conduct-cids/procedure/${procedureId}/approach/${conduct.surgicalApproachId}`, {
+      console.log(`⚡ [PARALELO] Iniciando 3 chamadas API em paralelo para conduta ${conduct.surgicalApproachId}`);
+      
+      const [cidResult, cbhpmResult, completeDataResult] = await Promise.allSettled([
+        // 1. Buscar CIDs associados
+        fetch(`/api/surgical-procedure-conduct-cids/procedure/${procedureId}/approach/${conduct.surgicalApproachId}`, {
           credentials: 'include'
-        });
+        }).then(res => res.ok ? res.json() : []),
         
-        console.log(`🔍 [DEBUG-SELECAO] Response status CIDs: ${cidResponse.status}`);
-        if (cidResponse.ok) {
-          const associatedCids = await cidResponse.json();
-          console.log('📋 [DEBUG-SELECAO] CIDs encontrados para a conduta:', associatedCids);
-          console.log('📋 [DEBUG-SELECAO] Total de CIDs encontrados:', associatedCids?.length || 0);
+        // 2. Buscar procedimentos CBHPM associados
+        fetch(`/api/cbhpm-procedures-by-combination?medicalProcedureId=${procedureId}&approachId=${conduct.surgicalApproachId}`, {
+          credentials: 'include'
+        }).then(res => res.ok ? res.json() : []),
+        
+        // 3. Buscar dados completos (OPME, fornecedores, justificativas)
+        fetch(`/api/surgical-approaches/${conduct.surgicalApproachId}/complete?surgicalProcedureId=${procedureId}`, {
+          credentials: 'include'
+        }).then(res => res.ok ? res.json() : null)
+      ]);
+      
+      console.log(`✅ [PARALELO] 3 chamadas API concluídas!`);
+      
+      // Extrair dados com tratamento de erros individual
+      const associatedCids = cidResult.status === 'fulfilled' ? cidResult.value : [];
+      const cbhpmProcedures = cbhpmResult.status === 'fulfilled' ? cbhpmResult.value : [];
+      const completeData = completeDataResult.status === 'fulfilled' ? completeDataResult.value : null;
+      
+      // Log de erros individuais
+      if (cidResult.status === 'rejected') console.error('❌ Erro ao buscar CIDs:', cidResult.reason);
+      if (cbhpmResult.status === 'rejected') console.error('❌ Erro ao buscar CBHPM:', cbhpmResult.reason);
+      if (completeDataResult.status === 'rejected') console.error('❌ Erro ao buscar dados completos:', completeDataResult.reason);
+      
+      console.log(`📊 [PARALELO] Resultados: CIDs=${associatedCids?.length || 0}, CBHPM=${cbhpmProcedures?.length || 0}, CompleteData=${completeData ? 'OK' : 'NULL'}`);
+      
+      // ========== PROCESSAR CIDs ==========
+      if (associatedCids && associatedCids.length > 0 && setMultipleCids) {
+        console.log('📋 [DEBUG-SELECAO] CIDs encontrados para a conduta:', associatedCids);
+        
+        setMultipleCids((prevCids: any) => {
+          const updatedList = [...(prevCids || [])];
+          let addedCount = 0;
           
-          if (associatedCids.length > 0 && setMultipleCids) {
-            // 🔄 MERGE INTELIGENTE: Sempre combinar CIDs (evita duplicatas)
-            setMultipleCids((prevCids: any) => {
-              const updatedList = [...(prevCids || [])];
-              let addedCount = 0;
+          associatedCids.forEach((cidData: any) => {
+            const exists = updatedList.some((existing: any) => 
+              (existing.cid?.id || existing.id) === cidData.cidId
+            );
+            
+            if (!exists) {
+              const newCidItem = {
+                cid: {
+                  id: cidData.cidId,
+                  code: cidData.cidCode,
+                  description: cidData.cidDescription,
+                  category: cidData.cidCategory || 'Geral'
+                },
+                isAutoAdded: true,
+                isPrimary: cidData.isPrimaryCid,
+                notes: cidData.notes,
+                addedByConductSelect: true,
+                sourceApproachId: conduct.surgicalApproachId,
+                sourceApproachName: conduct.approachName,
+                sourceProcedureId: procedureId,
+                sourceProcedureName: procedureName
+              };
               
-              associatedCids.forEach((cidData: any) => {
-                const exists = updatedList.some((existing: any) => 
-                  (existing.cid?.id || existing.id) === cidData.cidId
-                );
-                
-                if (!exists) {
-                  const newCidItem = {
-                    cid: {
-                      id: cidData.cidId,
-                      code: cidData.cidCode,
-                      description: cidData.cidDescription,
-                      category: cidData.cidCategory || 'Geral'
-                    },
-                    isAutoAdded: true,
-                    isPrimary: cidData.isPrimaryCid,
-                    notes: cidData.notes,
-                    addedByConductSelect: true
-                  };
-                  
-                  updatedList.push(newCidItem);
-                  addedCount++;
-                  console.log(`✅ CID merged: ${cidData.cidCode} - ${cidData.cidDescription}`);
-                }
-              });
-              
-              if (addedCount > 0) {
-                toast({
-                  title: "CIDs combinados",
-                  description: `${addedCount} novo(s) CID(s) adicionado(s)`,
-                  duration: 3000,
-                });
-              }
-              
-              return updatedList;
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Erro ao buscar CIDs associados:', error);
-      }
-    }
-
-    // AUTO-PREENCHIMENTO: Buscar procedimentos CBHPM associados ao procedimento médico + conduta
-    if (procedureId && conduct.surgicalApproachId) {
-      try {
-        console.log(`🔍 Buscando procedimentos CBHPM para procedimento ${procedureId} + conduta ${conduct.surgicalApproachId}`);
-        
-        const cbhpmResponse = await fetch(`/api/cbhpm-procedures-by-combination?medicalProcedureId=${procedureId}&approachId=${conduct.surgicalApproachId}`, {
-          credentials: 'include'
-        });
-        
-        if (cbhpmResponse.ok) {
-          const cbhpmProcedures = await cbhpmResponse.json();
-          console.log('🏥 Procedimentos CBHPM encontrados:', cbhpmProcedures);
-          console.log('🔍 Verificando callbacks:', {
-            hasSetSelectedProcedure: !!setSelectedProcedure,
-            hasSetSecondaryProcedures: !!setSecondaryProcedures,
-            cbhpmLength: cbhpmProcedures.length
+              updatedList.push(newCidItem);
+              addedCount++;
+              console.log(`✅ CID merged: ${cidData.cidCode} - ${cidData.cidDescription} (origem: ${conduct.approachName})`);
+            }
           });
           
-          // Permitir auto-preenchimento se pelo menos setSecondaryProcedures estiver disponível
-          if (cbhpmProcedures.length > 0 && setSecondaryProcedures) {
-            // 🔄 MERGE INTELIGENTE: Sempre combinar procedimentos CBHPM (soma quantidades)
-            const formattedProcedures = cbhpmProcedures.map((proc: any) => ({
-              procedure: {
-                id: proc.procedureId,
-                code: proc.procedureCode,
-                name: proc.procedureName,
-                description: proc.notes,
-                active: true,
-                porte: proc.porte,
-                custoOperacional: null,
-                porteAnestesista: proc.porteAnestesista,
-                numeroAuxiliares: proc.numeroAuxiliares,
-                addedByConductSelect: true
-              },
-              quantity: proc.quantity || 1
-            }));
-            
-            // Adicionar/merge procedimentos
-            formattedProcedures.forEach((newProc: any) => {
-              setSecondaryProcedures((prevSecondaryProcedures: any) => {
-                const currentSecondaryList = [...(prevSecondaryProcedures || [])];
-                const existingSecondaryIndex = currentSecondaryList.findIndex((existing: any) => 
-                  existing.procedure.id === newProc.procedure.id
-                );
-                
-                if (existingSecondaryIndex !== -1) {
-                  currentSecondaryList[existingSecondaryIndex].quantity += newProc.quantity;
-                  console.log(`🏥 MERGE: ${newProc.procedure.code} - qtd: ${currentSecondaryList[existingSecondaryIndex].quantity}`);
-                } else {
-                  const isMainProcedure = selectedProcedure?.id === newProc.procedure.id;
-                  
-                  if (isMainProcedure && setProcedureQuantity) {
-                    setProcedureQuantity((prev: number) => prev + newProc.quantity);
-                    console.log(`🏥 MERGE PRINCIPAL: ${newProc.procedure.code}`);
-                  } else {
-                    currentSecondaryList.push(newProc);
-                    console.log(`🏥 NOVO: ${newProc.procedure.code}`);
-                  }
-                }
-                
-                return currentSecondaryList;
-              });
-            });
-            
-            // Definir procedimento principal se não houver
-            if (!selectedProcedure && formattedProcedures.length > 0) {
-              const sortedByPorte = formattedProcedures.sort((a: any, b: any) => (b.procedure.porte || 0) - (a.procedure.porte || 0));
-              const newMainProcedure = sortedByPorte[0];
-              
-              setSelectedProcedure(newMainProcedure.procedure);
-              if (setProcedureQuantity) {
-                setProcedureQuantity(newMainProcedure.quantity);
-              }
-              console.log(`🏥 PRINCIPAL: ${newMainProcedure.procedure.code}`);
-              
-              // Remover dos secundários
-              setSecondaryProcedures((prevSecondaryProcedures: any) => {
-                return prevSecondaryProcedures.filter((proc: any) => 
-                  proc.procedure.id !== newMainProcedure.procedure.id
-                );
-              });
-            }
-            
+          if (addedCount > 0) {
             toast({
-              title: "Procedimentos CBHPM combinados",
-              description: `Procedimentos da conduta ${conduct.approachName} combinados`,
+              title: "CIDs combinados",
+              description: `${addedCount} novo(s) CID(s) adicionado(s)`,
               duration: 3000,
             });
           }
-        }
-      } catch (error) {
-        console.error('Erro ao buscar procedimentos CBHPM:', error);
+          
+          return updatedList;
+        });
       }
-    }
-
-    // AUTO-PREENCHIMENTO COMPLETO: Buscar dados completos da conduta cirúrgica  
-    // Incluindo itens OPME, fornecedores e justificativas clínicas
-    if (procedureId && conduct.surgicalApproachId) {
-      try {
-        console.log(`🔄 Iniciando auto-preenchimento completo para conduta cirúrgica ID: ${conduct.surgicalApproachId}, Procedimento Cirúrgico ID: ${procedureId}`);
+      
+      // ========== PROCESSAR CBHPM ==========
+      if (cbhpmProcedures && cbhpmProcedures.length > 0 && setSecondaryProcedures) {
+        console.log('🏥 Procedimentos CBHPM encontrados:', cbhpmProcedures);
         
-        const response = await fetch(`/api/surgical-approaches/${conduct.surgicalApproachId}/complete?surgicalProcedureId=${procedureId}`, {
-          credentials: 'include'
+        const formattedProcedures = cbhpmProcedures.map((proc: any) => ({
+          procedure: {
+            id: proc.procedureId,
+            code: proc.procedureCode,
+            name: proc.procedureName,
+            description: proc.notes,
+            active: true,
+            porte: proc.porte,
+            custoOperacional: null,
+            porteAnestesista: proc.porteAnestesista,
+            numeroAuxiliares: proc.numeroAuxiliares,
+            addedByConductSelect: true,
+            sourceApproachId: conduct.surgicalApproachId,
+            sourceApproachName: conduct.approachName,
+            sourceProcedureId: procedureId,
+            sourceProcedureName: procedureName
+          },
+          quantity: proc.quantity || 1
+        }));
+        
+        // Adicionar/merge procedimentos
+        formattedProcedures.forEach((newProc: any) => {
+          setSecondaryProcedures((prevSecondaryProcedures: any) => {
+            const currentSecondaryList = [...(prevSecondaryProcedures || [])];
+            const existingSecondaryIndex = currentSecondaryList.findIndex((existing: any) => 
+              existing.procedure.id === newProc.procedure.id
+            );
+            
+            if (existingSecondaryIndex !== -1) {
+              currentSecondaryList[existingSecondaryIndex].quantity += newProc.quantity;
+              console.log(`🏥 MERGE: ${newProc.procedure.code} - qtd: ${currentSecondaryList[existingSecondaryIndex].quantity}`);
+            } else {
+              const isMainProcedure = selectedProcedure?.id === newProc.procedure.id;
+              
+              if (isMainProcedure && setProcedureQuantity) {
+                setProcedureQuantity((prev: number) => prev + newProc.quantity);
+                console.log(`🏥 MERGE PRINCIPAL: ${newProc.procedure.code}`);
+              } else {
+                currentSecondaryList.push(newProc);
+                console.log(`🏥 NOVO: ${newProc.procedure.code}`);
+              }
+            }
+            
+            return currentSecondaryList;
+          });
         });
         
-        if (response.ok) {
-          const completeData = await response.json();
-          console.log('📋 Dados completos da conduta cirúrgica:', completeData);
+        // Definir procedimento principal se não houver
+        if (!selectedProcedure && formattedProcedures.length > 0 && setSelectedProcedure) {
+          const sortedByPorte = formattedProcedures.sort((a: any, b: any) => (b.procedure.porte || 0) - (a.procedure.porte || 0));
+          const newMainProcedure = sortedByPorte[0];
           
-          // 🔄 MERGE INTELIGENTE: Sempre combinar itens OPME (soma quantidades)
-          if (completeData.opmeItems && completeData.opmeItems.length > 0 && setSelectedOpmeItems) {
-            setSelectedOpmeItems((prevOpmeItems: any) => {
-              const currentItems = [...(prevOpmeItems || [])];
-              let addedCount = 0;
-              let mergedCount = 0;
-              
-              completeData.opmeItems.forEach((newOpme: any) => {
-                const existingIndex = currentItems.findIndex((existing: any) => 
-                  existing.item.id === newOpme.id
-                );
-                
-                if (existingIndex !== -1) {
-                  currentItems[existingIndex].quantity += (newOpme.quantity || 1);
-                  mergedCount++;
-                  console.log(`📦 MERGE: ${newOpme.technicalName} - qtd: ${currentItems[existingIndex].quantity}`);
-                } else {
-                  currentItems.push({
-                    item: {
-                      id: newOpme.id,
-                      technicalName: newOpme.technicalName,
-                      commercialName: newOpme.commercialName,
-                      manufacturerName: newOpme.manufacturerName || '',
-                      anvisaRegistrationNumber: newOpme.anvisaRegistrationNumber,
-                      riskClass: newOpme.riskClass,
-                      registrationHolder: newOpme.registrationHolder
-                    },
-                    quantity: newOpme.quantity || 1
-                  });
-                  addedCount++;
-                  console.log(`📦 NOVO: ${newOpme.technicalName}`);
-                }
-              });
-              
-              if (addedCount > 0 || mergedCount > 0) {
-                toast({
-                  title: "Itens OPME combinados",
-                  description: `${addedCount} novos + ${mergedCount} atualizados`,
-                  duration: 3000,
-                });
-              }
-              
-              return currentItems;
-            });
+          setSelectedProcedure(newMainProcedure.procedure);
+          if (setProcedureQuantity) {
+            setProcedureQuantity(newMainProcedure.quantity);
           }
+          console.log(`🏥 PRINCIPAL: ${newMainProcedure.procedure.code}`);
           
-          // 🔄 MERGE INTELIGENTE: Sempre combinar fornecedores (max 3, evita duplicatas por CNPJ)
-          if (completeData.suppliers && completeData.suppliers.length > 0) {
-            const newSuppliers = completeData.suppliers.slice(0, 3);
-            const currentSuppliers = [selectedSupplier1, selectedSupplier2, selectedSupplier3].filter(Boolean);
-            const combinedSuppliers = [...currentSuppliers];
+          // Remover dos secundários
+          setSecondaryProcedures((prevSecondaryProcedures: any) => {
+            return prevSecondaryProcedures.filter((proc: any) => 
+              proc.procedure.id !== newMainProcedure.procedure.id
+            );
+          });
+        }
+        
+        toast({
+          title: "Procedimentos CBHPM combinados",
+          description: `Procedimentos da conduta ${conduct.approachName} combinados`,
+          duration: 3000,
+        });
+      }
+      
+      // ========== PROCESSAR DADOS COMPLETOS (OPME, Fornecedores, Justificativas) ==========
+      if (completeData) {
+        console.log('📋 Dados completos da conduta cirúrgica:', completeData);
+        
+        // 🔄 MERGE INTELIGENTE: Sempre combinar itens OPME (soma quantidades)
+        if (completeData.opmeItems && completeData.opmeItems.length > 0 && setSelectedOpmeItems) {
+          setSelectedOpmeItems((prevOpmeItems: any) => {
+            const currentItems = [...(prevOpmeItems || [])];
             let addedCount = 0;
+            let mergedCount = 0;
             
-            newSuppliers.forEach((newSupplier: any) => {
-              const exists = combinedSuppliers.some((existing: any) => existing.cnpj === newSupplier.cnpj);
+            completeData.opmeItems.forEach((newOpme: any) => {
+              const existingIndex = currentItems.findIndex((existing: any) => 
+                existing.item.id === newOpme.id
+              );
               
-              if (!exists && combinedSuppliers.length < 3) {
-                combinedSuppliers.push({
-                  id: newSupplier.id,
-                  companyName: newSupplier.companyName,
-                  tradeName: newSupplier.tradeName,
-                  cnpj: newSupplier.cnpj,
-                  municipalityId: newSupplier.municipalityId,
-                  address: newSupplier.address,
-                  phone: newSupplier.phone,
-                  email: newSupplier.email,
-                  active: newSupplier.active
+              if (existingIndex !== -1) {
+                currentItems[existingIndex].quantity += (newOpme.quantity || 1);
+                mergedCount++;
+                console.log(`📦 MERGE: ${newOpme.technicalName} - qtd: ${currentItems[existingIndex].quantity}`);
+              } else {
+                currentItems.push({
+                  item: {
+                    id: newOpme.id,
+                    technicalName: newOpme.technicalName,
+                    commercialName: newOpme.commercialName,
+                    manufacturerName: newOpme.manufacturerName || '',
+                    anvisaRegistrationNumber: newOpme.anvisaRegistrationNumber,
+                    riskClass: newOpme.riskClass,
+                    registrationHolder: newOpme.registrationHolder,
+                    sourceApproachId: conduct.surgicalApproachId,
+                    sourceApproachName: conduct.approachName,
+                    sourceProcedureId: procedureId,
+                    sourceProcedureName: procedureName
+                  },
+                  quantity: newOpme.quantity || 1
                 });
                 addedCount++;
-                console.log(`🏢 NOVO: ${newSupplier.tradeName || newSupplier.companyName}`);
+                console.log(`📦 NOVO: ${newOpme.technicalName} (origem: ${conduct.approachName})`);
               }
             });
             
-            if (setSelectedSupplier1) setSelectedSupplier1(combinedSuppliers[0] || null);
-            if (setSelectedSupplier2) setSelectedSupplier2(combinedSuppliers[1] || null);
-            if (setSelectedSupplier3) setSelectedSupplier3(combinedSuppliers[2] || null);
-            
-            if (addedCount > 0) {
-              console.log(`🏢 ${addedCount} fornecedor(es) adicionado(s)`);
+            if (addedCount > 0 || mergedCount > 0) {
+              toast({
+                title: "Itens OPME combinados",
+                description: `${addedCount} novos + ${mergedCount} atualizados`,
+                duration: 3000,
+              });
             }
-          }
-          
-          // 🔄 MERGE INTELIGENTE: Sempre combinar justificativas (concatena se diferente)
-          if (completeData.justifications && completeData.justifications.length > 0 && setClinicalJustification) {
-            const preferredJustification = completeData.justifications.find((j: any) => j.isPreferred) || completeData.justifications[0];
             
-            setClinicalJustification((prevJustification: string) => {
-              if (prevJustification && prevJustification.trim()) {
-                if (!prevJustification.includes(preferredJustification.content)) {
-                  const combined = `${prevJustification}\n\n${preferredJustification.content}`;
-                  console.log(`📝 MERGE: Justificativa concatenada`);
-                  toast({
-                    title: "Justificativa combinada",
-                    description: preferredJustification.title,
-                    duration: 3000,
-                  });
-                  return combined;
-                }
-                console.log(`📝 Justificativa já inclusa`);
-                return prevJustification;
-              }
-              console.log(`📝 NOVA: ${preferredJustification.title}`);
-              return preferredJustification.content;
-            });
-          }
-          
+            return currentItems;
+          });
         }
-      } catch (error) {
-        console.error('Erro ao buscar dados completos da conduta cirúrgica:', error);
+        
+        // 🔄 MERGE INTELIGENTE: Sempre combinar fornecedores (evita duplicatas por CNPJ)
+        if (completeData.suppliers && completeData.suppliers.length > 0 && setSupplierDetails) {
+          const newSuppliers = completeData.suppliers;
+          const currentSuppliers = [...(supplierDetails || [])];
+          let addedCount = 0;
+          
+          newSuppliers.forEach((newSupplier: any) => {
+            const exists = currentSuppliers.some((existing: any) => existing.cnpj === newSupplier.cnpj);
+            
+            if (!exists) {
+              currentSuppliers.push({
+                id: newSupplier.id,
+                companyName: newSupplier.companyName,
+                tradeName: newSupplier.tradeName,
+                cnpj: newSupplier.cnpj,
+                municipalityId: newSupplier.municipalityId,
+                address: newSupplier.address,
+                phone: newSupplier.phone,
+                email: newSupplier.email,
+                active: newSupplier.active,
+                sourceApproachId: conduct.surgicalApproachId,
+                sourceApproachName: conduct.approachName,
+                sourceProcedureId: procedureId,
+                sourceProcedureName: procedureName
+              });
+              addedCount++;
+              console.log(`🏢 NOVO: ${newSupplier.tradeName || newSupplier.companyName} (conduta: ${conduct.approachName})`);
+            }
+          });
+          
+          if (addedCount > 0) {
+            setSupplierDetails(currentSuppliers);
+            console.log(`🏢 ${addedCount} fornecedor(es) adicionado(s)`);
+          }
+        }
+        
+        // 🔄 MERGE INTELIGENTE: Sempre combinar justificativas (concatena se diferente)
+        if (completeData.justifications && completeData.justifications.length > 0 && setClinicalJustification) {
+          const preferredJustification = completeData.justifications.find((j: any) => j.isPreferred) || completeData.justifications[0];
+          
+          setClinicalJustification((prevJustification: string) => {
+            if (prevJustification && prevJustification.trim()) {
+              if (!prevJustification.includes(preferredJustification.content)) {
+                const combined = `${prevJustification}\n\n${preferredJustification.content}`;
+                console.log(`📝 MERGE: Justificativa concatenada`);
+                toast({
+                  title: "Justificativa combinada",
+                  description: preferredJustification.title,
+                  duration: 3000,
+                });
+                return combined;
+              }
+              console.log(`📝 Justificativa já inclusa`);
+              return prevJustification;
+            }
+            console.log(`📝 NOVA: ${preferredJustification.title}`);
+            return preferredJustification.content;
+          });
+        }
       }
     }
 
@@ -916,6 +1020,35 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
 
     // NOTA: A conduta cirúrgica será salva no banco apenas quando o usuário clicar em "Salvar" ou "Próximo"
     // seguindo o mesmo padrão dos outros campos do formulário
+    
+    // 📝 INSERIR SUBTÍTULOS AUTOMÁTICOS NAS CAIXAS DE TEXTO
+    // Formato: ### [Procedimento] → [Conduta]
+    const subtitleText = `### ${procedureName} → ${conduct.approachName}`;
+    
+    // Função auxiliar para inserir subtítulo se não existir
+    const insertSubtitleIfNotExists = (currentNotes: string, setNotes?: (notes: string) => void) => {
+      if (!setNotes) return;
+      
+      // Verificar se o subtítulo já existe (evitar duplicatas)
+      // Busca pelo padrão exato do subtítulo
+      if (currentNotes.includes(subtitleText)) {
+        console.log(`📝 [SUBTITULO] Subtítulo já existe: ${subtitleText}`);
+        return;
+      }
+      
+      // Adicionar subtítulo no final com quebras de linha
+      const newNotes = currentNotes.trim() 
+        ? `${currentNotes.trim()}\n\n${subtitleText}\n\n`
+        : `${subtitleText}\n\n`;
+      
+      console.log(`📝 [SUBTITULO] Inserindo subtítulo: ${subtitleText}`);
+      setNotes(newNotes);
+    };
+    
+    // Inserir em todas as 3 caixas de texto
+    insertSubtitleIfNotExists(cbhpmAdditionalNotes, setCbhpmAdditionalNotes);
+    insertSubtitleIfNotExists(opmeAdditionalNotes, setOpmeAdditionalNotes);
+    insertSubtitleIfNotExists(supplierAdditionalNotes, setSupplierAdditionalNotes);
     
     toast({
       title: "Conduta selecionada",
@@ -1093,6 +1226,13 @@ export function SurgeryData({
   attachments = null,
   // Região anatômica selecionada para o webhook de IA
   selectedAnatomicalRegion = null,
+  // Campos de texto livre após procedimentos CBHPM, itens OPME e fornecedores
+  cbhpmAdditionalNotes = "",
+  setCbhpmAdditionalNotes = () => {},
+  opmeAdditionalNotes = "",
+  setOpmeAdditionalNotes = () => {},
+  supplierAdditionalNotes = "",
+  setSupplierAdditionalNotes = () => {},
 }: SurgeryDataProps) {
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
@@ -1125,6 +1265,22 @@ export function SurgeryData({
   const [availableSurgicalApproaches, setAvailableSurgicalApproaches] = useState<any[]>([]);
   const [selectedCidForApproach, setSelectedCidForApproach] = useState<CidCode | null>(null);
   const [localSelectedSurgicalApproaches, setLocalSelectedSurgicalApproaches] = useState<any[]>([]);
+  
+  // Estado para associação manual de itens à conduta
+  const [manualAssociationApproachId, setManualAssociationApproachId] = useState<string>("none");
+  
+  // Auto-selecionar conduta quando há apenas uma no pedido
+  useEffect(() => {
+    if (selectedSurgicalApproaches.length === 1 && (!manualAssociationApproachId || manualAssociationApproachId === "none")) {
+      const singleApproach = selectedSurgicalApproaches[0];
+      console.log("🎯 Auto-selecionando única conduta disponível:", singleApproach.approachName);
+      // Usar chave composta: surgicalProcedureId-surgicalApproachId
+      setManualAssociationApproachId(`${singleApproach.surgicalProcedureId}-${singleApproach.surgicalApproachId}`);
+    } else if (selectedSurgicalApproaches.length === 0 && manualAssociationApproachId !== "none") {
+      // Resetar se não há mais condutas
+      setManualAssociationApproachId("none");
+    }
+  }, [selectedSurgicalApproaches, manualAssociationApproachId]);
 
   // Estados para procedimentos secundários
   const [secondaryProcedureSearchOpen, setSecondaryProcedureSearchOpen] =
@@ -1385,7 +1541,27 @@ export function SurgeryData({
   const opmeItems = selectedOpmeItems;
   const setOpmeItems = setSelectedOpmeItems;
 
-  // Estados para fornecedores
+  // Interface para fornecedor com associação de conduta
+  interface SupplierWithAssociation {
+    id: number;
+    companyName: string;
+    tradeName: string | null;
+    cnpj: string;
+    municipalityId?: number;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    active?: boolean;
+    // Campos de associação com conduta cirúrgica
+    sourceApproachId?: number | null;
+    sourceApproachName?: string | null;
+    sourceProcedureId?: number | null;
+    sourceProcedureName?: string | null;
+    manufacturerName?: string | null;
+    isApproved?: boolean;
+  }
+
+  // Interface para fornecedor base (resultado de busca)
   interface Supplier {
     id: number;
     companyName: string;
@@ -1398,82 +1574,38 @@ export function SurgeryData({
     active: boolean;
   }
 
-  const [supplier1Open, setSupplier1Open] = useState<boolean>(false);
-  const [supplier2Open, setSupplier2Open] = useState<boolean>(false);
-  const [supplier3Open, setSupplier3Open] = useState<boolean>(false);
+  // Estados para busca de fornecedores (popover único)
+  const [supplierSearchOpen, setSupplierSearchOpen] = useState<boolean>(false);
   const [supplierSearchTerm, setSupplierSearchTerm] = useState<string>("");
   const [supplierResults, setSupplierResults] = useState<Supplier[]>([]);
   const [supplierLoading, setSupplierLoading] = useState<boolean>(false);
-  const [selectedSupplier1, setSelectedSupplier1] = useState<Supplier | null>(
-    null,
-  );
-  const [selectedSupplier2, setSelectedSupplier2] = useState<Supplier | null>(
-    null,
-  );
-  const [selectedSupplier3, setSelectedSupplier3] = useState<Supplier | null>(
-    null,
-  );
+  const [currentSupplier, setCurrentSupplier] = useState<Supplier | null>(null);
+  
+  // Lista dinâmica de fornecedores selecionados (usa supplierDetails do pai)
+  const selectedSuppliers = supplierDetails || [];
+  const setSelectedSuppliers = setSupplierDetails || (() => {});
 
-  // Estados para fabricantes dos fornecedores
-  const [manufacturer1, setManufacturer1] = useState<string>("");
-  const [manufacturer2, setManufacturer2] = useState<string>("");
-  const [manufacturer3, setManufacturer3] = useState<string>("");
-
-  // Limpar fornecedores quando não houver itens OPME (apenas quando itens OPME mudam)
+  // Limpar fornecedores quando não houver itens OPME
   useEffect(() => {
     const hasOpmeItems = selectedOpmeItems && selectedOpmeItems.length > 0;
     
-    if (!hasOpmeItems) {
-      // Limpar todos os fornecedores incondicionalmente
-      setSelectedSupplier1(null);
-      setSelectedSupplier2(null);
-      setSelectedSupplier3(null);
-      
-      // Limpar todos os fabricantes incondicionalmente
-      setManufacturer1("");
-      setManufacturer2("");
-      setManufacturer3("");
-      
-      console.log("🗑️ Fornecedores e fabricantes limpos - sem itens OPME");
+    if (!hasOpmeItems && selectedSuppliers.length > 0) {
+      setSelectedSuppliers([]);
+      console.log("🗑️ Fornecedores limpos - sem itens OPME");
     }
   }, [selectedOpmeItems]);
 
-  // Atualizar o componente pai quando um fornecedor é selecionado
+  // Sincronizar com o estado legado de IDs (para compatibilidade)
   useEffect(() => {
-    setSuppliers({
-      supplier1: selectedSupplier1 ? selectedSupplier1.id : null,
-      supplier2: selectedSupplier2 ? selectedSupplier2.id : null,
-      supplier3: selectedSupplier3 ? selectedSupplier3.id : null,
-    });
-  }, [selectedSupplier1, selectedSupplier2, selectedSupplier3, setSuppliers]);
-
-  // Carregar fornecedores salvos diretamente do supplierDetails (padrão simplificado)
-  useEffect(() => {
-    console.log("SurgeryData: Carregando fornecedores do supplierDetails:", supplierDetails?.length || 0);
-
-    if (!supplierDetails || supplierDetails.length === 0) {
-      console.log("SurgeryData: Nenhum fornecedor recebido");
-      return;
+    if (setSuppliers) {
+      const uniqueSupplierIds = [...new Set(selectedSuppliers.map(s => s.id))].slice(0, 3);
+      setSuppliers({
+        supplier1: uniqueSupplierIds[0] || null,
+        supplier2: uniqueSupplierIds[1] || null,
+        supplier3: uniqueSupplierIds[2] || null,
+      });
     }
-
-    console.log("SurgeryData: Aplicando fornecedores:", supplierDetails.map(s => s.companyName));
-    
-    // Aplicar fornecedores diretamente pela ordem (padrão simples e confiável)
-    if (supplierDetails[0]) {
-      setSelectedSupplier1(supplierDetails[0]);
-      console.log("✅ Fornecedor 1 aplicado:", supplierDetails[0].companyName);
-    }
-
-    if (supplierDetails[1]) {
-      setSelectedSupplier2(supplierDetails[1]);
-      console.log("✅ Fornecedor 2 aplicado:", supplierDetails[1].companyName);
-    }
-
-    if (supplierDetails[2]) {
-      setSelectedSupplier3(supplierDetails[2]);
-      console.log("✅ Fornecedor 3 aplicado:", supplierDetails[2].companyName);
-    }
-  }, [supplierDetails]);
+  }, [selectedSuppliers, setSuppliers]);
 
   // Estado para armazenar os resultados da busca de CID-10
   const [cidCodes, setCidCodes] = useState<CidCode[]>([]);
@@ -1716,23 +1848,60 @@ export function SurgeryData({
 
   // Função para selecionar um material OPME e adicionar automaticamente
   const handleSelectOpmeItem = async (item: OpmeItem) => {
-    // Verificar se o material já existe na lista
-    const exists = opmeItems?.some((opmeItem) => opmeItem.item.id === item.id);
+    // Verificar se há uma conduta selecionada para associação manual
+    let manualApproachInfo: any = null;
+    if (manualAssociationApproachId && manualAssociationApproachId !== "none" && selectedSurgicalApproaches.length > 0) {
+      // Formato da chave: "procedureId-surgicalApproachId"
+      const [procedureIdStr, approachIdStr] = manualAssociationApproachId.split('-');
+      const procedureId = parseInt(procedureIdStr);
+      const approachId = parseInt(approachIdStr);
+      
+      const selectedApproach = selectedSurgicalApproaches.find(
+        (a: any) => a.surgicalProcedureId === procedureId && a.surgicalApproachId === approachId
+      );
+      if (selectedApproach) {
+        manualApproachInfo = {
+          sourceApproachId: selectedApproach.surgicalApproachId,
+          sourceApproachName: selectedApproach.approachName,
+          sourceProcedureId: selectedApproach.surgicalProcedureId,
+          sourceProcedureName: selectedApproach.procedureName
+        };
+      }
+    }
 
-    if (exists) {
+    // Verificar se o mesmo OPME já existe NO MESMO BLOCO (mesma conduta)
+    // Permitir o mesmo OPME em blocos diferentes (igual ao CBHPM e CID10)
+    const existsInSameBlock = opmeItems?.some((opmeItem: any) => {
+      if (opmeItem.item.id !== item.id) return false;
+      
+      // Se ambos são manuais (sem conduta), são duplicatas
+      if (!opmeItem.item.sourceApproachId && !manualApproachInfo) return true;
+      
+      // Se um tem conduta e outro não, são blocos diferentes
+      if (!opmeItem.item.sourceApproachId || !manualApproachInfo) return false;
+      
+      // Verificar se são do mesmo bloco (mesmo approach + procedure)
+      return opmeItem.item.sourceApproachId === manualApproachInfo.sourceApproachId &&
+             opmeItem.item.sourceProcedureId === manualApproachInfo.sourceProcedureId;
+    });
+
+    if (existsInSameBlock) {
       toast({
-        title: "Material já adicionado",
-        description: "Este material OPME já foi adicionado à lista.",
+        title: "Material já adicionado neste bloco",
+        description: "Este material OPME já foi adicionado a esta conduta. Você pode adicioná-lo a uma conduta diferente.",
         variant: "destructive",
-        duration: 3000,
+        duration: 4000,
       });
       setOpmeSearchOpen(false);
       return;
     }
 
-    // Adicionar automaticamente à lista com a quantidade atual
+    // Adicionar automaticamente à lista com a quantidade atual e metadados de bloco
     const newOpmeItem = {
-      item: item,
+      item: {
+        ...item,
+        ...(manualApproachInfo || {})
+      },
       quantity: opmeQuantity,
     };
 
@@ -1741,13 +1910,14 @@ export function SurgeryData({
       setOpmeItems(updatedItems);
     }
 
-    // Salvar no banco de dados imediatamente
-    const saveSuccess = await saveOpmeItemsToDatabase(updatedItems);
-    if (saveSuccess) {
-      console.log(`Item OPME ${item.technicalName} salvo no banco com sucesso`);
-    } else {
-      console.error(`Erro ao salvar item OPME ${item.technicalName} no banco`);
-    }
+    // ❌ SALVAMENTO LEGADO COMENTADO - Persistência agora é feita via saveProgress no passo 3
+    // const saveSuccess = await saveOpmeItemsToDatabase(updatedItems);
+    // if (saveSuccess) {
+    //   console.log(`Item OPME ${item.technicalName} salvo no banco com sucesso`);
+    // } else {
+    //   console.error(`Erro ao salvar item OPME ${item.technicalName} no banco`);
+    // }
+    console.log(`Item OPME ${item.technicalName} adicionado ao estado (será salvo no passo 3)`);
 
     // Limpar seleção e fechar popup
     setCurrentOpmeItem(null);
@@ -1756,14 +1926,21 @@ export function SurgeryData({
     setOpmeSearchTerm("");
     setOpmeSearchOpen(false);
 
+    const toastDescription = manualApproachInfo 
+      ? `${item.technicalName} adicionado e associado a "${manualApproachInfo.sourceApproachName}"!`
+      : `${item.technicalName} adicionado com sucesso!`;
+
     toast({
       title: "Material OPME adicionado",
-      description: `${item.technicalName} adicionado com sucesso!`,
+      description: toastDescription,
       duration: 2000,
     });
   };
 
-  // Função para salvar itens OPME no banco
+  // ❌ FUNÇÃO LEGADA COMENTADA - Salvamento unificado agora é feito via saveProgress em create-order.tsx
+  // A persistência de itens OPME com associações cirúrgicas agora acontece APENAS no passo 3 do saveProgress
+  // Isso evita conflitos e sobrescrita de dados
+  /*
   const saveOpmeItemsToDatabase = async (items: Array<{ item: any; quantity: number }>) => {
     if (!orderId) {
       console.warn("Não há orderId para salvar itens OPME");
@@ -1797,6 +1974,7 @@ export function SurgeryData({
       return false;
     }
   };
+  */
 
   // Função para adicionar material OPME à lista
   const handleAddOpmeItem = async () => {
@@ -1809,15 +1987,54 @@ export function SurgeryData({
       return;
     }
 
-    // Verificar se o item já existe na lista
+    // VALIDAÇÃO OBRIGATÓRIA: Se há condutas no pedido, DEVE selecionar uma
+    if (selectedSurgicalApproaches.length > 0 && (!manualAssociationApproachId || manualAssociationApproachId === "none")) {
+      toast({
+        title: "Selecione uma conduta",
+        description: "É obrigatório associar o material OPME a uma conduta cirúrgica existente no pedido.",
+        variant: "destructive",
+        duration: 4000,
+      });
+      return;
+    }
+
+    // Verificar se há uma conduta selecionada para associação manual
+    let manualApproachInfo: any = null;
+    let targetProcedureId: number | null = null;
+    let targetApproachId: number | null = null;
+    
+    if (manualAssociationApproachId && manualAssociationApproachId !== "none" && selectedSurgicalApproaches.length > 0) {
+      // Formato da chave: "procedureId-surgicalApproachId"
+      const [procedureIdStr, approachIdStr] = manualAssociationApproachId.split('-');
+      targetProcedureId = parseInt(procedureIdStr);
+      targetApproachId = parseInt(approachIdStr);
+      
+      const selectedApproach = selectedSurgicalApproaches.find(
+        (a: any) => a.surgicalProcedureId === targetProcedureId && a.surgicalApproachId === targetApproachId
+      );
+      if (selectedApproach) {
+        manualApproachInfo = {
+          sourceApproachId: selectedApproach.surgicalApproachId,
+          sourceApproachName: selectedApproach.approachName,
+          sourceProcedureId: selectedApproach.surgicalProcedureId,
+          sourceProcedureName: selectedApproach.procedureName
+        };
+        console.log(`Item OPME ${currentOpmeItem.technicalName} será associado manualmente à conduta: ${selectedApproach.approachName}`);
+      }
+    }
+
+    // Verificar se o item já existe NA MESMA CONDUTA
+    // O mesmo item OPME pode existir em condutas diferentes
     const existingItemIndex = opmeItems.findIndex(
-      (item) => item.item.id === currentOpmeItem.id,
+      (item) => item.item.id === currentOpmeItem.id && 
+                item.item.sourceProcedureId === targetProcedureId &&
+                item.item.sourceApproachId === targetApproachId
     );
 
     let updatedItems;
 
     if (existingItemIndex >= 0) {
-      // Atualizar a quantidade do item existente
+      // Atualizar a quantidade do item existente NA MESMA CONDUTA
       const existingItem = opmeItems[existingItemIndex];
       const newQuantity = existingItem.quantity + opmeQuantity;
 
@@ -1829,35 +2046,48 @@ export function SurgeryData({
 
       setOpmeItems(updatedItems);
 
+      const condutaInfo = manualApproachInfo 
+        ? ` na conduta "${manualApproachInfo.sourceProcedureName} → ${manualApproachInfo.sourceApproachName}"`
+        : "";
       toast({
         title: "Quantidade atualizada",
-        description: `Quantidade de ${currentOpmeItem.technicalName} atualizada para ${newQuantity}`,
+        description: `Quantidade de ${currentOpmeItem.technicalName}${condutaInfo} atualizada para ${newQuantity}`,
       });
     } else {
-      // Adicionar novo item à lista
+      // Adicionar novo item à lista (com informações de associação manual se houver)
+      const itemToAdd = {
+        ...currentOpmeItem,
+        ...(manualApproachInfo || {})
+      };
+      
       updatedItems = [
         ...opmeItems,
         {
-          item: currentOpmeItem,
+          item: itemToAdd,
           quantity: opmeQuantity,
         },
       ];
 
       setOpmeItems(updatedItems);
 
+      const toastDescription = manualApproachInfo 
+        ? `${currentOpmeItem.technicalName} adicionado e associado a "${manualApproachInfo.sourceApproachName}"!`
+        : `${currentOpmeItem.technicalName} adicionado à lista de materiais`;
+
       toast({
         title: "Material adicionado",
-        description: `${currentOpmeItem.technicalName} adicionado à lista de materiais`,
+        description: toastDescription,
       });
     }
 
-    // Salvar no banco de dados imediatamente
-    const saveSuccess = await saveOpmeItemsToDatabase(updatedItems);
-    if (saveSuccess) {
-      console.log(`Item OPME ${currentOpmeItem.technicalName} salvo no banco com sucesso`);
-    } else {
-      console.error(`Erro ao salvar item OPME ${currentOpmeItem.technicalName} no banco`);
-    }
+    // ❌ SALVAMENTO LEGADO COMENTADO - Persistência agora é feita via saveProgress no passo 3
+    // const saveSuccess = await saveOpmeItemsToDatabase(updatedItems);
+    // if (saveSuccess) {
+    //   console.log(`Item OPME ${currentOpmeItem.technicalName} salvo no banco com sucesso`);
+    // } else {
+    //   console.error(`Erro ao salvar item OPME ${currentOpmeItem.technicalName} no banco`);
+    // }
+    console.log(`Item OPME ${currentOpmeItem.technicalName} adicionado ao estado (será salvo no passo 3)`);
 
     // Limpar o campo de busca e o item selecionado
     setOpmeSearchTerm("");
@@ -1874,13 +2104,14 @@ export function SurgeryData({
 
     setOpmeItems(newItems);
 
-    // Salvar no banco de dados imediatamente
-    const saveSuccess = await saveOpmeItemsToDatabase(newItems);
-    if (saveSuccess) {
-      console.log(`Item OPME ${removedItem.item.technicalName} removido do banco com sucesso`);
-    } else {
-      console.error(`Erro ao remover item OPME ${removedItem.item.technicalName} do banco`);
-    }
+    // ❌ SALVAMENTO LEGADO COMENTADO - Persistência agora é feita via saveProgress no passo 3
+    // const saveSuccess = await saveOpmeItemsToDatabase(newItems);
+    // if (saveSuccess) {
+    //   console.log(`Item OPME ${removedItem.item.technicalName} removido do banco com sucesso`);
+    // } else {
+    //   console.error(`Erro ao remover item OPME ${removedItem.item.technicalName} do banco`);
+    // }
+    console.log(`Item OPME ${removedItem.item.technicalName} removido do estado (será salvo no passo 3)`);
 
     toast({
       title: "Material removido",
@@ -2047,241 +2278,210 @@ export function SurgeryData({
     }
   };
 
-  // Função para selecionar fornecedor 1
-  const handleSelectSupplier1 = async (supplier: Supplier) => {
-    setSelectedSupplier1(supplier);
-    setSupplier1Open(false);
-
-    // Se o mesmo fornecedor já estiver selecionado em outra posição, limpar essa posição
-    if (selectedSupplier2?.id === supplier.id) {
-      setSelectedSupplier2(null);
-    }
-    if (selectedSupplier3?.id === supplier.id) {
-      setSelectedSupplier3(null);
-    }
-
-    // Atualizar lista de fornecedores selecionados e salvar no banco
-    const currentSuppliers = [
-      supplier,
-      selectedSupplier2,
-      selectedSupplier3
-    ].filter(Boolean) as Supplier[];
-
-    const saveSuccess = await saveSuppliersToDatabase(currentSuppliers);
-    if (saveSuccess) {
-      console.log(`Fornecedor 1 ${supplier.companyName} salvo no banco com sucesso`);
-    } else {
-      console.error(`Erro ao salvar fornecedor 1 ${supplier.companyName} no banco`);
-    }
-  };
-
-  // Função para selecionar fornecedor 2
-  const handleSelectSupplier2 = async (supplier: Supplier) => {
-    setSelectedSupplier2(supplier);
-    setSupplier2Open(false);
-
-    // Se o mesmo fornecedor já estiver selecionado em outra posição, limpar essa posição
-    if (selectedSupplier1?.id === supplier.id) {
-      setSelectedSupplier1(null);
-    }
-    if (selectedSupplier3?.id === supplier.id) {
-      setSelectedSupplier3(null);
-    }
-
-    // Atualizar lista de fornecedores selecionados e salvar no banco
-    const currentSuppliers = [
-      selectedSupplier1,
-      supplier,
-      selectedSupplier3
-    ].filter(Boolean) as Supplier[];
-
-    const saveSuccess = await saveSuppliersToDatabase(currentSuppliers);
-    if (saveSuccess) {
-      console.log(`Fornecedor 2 ${supplier.companyName} salvo no banco com sucesso`);
-    } else {
-      console.error(`Erro ao salvar fornecedor 2 ${supplier.companyName} no banco`);
-    }
-  };
-
-  // Função para selecionar fornecedor 3
-  const handleSelectSupplier3 = async (supplier: Supplier) => {
-    setSelectedSupplier3(supplier);
-    setSupplier3Open(false);
-
-    // Se o mesmo fornecedor já estiver selecionado em outra posição, limpar essa posição
-    if (selectedSupplier1?.id === supplier.id) {
-      setSelectedSupplier1(null);
-    }
-    if (selectedSupplier2?.id === supplier.id) {
-      setSelectedSupplier2(null);
-    }
-
-    // Atualizar lista de fornecedores selecionados e salvar no banco
-    const currentSuppliers = [
-      selectedSupplier1,
-      selectedSupplier2,
-      supplier
-    ].filter(Boolean) as Supplier[];
-
-    const saveSuccess = await saveSuppliersToDatabase(currentSuppliers);
-    if (saveSuccess) {
-      console.log(`Fornecedor 3 ${supplier.companyName} salvo no banco com sucesso`);
-    } else {
-      console.error(`Erro ao salvar fornecedor 3 ${supplier.companyName} no banco`);
-    }
-  };
-
-  // Funções para gerenciar fabricantes usando o novo sistema de prioridades
-  const handleManufacturerChange = async (manufacturerText: string, priority: 1 | 2 | 3) => {
-    if (!orderId) {
-      console.warn("Não há orderId para salvar fabricante");
+  // Função para adicionar fornecedor à lista dinâmica (similar aos itens OPME)
+  const handleAddSupplier = async () => {
+    if (!currentSupplier) {
+      toast({
+        title: "Nenhum fornecedor selecionado",
+        description: "Selecione um fornecedor primeiro",
+        variant: "destructive",
+      });
       return;
     }
 
-    let setManufacturer: (value: string) => void;
-
-    // Identificar função de estado usar
-    switch (priority) {
-      case 1:
-        setManufacturer = setManufacturer1;
-        break;
-      case 2:
-        setManufacturer = setManufacturer2;
-        break;
-      case 3:
-        setManufacturer = setManufacturer3;
-        break;
-    }
-
-    // Atualizar estado local imediatamente
-    setManufacturer(manufacturerText);
-
-    try {
-      // Salvar usando o novo sistema de batch update
-      const allManufacturers = [];
-      
-      // Coletar todos os fabricantes atuais
-      const currentManufacturer1 = priority === 1 ? manufacturerText : manufacturer1;
-      const currentManufacturer2 = priority === 2 ? manufacturerText : manufacturer2;
-      const currentManufacturer3 = priority === 3 ? manufacturerText : manufacturer3;
-
-      if (currentManufacturer1.trim()) {
-        allManufacturers.push({ manufacturerName: currentManufacturer1.trim(), priority: 1 });
-      }
-      if (currentManufacturer2.trim()) {
-        allManufacturers.push({ manufacturerName: currentManufacturer2.trim(), priority: 2 });
-      }
-      if (currentManufacturer3.trim()) {
-        allManufacturers.push({ manufacturerName: currentManufacturer3.trim(), priority: 3 });
-      }
-
-      const response = await fetch(`/api/medical-orders/${orderId}/manufacturers`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ manufacturers: allManufacturers }),
+    // VALIDAÇÃO OBRIGATÓRIA: Se há condutas no pedido, DEVE selecionar uma
+    if (selectedSurgicalApproaches.length > 0 && (!manualAssociationApproachId || manualAssociationApproachId === "none")) {
+      toast({
+        title: "Selecione uma conduta",
+        description: "É obrigatório associar o fornecedor a uma conduta cirúrgica existente no pedido.",
+        variant: "destructive",
+        duration: 4000,
       });
-
-      if (response.ok) {
-        console.log(`✅ Fabricante prioridade ${priority} "${manufacturerText}" salvo com sucesso`);
-      } else {
-        console.error(`Erro ao salvar fabricante prioridade ${priority}: ${response.status}`);
-      }
-    } catch (error) {
-      console.error("Erro ao gerenciar fabricante:", error);
+      return;
     }
+
+    // Verificar se há uma conduta selecionada para associação manual
+    let manualApproachInfo: any = {};
+    console.log(`🔍 DEBUG handleAddSupplier: manualAssociationApproachId=${manualAssociationApproachId}`);
+    console.log(`🔍 DEBUG handleAddSupplier: selectedSurgicalApproaches=`, selectedSurgicalApproaches);
+    
+    if (manualAssociationApproachId && manualAssociationApproachId !== "none" && selectedSurgicalApproaches.length > 0) {
+      // Formato da chave: "procedureId-surgicalApproachId"
+      const [procedureIdStr, approachIdStr] = manualAssociationApproachId.split('-');
+      const procedureId = parseInt(procedureIdStr);
+      const approachId = parseInt(approachIdStr);
+      
+      const selectedApproach = selectedSurgicalApproaches.find(
+        (a: any) => a.surgicalProcedureId === procedureId && a.surgicalApproachId === approachId
+      );
+      console.log(`🔍 DEBUG handleAddSupplier: selectedApproach=`, selectedApproach);
+      
+      if (selectedApproach) {
+        manualApproachInfo = {
+          sourceApproachId: selectedApproach.surgicalApproachId,
+          sourceApproachName: selectedApproach.approachName,
+          sourceProcedureId: selectedApproach.surgicalProcedureId,
+          sourceProcedureName: selectedApproach.procedureName
+        };
+        console.log(`✅ Fornecedor ${currentSupplier.companyName} será associado à conduta: ${selectedApproach.approachName} (approachId=${selectedApproach.surgicalApproachId}, procedureId=${selectedApproach.surgicalProcedureId})`);
+      } else {
+        console.log(`❌ DEBUG handleAddSupplier: Nenhuma conduta encontrada com surgicalProcedureId=${procedureId}, surgicalApproachId=${approachId}`);
+      }
+    }
+    
+    console.log(`🔍 DEBUG handleAddSupplier: manualApproachInfo=`, manualApproachInfo);
+
+    // Criar objeto de fornecedor com associação de conduta
+    const supplierWithApproach: SupplierWithAssociation = {
+      id: currentSupplier.id,
+      companyName: currentSupplier.companyName,
+      tradeName: currentSupplier.tradeName,
+      cnpj: currentSupplier.cnpj,
+      municipalityId: currentSupplier.municipalityId,
+      address: currentSupplier.address,
+      phone: currentSupplier.phone,
+      email: currentSupplier.email,
+      active: currentSupplier.active,
+      ...manualApproachInfo
+    };
+
+    // Adicionar à lista dinâmica
+    const updatedSuppliers = [...selectedSuppliers, supplierWithApproach];
+    setSelectedSuppliers(updatedSuppliers);
+
+    // Limpar seleção atual
+    setCurrentSupplier(null);
+    setSupplierSearchOpen(false);
+    setSupplierSearchTerm("");
+
+    const toastDescription = manualApproachInfo.sourceApproachName
+      ? `${currentSupplier.companyName} associado a "${manualApproachInfo.sourceApproachName}"!`
+      : `${currentSupplier.companyName} adicionado`;
+
+    toast({
+      title: "Fornecedor adicionado",
+      description: toastDescription,
+    });
+
+    console.log(`Fornecedor ${currentSupplier.companyName} adicionado (salvamento via saveProgress no passo 3)`);
   };
 
-  // Função para carregar fabricantes existentes usando o novo sistema de prioridades
+  // Função para remover fornecedor da lista dinâmica
+  const handleRemoveSupplier = (index: number) => {
+    const supplierToRemove = selectedSuppliers[index];
+    const updatedSuppliers = selectedSuppliers.filter((_, i) => i !== index);
+    setSelectedSuppliers(updatedSuppliers);
+
+    toast({
+      title: "Fornecedor removido",
+      description: `${supplierToRemove?.companyName || 'Fornecedor'} foi removido da lista`,
+    });
+
+    console.log(`Fornecedor removido do índice ${index}`);
+  };
+
+  // Função para selecionar e adicionar fornecedor diretamente da busca
+  const handleSelectSupplierFromSearch = (supplier: Supplier) => {
+    // Verificar se há uma conduta selecionada para associação manual
+    let manualApproachInfo: any = {};
+    let targetProcedureId: number | null = null;
+    let targetApproachId: number | null = null;
+    
+    if (manualAssociationApproachId && manualAssociationApproachId !== "none" && selectedSurgicalApproaches.length > 0) {
+      // Formato da chave: "surgicalProcedureId-surgicalApproachId"
+      const [procedureIdStr, approachIdStr] = manualAssociationApproachId.split('-');
+      targetProcedureId = parseInt(procedureIdStr);
+      targetApproachId = parseInt(approachIdStr);
+      
+      const selectedApproach = selectedSurgicalApproaches.find(
+        (a: any) => a.surgicalProcedureId === targetProcedureId && a.surgicalApproachId === targetApproachId
+      );
+      
+      if (selectedApproach) {
+        manualApproachInfo = {
+          sourceApproachId: selectedApproach.surgicalApproachId,
+          sourceApproachName: selectedApproach.approachName,
+          sourceProcedureId: selectedApproach.surgicalProcedureId,
+          sourceProcedureName: selectedApproach.procedureName
+        };
+      }
+    }
+
+    // Verificar se o fornecedor já existe NA MESMA CONDUTA
+    // O mesmo fornecedor pode existir em condutas diferentes
+    const exists = selectedSuppliers.some((s: any) => 
+      s.id === supplier.id && 
+      s.sourceProcedureId === targetProcedureId && 
+      s.sourceApproachId === targetApproachId
+    );
+    
+    if (exists) {
+      const condutaInfo = manualApproachInfo.sourceApproachName 
+        ? ` na conduta "${manualApproachInfo.sourceProcedureName} → ${manualApproachInfo.sourceApproachName}"`
+        : "";
+      toast({
+        title: "Fornecedor já adicionado",
+        description: `${supplier.companyName} já está${condutaInfo}.`,
+        variant: "destructive",
+      });
+      setSupplierSearchOpen(false);
+      setSupplierSearchTerm("");
+      return;
+    }
+
+    // Criar objeto de fornecedor com associação de conduta
+    const supplierWithApproach: SupplierWithAssociation = {
+      id: supplier.id,
+      companyName: supplier.companyName,
+      tradeName: supplier.tradeName,
+      cnpj: supplier.cnpj,
+      municipalityId: supplier.municipalityId,
+      address: supplier.address,
+      phone: supplier.phone,
+      email: supplier.email,
+      active: supplier.active,
+      ...manualApproachInfo
+    };
+
+    // Adicionar à lista dinâmica
+    const updatedSuppliers = [...selectedSuppliers, supplierWithApproach];
+    setSelectedSuppliers(updatedSuppliers);
+
+    // Limpar e fechar
+    setCurrentSupplier(null);
+    setSupplierSearchOpen(false);
+    setSupplierSearchTerm("");
+    setSupplierResults([]);
+
+    const toastDescription = manualApproachInfo.sourceApproachName
+      ? `${supplier.companyName} associado a "${manualApproachInfo.sourceApproachName}"!`
+      : `${supplier.companyName} adicionado`;
+
+    toast({
+      title: "Fornecedor adicionado",
+      description: toastDescription,
+    });
+
+    console.log(`Fornecedor ${supplier.companyName} adicionado diretamente da busca`);
+  };
+
+  // ========================================================================
+  // CÓDIGO DE FABRICANTES DESATIVADO - Sistema de fornecedores dinâmicos
+  // Campos manufacturer1/2/3 não são mais necessários com o novo sistema
+  // ========================================================================
+  
+  // Função vazia para manter compatibilidade com callbacks existentes
   const loadExistingManufacturers = async () => {
-    if (!orderId) return;
-
-    try {
-      const response = await fetch(`/api/medical-orders/${orderId}/manufacturers`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const manufacturers = await response.json();
-        console.log("✅ Fabricantes existentes carregados (novo sistema):", manufacturers);
-
-        // Carregar fabricantes nos campos corretos baseado na prioridade
-        manufacturers.forEach((manufacturer: any) => {
-          if (manufacturer.priority === 1) {
-            setManufacturer1(manufacturer.manufacturerName);
-            console.log(`✅ Fabricante 1 (prioridade 1) carregado: ${manufacturer.manufacturerName}`);
-          } else if (manufacturer.priority === 2) {
-            setManufacturer2(manufacturer.manufacturerName);
-            console.log(`✅ Fabricante 2 (prioridade 2) carregado: ${manufacturer.manufacturerName}`);
-          } else if (manufacturer.priority === 3) {
-            setManufacturer3(manufacturer.manufacturerName);
-            console.log(`✅ Fabricante 3 (prioridade 3) carregado: ${manufacturer.manufacturerName}`);
-          }
-        });
-      } else {
-        console.log("Nenhum fabricante encontrado ou erro ao carregar fabricantes");
-      }
-    } catch (error) {
-      console.error("Erro ao carregar fabricantes existentes:", error);
-    }
+    console.log("🏭 Sistema de fabricantes desativado - usando fornecedores dinâmicos");
+    return;
   };
 
-  // Efeito para carregar fabricantes no modo de edição
+  // Chamar callback onManufacturersReady imediatamente (para compatibilidade)
   useEffect(() => {
-    if (orderId && !isLoading) {
-      console.log("🏭 Carregando fabricantes existentes para o pedido", orderId);
-      loadExistingManufacturers();
+    if (orderId && onManufacturersReady) {
+      onManufacturersReady();
     }
-  }, [orderId, isLoading]);
-
-  // Função global para coletar dados dos fabricantes (para usar no saveProgress)
-  useEffect(() => {
-    // Registrar callback global para coletar dados dos fabricantes
-    (window as any).getManufacturersData = () => {
-      const manufacturersData = [];
-      
-      if (manufacturer1 && manufacturer1.trim()) {
-        manufacturersData.push({
-          manufacturerName: manufacturer1.trim(),
-          priority: 1
-        });
-      }
-      
-      if (manufacturer2 && manufacturer2.trim()) {
-        manufacturersData.push({
-          manufacturerName: manufacturer2.trim(),
-          priority: 2
-        });
-      }
-      
-      if (manufacturer3 && manufacturer3.trim()) {
-        manufacturersData.push({
-          manufacturerName: manufacturer3.trim(),
-          priority: 3
-        });
-      }
-      
-      console.log("🏭 getManufacturersData - Coletando dados dos fabricantes:", manufacturersData);
-      return manufacturersData;
-    };
-
-    // Cleanup function
-    return () => {
-      delete (window as any).getManufacturersData;
-    };
-  }, [manufacturer1, manufacturer2, manufacturer3]);
-
-  // Chamar callback quando fabricantes são carregados após fornecedores serem definidos
-  useEffect(() => {
-    if (orderId && suppliers && (suppliers.supplier1 || suppliers.supplier2 || suppliers.supplier3) && onManufacturersReady) {
-      // Carregar fabricantes e depois chamar callback
-      loadExistingManufacturers().then(() => {
-        onManufacturersReady();
-      });
-    }
-  }, [orderId, suppliers.supplier1, suppliers.supplier2, suppliers.supplier3]);
+  }, [orderId, onManufacturersReady]);
 
   // Função para carregar todos os fornecedores ativos
   const loadAllSuppliers = async () => {
@@ -2403,8 +2603,11 @@ export function SurgeryData({
     }
   };
 
-  // Função para salvar CIDs no banco de dados via API relacional
-  const saveCidsToDatabase = async (cids: Array<{ cid: { id: number } }>) => {
+  // ❌ FUNÇÃO LEGADA COMENTADA - Salvamento unificado agora é feito via saveProgress em create-order.tsx
+  // A persistência de CIDs com associações cirúrgicas agora acontece APENAS no passo 3 do saveProgress
+  // Isso evita conflitos e sobrescrita de dados
+  /*
+  const saveCidsToDatabase = async (cids: Array<{ cid: { id: number; sourceApproachId?: number; sourceProcedureId?: number }; surgicalApproach?: { id: number }; surgicalProcedure?: { id: number } }>) => {
     if (!orderId) {
       console.warn("Não há orderId para salvar CIDs");
       return false;
@@ -2412,7 +2615,15 @@ export function SurgeryData({
 
     try {
       console.log(`Salvando ${cids.length} CIDs para o pedido ${orderId}`);
-      const cidIds = cids.map(item => item.cid.id);
+      
+      // Mapear CIDs com associações cirúrgicas
+      const cidsWithAssociations = cids.map(item => ({
+        cidId: item.cid.id,
+        surgicalApproachId: item.surgicalApproach?.id || item.cid?.sourceApproachId || null,
+        surgicalProcedureId: item.surgicalProcedure?.id || item.cid?.sourceProcedureId || null
+      }));
+      
+      console.log(`CIDs com associações cirúrgicas:`, cidsWithAssociations);
       
       const response = await fetch(`/api/orders/${orderId}/cids`, {
         method: 'PUT',
@@ -2420,20 +2631,21 @@ export function SurgeryData({
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ cidIds })
+        body: JSON.stringify({ cids: cidsWithAssociations })
       });
 
       if (!response.ok) {
         throw new Error(`Erro ao salvar CIDs: ${response.status}`);
       }
 
-      console.log(`CIDs salvos com sucesso no banco: ${cidIds.join(', ')}`);
+      console.log(`CIDs salvos com sucesso no banco com associações cirúrgicas`);
       return true;
     } catch (error) {
       console.error("Erro ao salvar CIDs no banco:", error);
       return false;
     }
   };
+  */
 
   // Função para salvar condutas cirúrgicas selecionadas
   const saveSurgicalApproachesToDatabase = async (approaches: any[]) => {
@@ -2501,19 +2713,63 @@ export function SurgeryData({
         // Se NÃO tem condutas associadas, adicionar CID diretamente
         console.log(`CID ${cidCodeItem.code} não possui condutas associadas. Adicionando diretamente.`);
         
-        // Verificar se o CID já existe na lista
-        const exists = multipleCids.some((item) => item.cid.id === cidCodeItem.id);
+        // VALIDAÇÃO OBRIGATÓRIA: Se há condutas no pedido, DEVE selecionar uma
+        if (selectedSurgicalApproaches.length > 0 && (!manualAssociationApproachId || manualAssociationApproachId === "none")) {
+          toast({
+            title: "Selecione uma conduta",
+            description: "É obrigatório associar o CID a uma conduta cirúrgica existente no pedido.",
+            variant: "destructive",
+            duration: 4000,
+          });
+          return;
+        }
+
+        // Verificar se há uma conduta selecionada para associação manual
+        let manualApproachInfo: any = null;
+        let targetProcedureId: number | null = null;
+        let targetApproachId: number | null = null;
+        
+        if (manualAssociationApproachId && manualAssociationApproachId !== "none" && selectedSurgicalApproaches.length > 0) {
+          // Formato da chave: "procedureId-surgicalApproachId"
+          const [procedureIdStr, approachIdStr] = manualAssociationApproachId.split('-');
+          targetProcedureId = parseInt(procedureIdStr);
+          targetApproachId = parseInt(approachIdStr);
+          
+          const selectedApproach = selectedSurgicalApproaches.find(
+            (a: any) => a.surgicalProcedureId === targetProcedureId && a.surgicalApproachId === targetApproachId
+          );
+          if (selectedApproach) {
+            manualApproachInfo = {
+              sourceApproachId: selectedApproach.surgicalApproachId,
+              sourceApproachName: selectedApproach.approachName,
+              sourceProcedureId: selectedApproach.surgicalProcedureId,
+              sourceProcedureName: selectedApproach.procedureName
+            };
+            console.log(`CID ${cidCodeItem.code} será associado manualmente à conduta: ${selectedApproach.approachName}`);
+          }
+        }
+        
+        // Verificar se o CID já existe NA MESMA CONDUTA
+        // O mesmo CID pode existir em condutas diferentes
+        // Dados já normalizados - usar apenas formato frontend (sourceApproachId/sourceProcedureId)
+        const exists = multipleCids.some((item: any) => {
+          if (item.cid.id !== cidCodeItem.id) return false;
+          return item.sourceProcedureId === targetProcedureId && item.sourceApproachId === targetApproachId;
+        });
 
         if (exists) {
+          const condutaInfo = manualApproachInfo 
+            ? ` na conduta "${manualApproachInfo.sourceProcedureName} → ${manualApproachInfo.sourceApproachName}"`
+            : "";
           toast({
             title: "CID já adicionado",
-            description: `${cidCodeItem.code} já foi adicionado à lista.`,
+            description: `${cidCodeItem.code} já foi adicionado${condutaInfo}.`,
             variant: "destructive",
           });
           return;
         }
 
-        // Adicionar o CID sem conduta cirúrgica
+        // Adicionar o CID (com ou sem conduta cirúrgica manual)
         const newCidItem = {
           cid: {
             id: cidCodeItem.id,
@@ -2521,7 +2777,8 @@ export function SurgeryData({
             description: cidCodeItem.description,
             category: cidCodeItem.category,
           },
-          // Sem surgicalApproach para CIDs sem condutas associadas
+          // Incluir informações de associação manual se houver
+          ...(manualApproachInfo || {})
         };
 
         const updatedCids = [...multipleCids, newCidItem];
@@ -2536,9 +2793,13 @@ export function SurgeryData({
           setSelectedCidId(cidCodeItem.id);
         }
 
+        const toastDescription = manualApproachInfo 
+          ? `${cidCodeItem.code} adicionado e associado a "${manualApproachInfo.sourceApproachName}"!`
+          : `${cidCodeItem.code} adicionado com sucesso!`;
+
         toast({
           title: "CID-10 adicionado",
-          description: `${cidCodeItem.code} adicionado com sucesso!`,
+          description: toastDescription,
           duration: 2000,
         });
       }
@@ -2672,30 +2933,65 @@ export function SurgeryData({
   // Função para adicionar o CID atual à lista de múltiplos CIDs
   const handleAddCid = () => {
     if (currentCid) {
-      // Verificar se o CID já existe na lista
-      const exists = multipleCids.some((item) => item.cid.id === currentCid.id);
+      // Verificar se há uma conduta selecionada para associação manual
+      let manualApproachInfo: any = null;
+      let targetProcedureId: number | null = null;
+      let targetApproachId: number | null = null;
+      
+      if (manualAssociationApproachId && manualAssociationApproachId !== "none" && selectedSurgicalApproaches.length > 0) {
+        const [procedureIdStr, approachIdStr] = manualAssociationApproachId.split('-');
+        targetProcedureId = parseInt(procedureIdStr);
+        targetApproachId = parseInt(approachIdStr);
+        
+        const selectedApproach = selectedSurgicalApproaches.find(
+          (a: any) => a.surgicalProcedureId === targetProcedureId && a.surgicalApproachId === targetApproachId
+        );
+        if (selectedApproach) {
+          manualApproachInfo = {
+            sourceApproachId: selectedApproach.surgicalApproachId,
+            sourceApproachName: selectedApproach.approachName,
+            sourceProcedureId: selectedApproach.surgicalProcedureId,
+            sourceProcedureName: selectedApproach.procedureName
+          };
+        }
+      }
+      
+      // Verificar se o CID já existe NA MESMA CONDUTA
+      // O mesmo CID pode existir em condutas diferentes
+      // Dados já normalizados - usar apenas formato frontend (sourceApproachId/sourceProcedureId)
+      const exists = multipleCids.some((item: any) => {
+        if (item.cid.id !== currentCid.id) return false;
+        return item.sourceProcedureId === targetProcedureId && item.sourceApproachId === targetApproachId;
+      });
 
       if (exists) {
+        const condutaInfo = manualApproachInfo 
+          ? ` na conduta "${manualApproachInfo.sourceProcedureName} → ${manualApproachInfo.sourceApproachName}"`
+          : "";
         toast({
           title: "CID já adicionado",
-          description: "Este código CID-10 já foi adicionado à lista.",
+          description: `Este código CID-10 já foi adicionado${condutaInfo}.`,
           variant: "destructive",
         });
         return;
       }
 
-      // Adicionar o CID à lista
+      // Adicionar o CID à lista (com informações de associação manual se houver)
       setMultipleCids([
         ...multipleCids,
         {
           cid: currentCid,
+          ...(manualApproachInfo || {})
         },
       ]);
 
       // Feedback para o usuário
+      const toastDescription = manualApproachInfo 
+        ? `${currentCid.code} adicionado e associado a "${manualApproachInfo.sourceApproachName}"!`
+        : `${currentCid.code} - ${currentCid.description} adicionado à lista.`;
       toast({
         title: "CID adicionado",
-        description: `${currentCid.code} - ${currentCid.description} adicionado à lista.`,
+        description: toastDescription,
       });
     }
   };
@@ -2710,7 +3006,18 @@ export function SurgeryData({
     console.log(`CID ${removedCid.cid.code} removido da interface. Será persistido ao salvar o pedido.`);
 
     // Se este CID tem uma conduta cirúrgica associada, removê-la do banco
-    if (removedCid.surgicalApproach && orderId) {
+    // Formato normalizado: usar sourceApproachId em vez de surgicalApproach.id
+    const approachId = removedCid.sourceApproachId;
+    const approachName = removedCid.sourceApproachName;
+    
+    if (approachId && orderId) {
+      // IMPORTANTE: Capturar o approach ANTES de qualquer mutação de estado
+      const approachToRemove = selectedSurgicalApproaches.find(
+        a => a.surgicalApproachId === approachId
+      );
+      const procedureNameForCleanup = approachToRemove?.procedureName;
+      const approachNameForCleanup = approachToRemove?.approachName || approachName;
+      
       try {
         const response = await fetch(`/api/medical-order-surgical-approaches`, {
           method: 'DELETE',
@@ -2720,16 +3027,30 @@ export function SurgeryData({
           credentials: 'include',
           body: JSON.stringify({
             medicalOrderId: orderId,
-            surgicalApproachId: removedCid.surgicalApproach.id
+            surgicalApproachId: approachId
           })
         });
 
         if (response.ok) {
-          console.log(`Conduta cirúrgica ${removedCid.surgicalApproach.name} removida do banco`);
+          console.log(`Conduta cirúrgica ${approachName} removida do banco`);
+          
+          // Remover observações da conduta que está sendo removida (usando dados capturados antes)
+          if (procedureNameForCleanup && approachNameForCleanup) {
+            removeObservationSectionsForApproach(
+              procedureNameForCleanup,
+              approachNameForCleanup,
+              cbhpmAdditionalNotes,
+              setCbhpmAdditionalNotes,
+              opmeAdditionalNotes,
+              setOpmeAdditionalNotes,
+              supplierAdditionalNotes,
+              setSupplierAdditionalNotes
+            );
+          }
           
           // Remover também do estado local de condutas cirúrgicas do componente pai
           setSelectedSurgicalApproaches(prev => 
-            prev.filter(approach => approach.surgicalApproachId !== removedCid.surgicalApproach?.id)
+            prev.filter(approach => approach.surgicalApproachId !== approachId)
           );
         }
       } catch (error) {
@@ -2807,7 +3128,7 @@ export function SurgeryData({
     }
   };
 
-  // Função para salvar todos os procedimentos no banco (ordenados por porte)
+  // Função para salvar todos os procedimentos no banco (preservando ordem de adição)
   const saveAllProceduresToDatabase = async () => {
     if (!orderId) {
       console.warn("Não há orderId para salvar procedimentos");
@@ -2816,6 +3137,7 @@ export function SurgeryData({
 
     try {
       // Combinar todos os procedimentos (principal + secundários) em uma lista única
+      // IMPORTANTE: Preservar ordem de adição para manter ordem dos blocos na visualização
       const allProcedures = [];
       
       // Adicionar procedimento principal se existir
@@ -2826,7 +3148,7 @@ export function SurgeryData({
         });
       }
       
-      // Adicionar procedimentos secundários
+      // Adicionar procedimentos secundários (na ordem em que foram adicionados)
       secondaryProcedures.forEach(item => {
         allProcedures.push({
           procedure: item.procedure,
@@ -2834,16 +3156,23 @@ export function SurgeryData({
         });
       });
 
-      // Ordenar por porte (maior para menor)
-      const sortedProcedures = allProcedures.sort((a, b) => 
-        parsePorteValue(b.procedure.porte) - parsePorteValue(a.procedure.porte)
-      );
+      // Encontrar o índice do procedimento de maior porte para marcar como principal
+      // SEM reordenar o array (preservar ordem de adição)
+      let mainProcedureIndex = 0;
+      let maxPorteValue = 0;
+      allProcedures.forEach((item, index) => {
+        const porteValue = parsePorteValue(item.procedure.porte);
+        if (porteValue > maxPorteValue) {
+          maxPorteValue = porteValue;
+          mainProcedureIndex = index;
+        }
+      });
 
-      // Marcar o primeiro (maior porte) como principal
-      const proceduresToSave = sortedProcedures.map((item, index) => ({
+      // Marcar o de maior porte como principal, mantendo ordem de adição
+      const proceduresToSave = allProcedures.map((item, index) => ({
         procedureId: item.procedure.id,
         quantityRequested: item.quantity,
-        isMain: index === 0 // Primeiro da lista (maior porte) é o principal
+        isMain: index === mainProcedureIndex // Maior porte é o principal, mas ordem preservada
       }));
 
       console.log(`Salvando ${proceduresToSave.length} procedimentos para o pedido ${orderId}:`, proceduresToSave);
@@ -2872,27 +3201,74 @@ export function SurgeryData({
   // Handlers para procedimentos secundários
   const handleAddSecondaryProcedure = async () => {
     if (currentSecondaryProcedure) {
-      // Verificar se o procedimento já existe na lista
+      // VALIDAÇÃO OBRIGATÓRIA: Se há condutas no pedido, DEVE selecionar uma
+      if (selectedSurgicalApproaches.length > 0 && (!manualAssociationApproachId || manualAssociationApproachId === "none")) {
+        toast({
+          title: "Selecione uma conduta",
+          description: "É obrigatório associar o procedimento CBHPM a uma conduta cirúrgica existente no pedido.",
+          variant: "destructive",
+          duration: 4000,
+        });
+        return;
+      }
+
+      // Verificar se há uma conduta selecionada para associação manual
+      let manualApproachInfo: any = null;
+      let targetProcedureId: number | null = null;
+      let targetApproachId: number | null = null;
+      
+      if (manualAssociationApproachId && manualAssociationApproachId !== "none" && selectedSurgicalApproaches.length > 0) {
+        // Formato da chave: "procedureId-surgicalApproachId"
+        const [procedureIdStr, approachIdStr] = manualAssociationApproachId.split('-');
+        targetProcedureId = parseInt(procedureIdStr);
+        targetApproachId = parseInt(approachIdStr);
+        
+        const selectedApproach = selectedSurgicalApproaches.find(
+          (a: any) => a.surgicalProcedureId === targetProcedureId && a.surgicalApproachId === targetApproachId
+        );
+        if (selectedApproach) {
+          manualApproachInfo = {
+            sourceApproachId: selectedApproach.surgicalApproachId,
+            sourceApproachName: selectedApproach.approachName,
+            sourceProcedureId: selectedApproach.surgicalProcedureId,
+            sourceProcedureName: selectedApproach.procedureName
+          };
+          console.log(`Procedimento ${currentSecondaryProcedure.name} será associado manualmente à conduta: ${selectedApproach.approachName}`);
+        }
+      }
+      
+      // Verificar se o procedimento já existe NA MESMA CONDUTA
+      // O mesmo procedimento CBHPM pode existir em condutas diferentes
       const exists = secondaryProcedures.some(
-        (item) => item.procedure.id === currentSecondaryProcedure.id,
+        (item) => item.procedure.id === currentSecondaryProcedure.id &&
+                  item.procedure.sourceProcedureId === targetProcedureId &&
+                  item.procedure.sourceApproachId === targetApproachId
       );
 
       if (exists) {
+        const condutaInfo = manualApproachInfo 
+          ? ` na conduta "${manualApproachInfo.sourceProcedureName} → ${manualApproachInfo.sourceApproachName}"`
+          : "";
         toast({
           title: "Procedimento já adicionado",
-          description: "Este procedimento secundário já foi adicionado.",
+          description: `Este procedimento CBHPM já foi adicionado${condutaInfo}.`,
           variant: "destructive",
         });
         return;
       }
 
-      // Adicionar o procedimento à lista (sem lateralidade conforme solicitado)
+      // Adicionar o procedimento à lista (com informações de associação manual se houver)
+      const procedureToAdd = {
+        procedure: {
+          ...currentSecondaryProcedure,
+          ...(manualApproachInfo || {})
+        },
+        quantity: currentSecondaryQuantity,
+      };
+      
       const updatedProcedures = [
         ...secondaryProcedures,
-        {
-          procedure: currentSecondaryProcedure,
-          quantity: currentSecondaryQuantity,
-        },
+        procedureToAdd,
       ];
       
       setSecondaryProcedures(updatedProcedures);
@@ -3137,6 +3513,25 @@ export function SurgeryData({
                             setSelectedSurgicalProcedures(remainingProcedures);
                             
                             // 2. Remover condutas cirúrgicas associadas apenas a este procedimento
+                            // e também remover as observações correspondentes
+                            const approachesToRemove = selectedSurgicalApproaches.filter(
+                              approach => approach.surgicalProcedureId === procedureToRemove.id
+                            );
+                            
+                            // Remover observações de cada conduta que será removida
+                            approachesToRemove.forEach(approach => {
+                              removeObservationSectionsForApproach(
+                                approach.procedureName || procedureToRemove.name,
+                                approach.approachName,
+                                cbhpmAdditionalNotes,
+                                setCbhpmAdditionalNotes,
+                                opmeAdditionalNotes,
+                                setOpmeAdditionalNotes,
+                                supplierAdditionalNotes,
+                                setSupplierAdditionalNotes
+                              );
+                            });
+                            
                             setSelectedSurgicalApproaches(prev => {
                               const filteredApproaches = prev.filter(approach => 
                                 approach.surgicalProcedureId !== procedureToRemove.id
@@ -3281,100 +3676,53 @@ export function SurgeryData({
                                 console.log(`🗑️ Todos os CBHPMs removidos - nenhum procedimento restante`);
                               }
                               
-                              // 6. Remover itens OPME específicos do procedimento (verificando sobreposição)
-                              if (remainingProcedures.length > 0) {
-                                // Buscar OPMEs de todos os procedimentos restantes
-                                const remainingOpmePromises = remainingProcedures.map(proc => 
-                                  fetch(`/api/surgical-procedures/${proc.id}/opme`).then(res => res.ok ? res.json() : [])
-                                );
-                                
-                                const allRemainingOpme = await Promise.all(remainingOpmePromises);
-                                const remainingOpmeIds = new Set();
-                                
-                                allRemainingOpme.flat().forEach((item: any) => {
-                                  remainingOpmeIds.add(item.opme?.id || item.id);
-                                });
-                                
-                                console.log(`🔍 OPMEs que devem ser preservados (outros procedimentos):`, Array.from(remainingOpmeIds));
-                                
-                                if (setSelectedOpmeItems) {
-                                  setSelectedOpmeItems(prev => {
-                                    const procedureOpmeIds = procedureOpme.map((item: any) => item.opme?.id || item.id);
-                                    const exclusiveOpmeToRemove = procedureOpmeIds.filter(id => 
-                                      !remainingOpmeIds.has(id)
-                                    );
-                                    
-                                    const filteredOpme = prev.filter(opmeItem => {
-                                      const opmeId = opmeItem.item?.id || opmeItem.id;
-                                      return !exclusiveOpmeToRemove.includes(opmeId);
-                                    });
-                                    
-                                    console.log(`🗑️ Itens OPME exclusivos removidos:`, exclusiveOpmeToRemove);
-                                    console.log(`✅ Itens OPME preservados (compartilhados):`, 
-                                      procedureOpmeIds.filter(id => remainingOpmeIds.has(id))
-                                    );
-                                    
-                                    return filteredOpme;
+                              // 6. Remover itens OPME específicos do procedimento usando sourceProcedureId
+                              // (Usa o mesmo padrão da inserção - filtra por sourceProcedureId diretamente)
+                              if (setSelectedOpmeItems) {
+                                setSelectedOpmeItems(prev => {
+                                  const filteredOpme = prev.filter(opmeItem => {
+                                    // Preservar itens que NÃO são do procedimento removido
+                                    const itemSourceProcedureId = opmeItem.item?.sourceProcedureId || opmeItem.sourceProcedureId;
+                                    return itemSourceProcedureId !== procedureToRemove.id;
                                   });
-                                }
-                              } else {
-                                // Se não há procedimentos restantes, remover todos os OPMEs
-                                if (setSelectedOpmeItems) setSelectedOpmeItems([]);
-                                console.log(`🗑️ Todos os itens OPME removidos - nenhum procedimento restante`);
+                                  
+                                  const removedOpme = prev.filter(opmeItem => {
+                                    const itemSourceProcedureId = opmeItem.item?.sourceProcedureId || opmeItem.sourceProcedureId;
+                                    return itemSourceProcedureId === procedureToRemove.id;
+                                  });
+                                  
+                                  console.log(`🗑️ Itens OPME removidos (sourceProcedureId=${procedureToRemove.id}):`, 
+                                    removedOpme.map(o => o.item?.technicalName || o.technicalName)
+                                  );
+                                  console.log(`✅ Itens OPME preservados (outros procedimentos):`, 
+                                    filteredOpme.map(o => o.item?.technicalName || o.technicalName)
+                                  );
+                                  
+                                  return filteredOpme;
+                                });
                               }
                               
-                              // 7. Remover fornecedores específicos do procedimento (verificando sobreposição)
-                              if (remainingProcedures.length > 0) {
-                                // Buscar fornecedores de todos os procedimentos restantes
-                                const remainingSuppliersPromises = remainingProcedures.map(proc => 
-                                  fetch(`/api/surgical-procedures/${proc.id}/suppliers`).then(res => res.ok ? res.json() : [])
-                                );
-                                
-                                const allRemainingSuppliers = await Promise.all(remainingSuppliersPromises);
-                                const remainingSupplierIds = new Set();
-                                
-                                allRemainingSuppliers.flat().forEach((item: any) => {
-                                  remainingSupplierIds.add(item.supplier?.id || item.id);
+                              // 7. Remover fornecedores específicos do procedimento usando sourceProcedureId
+                              // (Usa o mesmo padrão da inserção - filtra por sourceProcedureId diretamente)
+                              if (setSupplierDetails) {
+                                const currentSuppliers = supplierDetails || [];
+                                const filteredSuppliers = currentSuppliers.filter((supplier: any) => {
+                                  // Preservar fornecedores que NÃO são do procedimento removido
+                                  return supplier.sourceProcedureId !== procedureToRemove.id;
                                 });
                                 
-                                console.log(`🔍 Fornecedores que devem ser preservados (outros procedimentos):`, Array.from(remainingSupplierIds));
-                                
-                                const procedureSupplierIds = procedureSuppliers.map((item: any) => item.supplier?.id || item.id);
-                                const exclusiveSuppliersToRemove = procedureSupplierIds.filter(id => 
-                                  !remainingSupplierIds.has(id)
+                                const removedSuppliers = currentSuppliers.filter((supplier: any) => 
+                                  supplier.sourceProcedureId === procedureToRemove.id
                                 );
                                 
-                                // Verificar e remover fornecedores específicos mantendo os de outros procedimentos
-                                if (selectedSupplier1 && exclusiveSuppliersToRemove.includes(selectedSupplier1.id)) {
-                                  if (setSelectedSupplier1) setSelectedSupplier1(null);
-                                  console.log(`🗑️ Fornecedor 1 removido (exclusivo): ${selectedSupplier1.companyName || selectedSupplier1.company_name}`);
-                                } else if (selectedSupplier1 && procedureSupplierIds.includes(selectedSupplier1.id)) {
-                                  console.log(`✅ Fornecedor 1 preservado (compartilhado): ${selectedSupplier1.companyName || selectedSupplier1.company_name}`);
-                                }
-                                
-                                if (selectedSupplier2 && exclusiveSuppliersToRemove.includes(selectedSupplier2.id)) {
-                                  if (setSelectedSupplier2) setSelectedSupplier2(null);
-                                  console.log(`🗑️ Fornecedor 2 removido (exclusivo): ${selectedSupplier2.companyName || selectedSupplier2.company_name}`);
-                                } else if (selectedSupplier2 && procedureSupplierIds.includes(selectedSupplier2.id)) {
-                                  console.log(`✅ Fornecedor 2 preservado (compartilhado): ${selectedSupplier2.companyName || selectedSupplier2.company_name}`);
-                                }
-                                
-                                if (selectedSupplier3 && exclusiveSuppliersToRemove.includes(selectedSupplier3.id)) {
-                                  if (setSelectedSupplier3) setSelectedSupplier3(null);
-                                  console.log(`🗑️ Fornecedor 3 removido (exclusivo): ${selectedSupplier3.companyName || selectedSupplier3.company_name}`);
-                                } else if (selectedSupplier3 && procedureSupplierIds.includes(selectedSupplier3.id)) {
-                                  console.log(`✅ Fornecedor 3 preservado (compartilhado): ${selectedSupplier3.companyName || selectedSupplier3.company_name}`);
-                                }
-                                
-                                console.log(`✅ Fornecedores preservados (compartilhados):`, 
-                                  procedureSupplierIds.filter(id => remainingSupplierIds.has(id))
+                                console.log(`🗑️ Fornecedores removidos (sourceProcedureId=${procedureToRemove.id}):`, 
+                                  removedSuppliers.map((s: any) => s.tradeName || s.companyName)
                                 );
-                              } else {
-                                // Se não há procedimentos restantes, remover todos os fornecedores
-                                if (setSelectedSupplier1) setSelectedSupplier1(null);
-                                if (setSelectedSupplier2) setSelectedSupplier2(null);
-                                if (setSelectedSupplier3) setSelectedSupplier3(null);
-                                console.log(`🗑️ Todos os fornecedores removidos - nenhum procedimento restante`);
+                                console.log(`✅ Fornecedores preservados (outros procedimentos):`, 
+                                  filteredSuppliers.map((s: any) => s.tradeName || s.companyName)
+                                );
+                                
+                                setSupplierDetails(filteredSuppliers);
                               }
                               
                               // 8. Se não há mais procedimentos, limpar justificativa
@@ -3421,16 +3769,18 @@ export function SurgeryData({
                           setProcedureQuantity={setProcedureQuantity}
                           setSecondaryProcedures={setSecondaryProcedures}
                           setSelectedOpmeItems={setSelectedOpmeItems}
-                          setSelectedSupplier1={setSelectedSupplier1}
-                          selectedSupplier1={selectedSupplier1}
-                          setSelectedSupplier2={setSelectedSupplier2}
-                          selectedSupplier2={selectedSupplier2}
-                          setSelectedSupplier3={setSelectedSupplier3}
-                          selectedSupplier3={selectedSupplier3}
+                          setSupplierDetails={setSupplierDetails}
+                          supplierDetails={selectedSuppliers}
                           setClinicalJustification={setClinicalJustification}
                           setSelectedSurgicalApproaches={setSelectedSurgicalApproaches}
                           selectedSurgicalApproaches={selectedSurgicalApproaches}
                           isEditMode={isEditMode}
+                          cbhpmAdditionalNotes={cbhpmAdditionalNotes}
+                          setCbhpmAdditionalNotes={setCbhpmAdditionalNotes}
+                          opmeAdditionalNotes={opmeAdditionalNotes}
+                          setOpmeAdditionalNotes={setOpmeAdditionalNotes}
+                          supplierAdditionalNotes={supplierAdditionalNotes}
+                          setSupplierAdditionalNotes={setSupplierAdditionalNotes}
                         />
                       </div>
                     </div>
@@ -3466,6 +3816,41 @@ export function SurgeryData({
               {/* Conteúdo com fundo card */}
               <div className="p-5">
                 <div className="space-y-4">
+              
+              {/* Dropdown para associação OBRIGATÓRIA à conduta - aparece quando há condutas selecionadas */}
+              {selectedSurgicalApproaches.length > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <div className="flex-shrink-0">
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                      Associar à conduta: <span className="text-red-500">*</span>
+                    </span>
+                  </div>
+                  <Select
+                    value={manualAssociationApproachId}
+                    onValueChange={setManualAssociationApproachId}
+                  >
+                    <SelectTrigger className={`flex-1 h-9 text-sm ${!manualAssociationApproachId || manualAssociationApproachId === "none" ? 'border-amber-400' : 'border-green-500'}`}>
+                      <SelectValue placeholder="Selecione uma conduta (obrigatório)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectedSurgicalApproaches.map((approach: any, index: number) => (
+                        <SelectItem 
+                          key={`cid-approach-${approach.surgicalProcedureId}-${approach.surgicalApproachId}-${index}`} 
+                          value={`${approach.surgicalProcedureId}-${approach.surgicalApproachId}`}
+                        >
+                          {approach.procedureName} → {approach.approachName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(!manualAssociationApproachId || manualAssociationApproachId === "none") && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                      Obrigatório
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div className="w-full">
                 <Popover open={open} onOpenChange={setOpen}>
                   <PopoverTrigger asChild>
@@ -3585,45 +3970,140 @@ export function SurgeryData({
                   </Popover>
               </div>
 
-              {/* Lista de CIDs selecionados */}
+              {/* Lista de CIDs selecionados - Agrupados por Conduta Cirúrgica (Procedimento + Via de Acesso) */}
               <div className="mt-4">
                 {multipleCids.length > 0 ? (
                   <div className="space-y-3">
                     <h4 className="text-sm font-medium text-muted-foreground">
                       Códigos CID-10 Selecionados:
                     </h4>
-                    <div className="space-y-2">
-                      {multipleCids.map((item, index) => (
-                        <div
-                          key={index}
-                          className="flex justify-between items-center rounded-md border border-border bg-accent/20 p-3"
-                        >
-                          <div>
-                            <div className="font-medium text-muted-foreground">
-                              <span className="font-bold">{item.cid?.code || item.code}</span>{" "}
-                              - {item.cid?.description || item.description}
-                              {(item.isAutoAdded || item.cid?.isAutoAdded) && (
-                                <span className="ml-2 px-2 py-1 bg-accent-light text-accent text-xs rounded-full">
-                                  Automático
-                                </span>
-                              )}
-                            </div>
-                            {(item.cid?.category || item.category) && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                Categoria: {item.cid?.category || item.category}
-                              </div>
-                            )}
+                    <div className="space-y-4">
+                      {(() => {
+                        // Agrupar CIDs por conduta cirúrgica (Procedimento + Via de Acesso)
+                        // Prioriza dados do backend (surgicalProcedure, surgicalApproach), com fallback para dados manuais (source*)
+                        const groupedCids = multipleCids.reduce((acc: any, item: any, index: number) => {
+                          // Buscar dados de associação do backend ou fallback para dados manuais
+                          const procedureName = item.surgicalProcedure?.name || item.sourceProcedureName || null;
+                          const approachName = item.surgicalApproach?.name || item.sourceApproachName || null;
+                          const approachId = item.surgicalApproach?.id || item.sourceApproachId || null;
+                          const procedureId = item.surgicalProcedure?.id || item.sourceProcedureId || null;
+                          
+                          // Criar chave de agrupamento baseada no procedimento e via de acesso
+                          let groupKey: string;
+                          let isManual = false;
+                          
+                          if (procedureId && approachId) {
+                            // Tem associação completa: Procedimento + Via de Acesso
+                            groupKey = `${procedureName} → ${approachName}`;
+                          } else if (procedureId) {
+                            // Só tem procedimento
+                            groupKey = procedureName || 'Procedimento não especificado';
+                          } else if (approachId) {
+                            // Só tem via de acesso
+                            groupKey = `Via: ${approachName}`;
+                          } else {
+                            // Adicionado manualmente ou sem associação
+                            groupKey = 'Itens Gerais';
+                            isManual = true;
+                          }
+                          
+                          if (!acc[groupKey]) {
+                            acc[groupKey] = {
+                              items: [],
+                              procedureId,
+                              approachId,
+                              isManual
+                            };
+                          }
+                          acc[groupKey].items.push({ ...item, originalIndex: index });
+                          return acc;
+                        }, {});
 
+                        const groupKeys = Object.keys(groupedCids);
+                        
+                        // Se só houver um grupo "Itens Gerais", mostrar sem agrupamento visual
+                        if (groupKeys.length === 1 && groupKeys[0] === 'Itens Gerais') {
+                          return multipleCids.map((item, index) => (
+                            <div
+                              key={index}
+                              className="flex justify-between items-center rounded-md border border-border bg-accent/20 p-3"
+                            >
+                              <div>
+                                <div className="font-medium text-muted-foreground">
+                                  <span className="font-bold">{item.cid?.code || item.code}</span>{" "}
+                                  - {item.cid?.description || item.description}
+                                </div>
+                                {(item.cid?.category || item.category) && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    Categoria: {item.cid?.category || item.category}
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleRemoveCid(index)}
+                              >
+                                Remover
+                              </Button>
+                            </div>
+                          ));
+                        }
+
+                        // Mostrar agrupado por conduta
+                        return groupKeys.map((groupKey) => (
+                          <div key={groupKey} className="border border-border rounded-lg overflow-hidden">
+                            {/* Cabeçalho do grupo */}
+                            <div className={`px-3 py-2 text-sm font-medium flex items-center ${
+                              groupedCids[groupKey].isManual 
+                                ? 'bg-muted/50 text-muted-foreground' 
+                                : 'bg-medsync-blue/10 text-medsync-blue'
+                            }`}>
+                              {groupedCids[groupKey].isManual ? (
+                                <span>📝 {groupKey}</span>
+                              ) : (
+                                <span>🔗 {groupKey}</span>
+                              )}
+                              <span className="ml-2 text-xs px-2 py-0.5 bg-background rounded-full">
+                                {groupedCids[groupKey].items.length} CID{groupedCids[groupKey].items.length > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            {/* Itens do grupo */}
+                            <div className="divide-y divide-border">
+                              {groupedCids[groupKey].items.map((item: any) => (
+                                <div
+                                  key={item.originalIndex}
+                                  className="flex justify-between items-center bg-accent/10 p-3"
+                                >
+                                  <div>
+                                    <div className="font-medium text-muted-foreground">
+                                      <span className="font-bold">{item.cid?.code || item.code}</span>{" "}
+                                      - {item.cid?.description || item.description}
+                                      {(item.isAutoAdded || item.cid?.isAutoAdded) && (
+                                        <span className="ml-2 px-2 py-1 bg-accent-light text-accent text-xs rounded-full">
+                                          Automático
+                                        </span>
+                                      )}
+                                    </div>
+                                    {(item.cid?.category || item.category) && (
+                                      <div className="text-xs text-muted-foreground mt-1">
+                                        Categoria: {item.cid?.category || item.category}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => handleRemoveCid(item.originalIndex)}
+                                  >
+                                    Remover
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleRemoveCid(index)}
-                          >
-                            Remover
-                          </Button>
-                        </div>
-                      ))}
+                        ));
+                      })()}
                     </div>
                   </div>
                 ) : null}
@@ -3818,6 +4298,40 @@ export function SurgeryData({
               {/* Conteúdo com fundo card */}
               <div className="p-5">
 
+              {/* Dropdown para associação OBRIGATÓRIA à conduta - aparece quando há condutas selecionadas */}
+              {selectedSurgicalApproaches.length > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-4">
+                  <div className="flex-shrink-0">
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                      Associar à conduta: <span className="text-red-500">*</span>
+                    </span>
+                  </div>
+                  <Select
+                    value={manualAssociationApproachId}
+                    onValueChange={setManualAssociationApproachId}
+                  >
+                    <SelectTrigger className={`flex-1 h-9 text-sm ${!manualAssociationApproachId || manualAssociationApproachId === "none" ? 'border-amber-400' : 'border-green-500'}`}>
+                      <SelectValue placeholder="Selecione uma conduta (obrigatório)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectedSurgicalApproaches.map((approach: any, index: number) => (
+                        <SelectItem 
+                          key={`cbhpm-approach-${approach.surgicalProcedureId}-${approach.surgicalApproachId}-${index}`} 
+                          value={`${approach.surgicalProcedureId}-${approach.surgicalApproachId}`}
+                        >
+                          {approach.procedureName} → {approach.approachName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(!manualAssociationApproachId || manualAssociationApproachId === "none") && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                      Obrigatório
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-4">
                 <div className="flex flex-col md:flex-row md:items-end md:space-x-3 space-y-3 md:space-y-0">
                   <div className="flex-grow">
@@ -3892,17 +4406,67 @@ export function SurgeryData({
                                     key={procedure.id}
                                     value={procedure.code + procedure.name}
                                     onSelect={() => {
-                                      // Verificar se o procedimento já existe na lista
-                                      const exists = secondaryProcedures.some(
-                                        (item) => item.procedure.id === procedure.id
-                                      );
+                                      // Verificar se há uma conduta selecionada para associação manual
+                                      let manualApproachInfo: any = null;
+                                      if (manualAssociationApproachId && manualAssociationApproachId !== "none" && selectedSurgicalApproaches.length > 0) {
+                                        // Formato da chave: "procedureId-surgicalApproachId"
+                                        const [procedureIdStr, approachIdStr] = manualAssociationApproachId.split('-');
+                                        const procedureId = parseInt(procedureIdStr);
+                                        const approachId = parseInt(approachIdStr);
+                                        
+                                        const selectedApproach = selectedSurgicalApproaches.find(
+                                          (a: any) => a.surgicalProcedureId === procedureId && a.surgicalApproachId === approachId
+                                        );
+                                        if (selectedApproach) {
+                                          manualApproachInfo = {
+                                            sourceApproachId: selectedApproach.surgicalApproachId,
+                                            sourceApproachName: selectedApproach.approachName,
+                                            sourceProcedureId: selectedApproach.surgicalProcedureId,
+                                            sourceProcedureName: selectedApproach.procedureName
+                                          };
+                                        }
+                                      }
 
-                                      if (exists) {
+                                      // Verificar se o mesmo CBHPM já existe NO MESMO BLOCO (mesma conduta)
+                                      // Permitir o mesmo CBHPM em blocos diferentes (igual ao CID10)
+                                      const existsInSameBlock = secondaryProcedures.some((item: any) => {
+                                        if (item.procedure.id !== procedure.id) return false;
+                                        
+                                        // Se ambos são manuais (sem conduta), são duplicatas
+                                        if (!item.procedure.sourceApproachId && !manualApproachInfo) return true;
+                                        
+                                        // Se um tem conduta e outro não, são blocos diferentes
+                                        if (!item.procedure.sourceApproachId || !manualApproachInfo) return false;
+                                        
+                                        // Verificar se são do mesmo bloco (mesmo approach + procedure)
+                                        return item.procedure.sourceApproachId === manualApproachInfo.sourceApproachId &&
+                                               item.procedure.sourceProcedureId === manualApproachInfo.sourceProcedureId;
+                                      });
+
+                                      // Verificar também no procedimento principal
+                                      // O procedimento principal pode ter os metadados de bloco ou não
+                                      const existsAsMainInSameBlock = selectedProcedure && selectedProcedure.id === procedure.id && (() => {
+                                        const mainApproachId = selectedProcedure.sourceApproachId;
+                                        const mainProcedureId = selectedProcedure.sourceProcedureId;
+                                        
+                                        // Se ambos são manuais (sem conduta associada), são duplicatas
+                                        if (!mainApproachId && !manualApproachInfo) return true;
+                                        
+                                        // Se um tem conduta e outro não, são blocos diferentes - permitir
+                                        if (!mainApproachId && manualApproachInfo) return false;
+                                        if (mainApproachId && !manualApproachInfo) return false;
+                                        
+                                        // Ambos têm conduta - verificar se é o mesmo bloco
+                                        return mainApproachId === manualApproachInfo?.sourceApproachId &&
+                                               mainProcedureId === manualApproachInfo?.sourceProcedureId;
+                                      })();
+
+                                      if (existsInSameBlock || existsAsMainInSameBlock) {
                                         toast({
-                                          title: "Procedimento já adicionado",
-                                          description: "Este procedimento já foi adicionado à lista.",
+                                          title: "Procedimento já adicionado neste bloco",
+                                          description: "Este procedimento CBHPM já foi adicionado a esta conduta. Você pode adicioná-lo a uma conduta diferente.",
                                           variant: "destructive",
-                                          duration: 3000,
+                                          duration: 4000,
                                         });
                                         setSecondaryProcedureSearchOpen(false);
                                         return;
@@ -3910,7 +4474,10 @@ export function SurgeryData({
 
                                       // Adicionar automaticamente à lista com a quantidade atual
                                       const newProcedure = {
-                                        procedure: procedure,
+                                        procedure: {
+                                          ...procedure,
+                                          ...(manualApproachInfo || {})
+                                        },
                                         quantity: currentSecondaryQuantity,
                                       };
 
@@ -3933,9 +4500,13 @@ export function SurgeryData({
                                       setCurrentSecondaryQuantity(1);
                                       setSecondaryProcedureSearchOpen(false);
 
+                                      const toastDescription = manualApproachInfo 
+                                        ? `${procedure.code} adicionado e associado a "${manualApproachInfo.sourceApproachName}"!`
+                                        : `${procedure.code} adicionado com sucesso!`;
+
                                       toast({
                                         title: "Procedimento adicionado",
-                                        description: `${procedure.code} adicionado com sucesso!`,
+                                        description: toastDescription,
                                         duration: 2000,
                                       });
                                     }}
@@ -3991,11 +4562,11 @@ export function SurgeryData({
                 </div>
               </div>
 
-              {/* Lista unificada de todos os procedimentos */}
+              {/* Lista unificada de todos os procedimentos - Agrupados por Conduta Cirúrgica */}
               <div className="mt-4">
                 {(() => {
-                  // Combinar procedimento principal com secundários
-                  const allProcedures = [];
+                  // Combinar procedimento principal com secundários (preservando ordem de adição)
+                  const allProcedures: any[] = [];
                   
                   // Adicionar procedimento principal se existir
                   if (selectedProcedure) {
@@ -4006,7 +4577,7 @@ export function SurgeryData({
                     });
                   }
                   
-                  // Adicionar procedimentos secundários
+                  // Adicionar procedimentos secundários (na ordem em que foram adicionados)
                   secondaryProcedures.forEach(item => {
                     allProcedures.push({
                       procedure: item.procedure,
@@ -4015,95 +4586,245 @@ export function SurgeryData({
                     });
                   });
 
-                  // Ordenar por porte (maior para menor)
-                  const sortedProcedures = allProcedures.sort((a, b) => 
-                    getPorteValue(b.procedure.porte) - getPorteValue(a.procedure.porte)
-                  );
+                  // Encontrar qual é o procedimento de maior porte (para marcar como principal)
+                  let maxPorteIndex = 0;
+                  let maxPorteValue = 0;
+                  allProcedures.forEach((item, index) => {
+                    const porteValue = getPorteValue(item.procedure.porte);
+                    if (porteValue > maxPorteValue) {
+                      maxPorteValue = porteValue;
+                      maxPorteIndex = index;
+                    }
+                  });
 
-                  return sortedProcedures.length > 0 ? (
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-medium text-muted-foreground">
-                        Procedimentos Cirúrgicos Necessários ({sortedProcedures.length})
-                      </h4>
-                      <div className="space-y-2">
-                        {sortedProcedures.map((item, index) => (
-                          <div
-                            key={`${item.procedure.id}-${item.isFromMain ? 'main' : 'secondary'}-${index}`}
-                            className="flex items-center justify-between p-3 border border-border rounded-md bg-accent/30"
-                          >
-                            <div className="flex-grow">
-                              <div className="flex items-center space-x-2">
-                                <span className="font-medium text-muted-foreground">
-                                  {item.quantity} x {item.procedure.code} - {item.procedure.name}
-                                </span>
-                                {item.procedure.porte && (
-                                  <span className="text-xs px-2 py-0.5 bg-accent/50 rounded-full text-muted-foreground">
-                                    Porte: {item.procedure.porte}
+                  // Verificar se há agrupamento necessário (mais de uma conduta ou manuais + automáticos)
+                  const hasGrouping = allProcedures.some(p => p.procedure.sourceApproachId);
+                  
+                  if (!hasGrouping) {
+                    // Sem agrupamento - ordenar por porte para lista simples
+                    const sortedProcedures = [...allProcedures].sort((a, b) => 
+                      getPorteValue(b.procedure.porte) - getPorteValue(a.procedure.porte)
+                    );
+                    return sortedProcedures.length > 0 ? (
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-medium text-muted-foreground">
+                          Procedimentos Cirúrgicos Necessários ({sortedProcedures.length})
+                        </h4>
+                        <div className="space-y-2">
+                          {sortedProcedures.map((item, index) => (
+                            <div
+                              key={`${item.procedure.id}-${item.isFromMain ? 'main' : 'secondary'}-${index}`}
+                              className="flex items-center justify-between p-3 border border-border rounded-md bg-accent/30"
+                            >
+                              <div className="flex-grow">
+                                <div className="flex items-center space-x-2">
+                                  <span className="font-medium text-muted-foreground">
+                                    {item.procedure.code} - {item.procedure.name}
                                   </span>
-                                )}
-                                {index === 0 && (
-                                  <span className="text-xs px-2 py-0.5 bg-accent-light rounded-full text-accent">
-                                    Procedimento Principal
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
-                                <span>Auxiliares: {item.procedure.numeroAuxiliares || 0}</span>
-                                <span>Porte Anestesista: {item.procedure.porteAnestesista || "0"}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-3">
-                              <div className="flex items-center space-x-2">
-                                <div className="flex items-center space-x-1">
-                                  <span className="text-xs font-medium text-muted-foreground">
-                                    Qtd:
-                                  </span>
-                                  <Input
-                                    type="number"
-                                    min="1"
-                                    value={item.quantity}
-                                    onChange={(e) => {
-                                      const newQuantity = parseInt(e.target.value) || 1;
-                                      if (item.isFromMain) {
-                                        setProcedureQuantity(newQuantity);
-                                      } else {
-                                        const secondaryIndex = secondaryProcedures.findIndex(sp => sp.procedure.id === item.procedure.id);
-                                        if (secondaryIndex !== -1) {
-                                          handleUpdateProcedureQuantity(secondaryIndex, newQuantity);
-                                        }
-                                      }
-                                    }}
-                                    className="w-16 h-8 text-xs bg-card text-foreground border-border"
-                                  />
+                                  {item.procedure.porte && (
+                                    <span className="text-xs px-2 py-0.5 bg-accent/50 rounded-full text-muted-foreground">
+                                      Porte: {item.procedure.porte}
+                                    </span>
+                                  )}
+                                  {index === 0 && (
+                                    <span className="text-xs px-2 py-0.5 bg-accent-light rounded-full text-accent">
+                                      Procedimento Principal
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
+                                  <span>Auxiliares: {item.procedure.numeroAuxiliares || 0}</span>
+                                  <span>Porte Anestesista: {item.procedure.porteAnestesista || "0"}</span>
                                 </div>
                               </div>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => {
-                                  if (item.isFromMain) {
-                                    // Remover procedimento principal
-                                    setSelectedProcedure(null);
-                                    setProcedureQuantity(1);
-                                    saveAllProceduresToDatabase();
-                                    toast({
-                                      title: "Procedimento removido",
-                                      description: `${item.procedure.name} removido da lista`,
-                                    });
-                                  } else {
-                                    // Remover procedimento secundário
-                                    const secondaryIndex = secondaryProcedures.findIndex(sp => sp.procedure.id === item.procedure.id);
-                                    if (secondaryIndex !== -1) {
-                                      handleRemoveSecondaryProcedure(secondaryIndex);
+                              <div className="flex items-center space-x-3">
+                                <div className="flex items-center space-x-2">
+                                  <div className="flex items-center space-x-1">
+                                    <span className="text-xs font-medium text-muted-foreground">
+                                      Qtd:
+                                    </span>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      value={item.quantity ?? 1}
+                                      onChange={(e) => {
+                                        const newQuantity = parseInt(e.target.value) || 1;
+                                        if (item.isFromMain) {
+                                          setProcedureQuantity(newQuantity);
+                                        } else {
+                                          const secondaryIndex = secondaryProcedures.findIndex(sp => sp.procedure.id === item.procedure.id);
+                                          if (secondaryIndex !== -1) {
+                                            handleUpdateProcedureQuantity(secondaryIndex, newQuantity);
+                                          }
+                                        }
+                                      }}
+                                      className="w-16 h-8 text-xs bg-card text-foreground border-border"
+                                    />
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (item.isFromMain) {
+                                      setSelectedProcedure(null);
+                                      setProcedureQuantity(1);
+                                      saveAllProceduresToDatabase();
+                                      toast({
+                                        title: "Procedimento removido",
+                                        description: `${item.procedure.name} removido da lista`,
+                                      });
+                                    } else {
+                                      const secondaryIndex = secondaryProcedures.findIndex(sp => sp.procedure.id === item.procedure.id);
+                                      if (secondaryIndex !== -1) {
+                                        handleRemoveSecondaryProcedure(secondaryIndex);
+                                      }
                                     }
-                                  }
-                                }}
-                              >
-                                Remover
-                              </Button>
+                                  }}
+                                >
+                                  Remover
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  }
+
+                  // Agrupar procedimentos por conduta cirúrgica de origem (preservando ordem de adição dos grupos)
+                  // Usar Map para preservar ordem de inserção
+                  const groupedProceduresMap = new Map<string, { items: any[], sourceApproachId: any, isManual: boolean }>();
+                  allProcedures.forEach((item: any, index: number) => {
+                    const groupKey = item.procedure.sourceApproachId 
+                      ? `${item.procedure.sourceProcedureName || 'Procedimento'} → ${item.procedure.sourceApproachName}`
+                      : 'Adicionado Manualmente';
+                    
+                    if (!groupedProceduresMap.has(groupKey)) {
+                      groupedProceduresMap.set(groupKey, {
+                        items: [],
+                        sourceApproachId: item.procedure.sourceApproachId,
+                        isManual: !item.procedure.sourceApproachId
+                      });
+                    }
+                    groupedProceduresMap.get(groupKey)!.items.push({ ...item, originalIndex: index, isPrincipal: index === maxPorteIndex });
+                  });
+
+                  // Converter Map para array preservando ordem, com 'Adicionado Manualmente' no final
+                  const groupEntries = Array.from(groupedProceduresMap.entries());
+                  const manualEntry = groupEntries.find(([key]) => key === 'Adicionado Manualmente');
+                  const otherEntries = groupEntries.filter(([key]) => key !== 'Adicionado Manualmente');
+                  const orderedGroupEntries = manualEntry ? [...otherEntries, manualEntry] : otherEntries;
+
+                  return allProcedures.length > 0 ? (
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium text-muted-foreground">
+                        Procedimentos Cirúrgicos Necessários ({allProcedures.length})
+                      </h4>
+                      <div className="space-y-4">
+                        {orderedGroupEntries.map(([groupKey, groupData]) => {
+                          // Ordenar itens DENTRO de cada grupo por porte (maior para menor)
+                          const sortedItems = [...groupData.items].sort((a, b) => 
+                            getPorteValue(b.procedure.porte) - getPorteValue(a.procedure.porte)
+                          );
+                          return (
+                          <div key={groupKey} className="border border-border rounded-lg overflow-hidden">
+                            {/* Cabeçalho do grupo */}
+                            <div className={`px-3 py-2 text-sm font-medium flex items-center ${
+                              groupData.isManual 
+                                ? 'bg-muted/50 text-muted-foreground' 
+                                : 'bg-medsync-blue/10 text-medsync-blue'
+                            }`}>
+                              {groupData.isManual ? (
+                                <span>📝 {groupKey}</span>
+                              ) : (
+                                <span>🔗 {groupKey}</span>
+                              )}
+                              <span className="ml-2 text-xs px-2 py-0.5 bg-background rounded-full">
+                                {groupData.items.length} CBHPM{groupData.items.length > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            {/* Itens do grupo - ordenados por porte dentro do grupo */}
+                            <div className="divide-y divide-border">
+                              {sortedItems.map((item: any, idx: number) => (
+                                <div
+                                  key={`${item.procedure.id}-${item.isFromMain ? 'main' : 'secondary'}-${idx}`}
+                                  className="flex items-center justify-between p-3 bg-accent/10"
+                                >
+                                  <div className="flex-grow">
+                                    <div className="flex items-center space-x-2 flex-wrap">
+                                      <span className="font-medium text-muted-foreground">
+                                        {item.procedure.code} - {item.procedure.name}
+                                      </span>
+                                      {item.procedure.porte && (
+                                        <span className="text-xs px-2 py-0.5 bg-accent/50 rounded-full text-muted-foreground">
+                                          Porte: {item.procedure.porte}
+                                        </span>
+                                      )}
+                                      {item.originalIndex === 0 && (
+                                        <span className="text-xs px-2 py-0.5 bg-accent-light rounded-full text-accent">
+                                          Procedimento Principal
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
+                                      <span>Auxiliares: {item.procedure.numeroAuxiliares || 0}</span>
+                                      <span>Porte Anestesista: {item.procedure.porteAnestesista || "0"}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center space-x-3">
+                                    <div className="flex items-center space-x-2">
+                                      <div className="flex items-center space-x-1">
+                                        <span className="text-xs font-medium text-muted-foreground">
+                                          Qtd:
+                                        </span>
+                                        <Input
+                                          type="number"
+                                          min="1"
+                                          value={item.quantity ?? 1}
+                                          onChange={(e) => {
+                                            const newQuantity = parseInt(e.target.value) || 1;
+                                            if (item.isFromMain) {
+                                              setProcedureQuantity(newQuantity);
+                                            } else {
+                                              const secondaryIndex = secondaryProcedures.findIndex((sp: any) => sp.procedure.id === item.procedure.id);
+                                              if (secondaryIndex !== -1) {
+                                                handleUpdateProcedureQuantity(secondaryIndex, newQuantity);
+                                              }
+                                            }
+                                          }}
+                                          className="w-16 h-8 text-xs bg-card text-foreground border-border"
+                                        />
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => {
+                                        if (item.isFromMain) {
+                                          setSelectedProcedure(null);
+                                          setProcedureQuantity(1);
+                                          saveAllProceduresToDatabase();
+                                          toast({
+                                            title: "Procedimento removido",
+                                            description: `${item.procedure.name} removido da lista`,
+                                          });
+                                        } else {
+                                          const secondaryIndex = secondaryProcedures.findIndex((sp: any) => sp.procedure.id === item.procedure.id);
+                                          if (secondaryIndex !== -1) {
+                                            handleRemoveSecondaryProcedure(secondaryIndex);
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      Remover
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        ))}
+                        );})}
                       </div>
                     </div>
                   ) : null;
@@ -4113,6 +4834,22 @@ export function SurgeryData({
               <p className="text-xs text-muted-foreground mt-2">
                 Adicione os procedimentos necessários para a cirurgia.
               </p>
+              
+              {/* Campo de texto rico para observações adicionais sobre procedimentos CBHPM */}
+              <div className="mt-4">
+                <Label htmlFor="cbhpm-notes" className="text-sm font-medium text-foreground">
+                  Observações Adicionais (Procedimentos)
+                </Label>
+                <div className="mt-2">
+                  <RichTextEditor
+                    id="cbhpm-notes"
+                    value={cbhpmAdditionalNotes}
+                    onChange={setCbhpmAdditionalNotes}
+                    placeholder="Insira aqui informações ou descrições adicionais sobre os procedimentos CBHPM..."
+                    minHeight="min-h-[100px]"
+                  />
+                </div>
+              </div>
             </div>
             </div>
           </div>
@@ -4134,6 +4871,41 @@ export function SurgeryData({
                 
                 {/* Conteúdo com fundo card */}
                 <div className="p-5">
+              
+              {/* Dropdown para associação OBRIGATÓRIA à conduta - aparece quando há condutas selecionadas */}
+              {selectedSurgicalApproaches.length > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-4">
+                  <div className="flex-shrink-0">
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                      Associar à conduta: <span className="text-red-500">*</span>
+                    </span>
+                  </div>
+                  <Select
+                    value={manualAssociationApproachId}
+                    onValueChange={setManualAssociationApproachId}
+                  >
+                    <SelectTrigger className={`flex-1 h-9 text-sm ${!manualAssociationApproachId || manualAssociationApproachId === "none" ? 'border-amber-400' : 'border-green-500'}`}>
+                      <SelectValue placeholder="Selecione uma conduta (obrigatório)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectedSurgicalApproaches.map((approach: any, index: number) => (
+                        <SelectItem 
+                          key={`opme-approach-${approach.surgicalProcedureId}-${approach.surgicalApproachId}-${index}`} 
+                          value={`${approach.surgicalProcedureId}-${approach.surgicalApproachId}`}
+                        >
+                          {approach.procedureName} → {approach.approachName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(!manualAssociationApproachId || manualAssociationApproachId === "none") && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                      Obrigatório
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-4">
                 {/* Formulário para busca de materiais OPME */}
                 <div className="flex flex-col md:flex-row md:items-end md:space-x-3 space-y-3 md:space-y-0">
@@ -4246,7 +5018,7 @@ export function SurgeryData({
 
                 </div>
 
-                {/* Lista de materiais OPME adicionados */}
+                {/* Lista de materiais OPME adicionados - Agrupados por Conduta Cirúrgica */}
                 <div>
                   <h5 className="text-xs font-medium mb-2 text-muted-foreground">
                     Materiais selecionados{" "}
@@ -4258,72 +5030,174 @@ export function SurgeryData({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {opmeItems.map((opmeItem, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between p-2 border border-border rounded-md bg-accent/30"
-                        >
-                          <div className="flex-grow">
-                            <div className="flex items-center">
-                              <span className="text-sm font-medium text-foreground">
-                                {opmeItem.item.technicalName}
-                              </span>
-                              {opmeItem.item.anvisaRegistrationNumber && (
-                                <span className="ml-2 text-xs px-2 py-0.5 bg-accent/50 rounded-full text-muted-foreground">
-                                  Reg: {opmeItem.item.anvisaRegistrationNumber}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              <span>
-                                Nome Comercial: {opmeItem.item.commercialName}
-                              </span>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              <span>
-                                Fabricante: {opmeItem.item.manufacturerName}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <div className="flex items-center space-x-1">
-                              <span className="text-xs font-medium text-muted-foreground">
-                                Qtd:
-                              </span>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={opmeItem.quantity}
-                                onChange={(e) => {
-                                  const newQuantity = parseInt(e.target.value) || 1;
-                                  console.log(`🔍 DEBUG - Input onChange:`, {
-                                    inputValue: e.target.value,
-                                    parsedQuantity: newQuantity,
-                                    index: index
-                                  });
-                                  handleUpdateOpmeQuantity(index, newQuantity);
-                                }}
-                                className="w-16 h-8 text-xs bg-card text-foreground border-border"
-                              />
-                            </div>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleRemoveOpmeItem(index)}
+                      {(() => {
+                        // Verificar se há agrupamento necessário
+                        const hasGrouping = opmeItems.some((item: any) => item.item.sourceApproachId);
+                        
+                        if (!hasGrouping) {
+                          // Sem agrupamento - mostrar lista simples
+                          return opmeItems.map((opmeItem: any, index: number) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-2 border border-border rounded-md bg-accent/30"
                             >
-                              Remover
-                            </Button>
+                              <div className="flex-grow">
+                                <div className="flex items-center">
+                                  <span className="text-sm font-medium text-foreground">
+                                    {opmeItem.item.technicalName}
+                                  </span>
+                                  {opmeItem.item.anvisaRegistrationNumber && (
+                                    <span className="ml-2 text-xs px-2 py-0.5 bg-accent/50 rounded-full text-muted-foreground">
+                                      Reg: {opmeItem.item.anvisaRegistrationNumber}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  <span>Nome Comercial: {opmeItem.item.commercialName}</span>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  <span>Fabricante: {opmeItem.item.manufacturerName}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-3">
+                                <div className="flex items-center space-x-1">
+                                  <span className="text-xs font-medium text-muted-foreground">Qtd:</span>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={opmeItem.quantity ?? 1}
+                                    onChange={(e) => {
+                                      const newQuantity = parseInt(e.target.value) || 1;
+                                      handleUpdateOpmeQuantity(index, newQuantity);
+                                    }}
+                                    className="w-16 h-8 text-xs bg-card text-foreground border-border"
+                                  />
+                                </div>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleRemoveOpmeItem(index)}
+                                >
+                                  Remover
+                                </Button>
+                              </div>
+                            </div>
+                          ));
+                        }
+
+                        // Agrupar OPME por conduta cirúrgica de origem
+                        const groupedOpme = opmeItems.reduce((acc: any, item: any, index: number) => {
+                          const groupKey = item.item.sourceApproachId 
+                            ? `${item.item.sourceProcedureName || 'Procedimento'} → ${item.item.sourceApproachName}`
+                            : 'Adicionado Manualmente';
+                          
+                          if (!acc[groupKey]) {
+                            acc[groupKey] = {
+                              items: [],
+                              sourceApproachId: item.item.sourceApproachId,
+                              isManual: !item.item.sourceApproachId
+                            };
+                          }
+                          acc[groupKey].items.push({ ...item, originalIndex: index });
+                          return acc;
+                        }, {});
+
+                        const groupKeys = Object.keys(groupedOpme);
+
+                        return groupKeys.map((groupKey) => (
+                          <div key={groupKey} className="border border-border rounded-lg overflow-hidden">
+                            {/* Cabeçalho do grupo */}
+                            <div className={`px-3 py-2 text-sm font-medium flex items-center ${
+                              groupedOpme[groupKey].isManual 
+                                ? 'bg-muted/50 text-muted-foreground' 
+                                : 'bg-medsync-blue/10 text-medsync-blue'
+                            }`}>
+                              {groupedOpme[groupKey].isManual ? (
+                                <span>📝 {groupKey}</span>
+                              ) : (
+                                <span>🔗 {groupKey}</span>
+                              )}
+                              <span className="ml-2 text-xs px-2 py-0.5 bg-background rounded-full">
+                                {groupedOpme[groupKey].items.length} OPME{groupedOpme[groupKey].items.length > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            {/* Itens do grupo */}
+                            <div className="divide-y divide-border">
+                              {groupedOpme[groupKey].items.map((opmeItem: any) => (
+                                <div
+                                  key={opmeItem.originalIndex}
+                                  className="flex items-center justify-between p-2 bg-accent/10"
+                                >
+                                  <div className="flex-grow">
+                                    <div className="flex items-center">
+                                      <span className="text-sm font-medium text-foreground">
+                                        {opmeItem.item.technicalName}
+                                      </span>
+                                      {opmeItem.item.anvisaRegistrationNumber && (
+                                        <span className="ml-2 text-xs px-2 py-0.5 bg-accent/50 rounded-full text-muted-foreground">
+                                          Reg: {opmeItem.item.anvisaRegistrationNumber}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      <span>Nome Comercial: {opmeItem.item.commercialName}</span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      <span>Fabricante: {opmeItem.item.manufacturerName}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center space-x-3">
+                                    <div className="flex items-center space-x-1">
+                                      <span className="text-xs font-medium text-muted-foreground">Qtd:</span>
+                                      <Input
+                                        type="number"
+                                        min="1"
+                                        value={opmeItem.quantity ?? 1}
+                                        onChange={(e) => {
+                                          const newQuantity = parseInt(e.target.value) || 1;
+                                          handleUpdateOpmeQuantity(opmeItem.originalIndex, newQuantity);
+                                        }}
+                                        className="w-16 h-8 text-xs bg-card text-foreground border-border"
+                                      />
+                                    </div>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => handleRemoveOpmeItem(opmeItem.originalIndex)}
+                                    >
+                                      Remover
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ));
+                      })()}
                     </div>
                   )}
+                  
+                  {/* Campo de texto rico para observações adicionais sobre itens OPME */}
+                  <div className="mt-4">
+                    <Label htmlFor="opme-notes" className="text-sm font-medium text-foreground">
+                      Observações Adicionais (Materiais OPME)
+                    </Label>
+                    <div className="mt-2">
+                      <RichTextEditor
+                        id="opme-notes"
+                        value={opmeAdditionalNotes}
+                        onChange={setOpmeAdditionalNotes}
+                        placeholder="Insira aqui informações ou descrições adicionais sobre os materiais OPME..."
+                        minHeight="min-h-[100px]"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Seção para Seleção de Fornecedores */}
+          {/* Seção para Seleção de Fornecedores - Sistema Dinâmico */}
           <div className="mb-6 text-foreground mt-6">
             <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
                 {/* Cabeçalho com fundo azul claro */}
@@ -4334,397 +5208,329 @@ export function SurgeryData({
                       <h3 className="text-lg font-semibold text-white">
                         Fornecedores de Materiais OPME
                       </h3>
+                      <p className="text-xs text-white/80">
+                        Adicione quantos fornecedores forem necessários para cada conduta
+                      </p>
                     </div>
                   </div>
                 </div>
                 
                 {/* Conteúdo com fundo card */}
-                <div className="p-5">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Primeiro fornecedor */}
-                <div className="space-y-2">
-                  <Label className="text-sm text-foreground">
-                    Fornecedor 1
-                  </Label>
-                  <Popover
-                    open={supplier1Open}
-                    onOpenChange={(open) => {
-                      setSupplier1Open(open);
-                      if (open) loadAllSuppliers();
-                    }}
+                <div className="p-5 space-y-4">
+              
+              {/* Dropdown para associação OBRIGATÓRIA à conduta - aparece quando há condutas selecionadas */}
+              {selectedSurgicalApproaches.length > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-4">
+                  <div className="flex-shrink-0">
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                      Associar à conduta: <span className="text-red-500">*</span>
+                    </span>
+                  </div>
+                  <Select
+                    value={manualAssociationApproachId}
+                    onValueChange={setManualAssociationApproachId}
                   >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={supplier1Open}
-                        className="combobox-medsync"
-                        disabled={!selectedOpmeItems || selectedOpmeItems.length === 0}
-                      >
-                        <span className={selectedSupplier1 ? "combobox-value" : "combobox-placeholder"}>
-                          {supplierLoading ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Buscando fornecedores...
-                            </span>
-                          ) : selectedSupplier1 ? (
-                            <span className="flex flex-col text-left truncate">
-                              <span className="font-medium">
-                                {selectedSupplier1.tradeName ||
-                                  selectedSupplier1.companyName}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                CNPJ: {selectedSupplier1.cnpj}
-                              </span>
-                            </span>
-                          ) : (
-                            "Selecionar fornecedor"
-                          )}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[500px] p-0 bg-popover border-border shadow-md" align="start" side="bottom" sideOffset={4}>
-                      <Command className="bg-popover text-popover-foreground">
-                        <CommandInput
-                          placeholder="Buscar nome da empresa ou CNPJ..."
-                          value={supplierSearchTerm}
-                          onValueChange={setSupplierSearchTerm}
-                          className="bg-background text-foreground border-input placeholder:text-muted-foreground"
-                        />
-                        <CommandList className="text-popover-foreground bg-popover">
-                          <CommandEmpty>
-                            {supplierSearchTerm.length < 3 ? (
-                              <p className="py-3 px-4 text-sm text-center text-muted-foreground">
-                                Digite pelo menos 3 caracteres para buscar
-                              </p>
-                            ) : supplierLoading ? (
-                              <div className="py-6 flex items-center justify-center">
-                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                              </div>
-                            ) : (
-                              <p className="py-3 px-4 text-sm text-center text-muted-foreground">
-                                Nenhum fornecedor encontrado
-                              </p>
-                            )}
-                          </CommandEmpty>
-                          <CommandGroup className="text-muted-foreground">
-                            {supplierSearchTerm.length >= 3 &&
-                              !supplierLoading && (
-                                <div className="p-2">
-                                  <Button
-                                    className="w-full justify-center bg-primary hover:bg-primary/90"
-                                    onClick={handleSupplierSearch}
-                                  >
-                                    <Search className="mr-2 h-4 w-4" />
-                                    Buscar fornecedores
-                                  </Button>
-                                </div>
-                              )}
-                            {supplierResults.map((supplier) => (
-                              <CommandItem
-                                key={supplier.id}
-                                value={`${supplier.tradeName} ${supplier.companyName} ${supplier.cnpj}`}
-                                className="cursor-pointer hover:bg-accent-light"
-                                onSelect={() => handleSelectSupplier1(supplier)}
-                              >
-                                <div className="flex flex-col w-full">
-                                  <div className="flex items-center gap-2">
-                                    <strong className="text-muted-foreground">
-                                      {supplier.tradeName || supplier.companyName}
-                                    </strong>
-                                    <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
-                                      {supplier.cnpj}
-                                    </span>
-                                  </div>
-                                  {supplier.tradeName && supplier.tradeName !== supplier.companyName && (
-                                    <span className="ml-2 text-foreground">
-                                      {supplier.companyName}
-                                    </span>
-                                  )}
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  
-                  {/* Campo de fabricante para Fornecedor 1 */}
-                  {selectedSupplier1 && (
-                    <div className="mt-2">
-                      <Label className="text-xs text-muted-foreground">
-                        Fabricante (opcional)
-                      </Label>
-                      <Input
-                        type="text"
-                        placeholder="Ex: Arthrex Brasil, Smith & Nephew..."
-                        value={manufacturer1}
-                        onChange={(e) => handleManufacturerChange(e.target.value, 1)}
-                        className="w-full bg-card text-foreground border-border placeholder:text-muted-foreground text-sm"
-                        maxLength={255}
-                        disabled={!selectedOpmeItems || selectedOpmeItems.length === 0}
-                      />
-                    </div>
+                    <SelectTrigger className={`flex-1 h-9 text-sm ${!manualAssociationApproachId || manualAssociationApproachId === "none" ? 'border-amber-400' : 'border-green-500'}`}>
+                      <SelectValue placeholder="Selecione uma conduta (obrigatório)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectedSurgicalApproaches.map((approach: any, index: number) => (
+                        <SelectItem 
+                          key={`supplier-approach-${approach.surgicalProcedureId}-${approach.surgicalApproachId}-${index}`} 
+                          value={`${approach.surgicalProcedureId}-${approach.surgicalApproachId}`}
+                        >
+                          {approach.procedureName} → {approach.approachName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(!manualAssociationApproachId || manualAssociationApproachId === "none") && (
+                    <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                      Obrigatório
+                    </span>
                   )}
                 </div>
+              )}
 
-                {/* Segundo fornecedor */}
-                <div className="space-y-2">
-                  <Label className="text-sm text-foreground">
-                    Fornecedor 2
-                  </Label>
-                  <Popover
-                    open={supplier2Open}
-                    onOpenChange={(open) => {
-                      setSupplier2Open(open);
-                      if (open) loadAllSuppliers();
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={supplier2Open}
-                        className="combobox-medsync"
-                        disabled={!selectedOpmeItems || selectedOpmeItems.length === 0}
+                  {/* Interface de adição de fornecedor */}
+                  <div className="space-y-3">
+                    <Label className="text-sm text-foreground font-medium">
+                      Fornecedor
+                    </Label>
+                    <div className="flex gap-2">
+                      <Popover
+                        open={supplierSearchOpen}
+                        onOpenChange={(open) => {
+                          setSupplierSearchOpen(open);
+                          if (open) loadAllSuppliers();
+                        }}
                       >
-                        <span className={selectedSupplier2 ? "combobox-value" : "combobox-placeholder"}>
-                          {supplierLoading ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Buscando fornecedores...
-                            </span>
-                          ) : selectedSupplier2 ? (
-                            <span className="flex flex-col text-left truncate">
-                              <span className="font-medium">
-                                {selectedSupplier2.tradeName ||
-                                  selectedSupplier2.companyName}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                CNPJ: {selectedSupplier2.cnpj}
-                              </span>
-                            </span>
-                          ) : (
-                            "Selecionar fornecedor"
-                          )}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[500px] p-0 bg-popover border-border shadow-md" align="start" side="bottom" sideOffset={4}>
-                      <Command className="bg-popover text-popover-foreground">
-                        <CommandInput
-                          placeholder="Buscar nome da empresa ou CNPJ..."
-                          value={supplierSearchTerm}
-                          onValueChange={setSupplierSearchTerm}
-                          className="bg-background text-foreground border-input placeholder:text-muted-foreground"
-                        />
-                        <CommandList className="text-popover-foreground bg-popover">
-                          <CommandEmpty>
-                            {supplierSearchTerm.length < 3 ? (
-                              <p className="py-3 px-4 text-sm text-center text-muted-foreground">
-                                Digite pelo menos 3 caracteres para buscar
-                              </p>
-                            ) : supplierLoading ? (
-                              <div className="py-6 flex items-center justify-center">
-                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                              </div>
-                            ) : (
-                              <p className="py-3 px-4 text-sm text-center text-muted-foreground">
-                                Nenhum fornecedor encontrado
-                              </p>
-                            )}
-                          </CommandEmpty>
-                          <CommandGroup className="text-muted-foreground">
-                            {supplierSearchTerm.length >= 3 &&
-                              !supplierLoading && (
-                                <div className="p-2">
-                                  <Button
-                                    className="w-full justify-center bg-primary hover:bg-primary/90"
-                                    onClick={handleSupplierSearch}
-                                  >
-                                    <Search className="mr-2 h-4 w-4" />
-                                    Buscar fornecedores
-                                  </Button>
-                                </div>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={supplierSearchOpen}
+                            className="flex-1 justify-between"
+                            disabled={
+                              !selectedOpmeItems || 
+                              selectedOpmeItems.length === 0 ||
+                              (selectedSurgicalApproaches.length > 0 && (!manualAssociationApproachId || manualAssociationApproachId === "none"))
+                            }
+                            data-testid="button-supplier-search"
+                          >
+                            <span className={currentSupplier ? "text-foreground" : "text-muted-foreground"}>
+                              {supplierLoading ? (
+                                <span className="flex items-center gap-2">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Buscando fornecedores...
+                                </span>
+                              ) : currentSupplier ? (
+                                <span className="flex flex-col text-left truncate">
+                                  <span className="font-medium">
+                                    {currentSupplier.tradeName || currentSupplier.companyName}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    CNPJ: {currentSupplier.cnpj}
+                                  </span>
+                                </span>
+                              ) : (
+                                "Pesquise e selecione fornecedores..."
                               )}
-                            {supplierResults.map((supplier) => (
-                              <CommandItem
-                                key={supplier.id}
-                                value={`${supplier.tradeName} ${supplier.companyName} ${supplier.cnpj}`}
-                                className="cursor-pointer hover:bg-accent-light"
-                                onSelect={() => handleSelectSupplier2(supplier)}
-                              >
-                                <div className="flex flex-col w-full">
-                                  <div className="flex items-center gap-2">
-                                    <strong className="text-muted-foreground">
-                                      {supplier.tradeName || supplier.companyName}
-                                    </strong>
-                                    <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
-                                      {supplier.cnpj}
-                                    </span>
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[500px] p-0 bg-popover border-border shadow-md" align="start" side="bottom" sideOffset={4}>
+                          <Command className="bg-popover text-popover-foreground">
+                            <CommandInput
+                              placeholder="Buscar nome da empresa ou CNPJ..."
+                              value={supplierSearchTerm}
+                              onValueChange={setSupplierSearchTerm}
+                              className="bg-background text-foreground border-input placeholder:text-muted-foreground"
+                            />
+                            <CommandList className="text-popover-foreground bg-popover">
+                              <CommandEmpty>
+                                {supplierSearchTerm.length < 3 ? (
+                                  <p className="py-3 px-4 text-sm text-center text-muted-foreground">
+                                    Digite pelo menos 3 caracteres para buscar
+                                  </p>
+                                ) : supplierLoading ? (
+                                  <div className="py-6 flex items-center justify-center">
+                                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                                   </div>
-                                  {supplier.tradeName && supplier.tradeName !== supplier.companyName && (
-                                    <span className="ml-2 text-foreground">
-                                      {supplier.companyName}
-                                    </span>
+                                ) : (
+                                  <p className="py-3 px-4 text-sm text-center text-muted-foreground">
+                                    Nenhum fornecedor encontrado
+                                  </p>
+                                )}
+                              </CommandEmpty>
+                              <CommandGroup className="text-muted-foreground">
+                                {supplierSearchTerm.length >= 3 &&
+                                  !supplierLoading && (
+                                    <div className="p-2">
+                                      <Button
+                                        className="w-full justify-center bg-primary hover:bg-primary/90"
+                                        onClick={handleSupplierSearch}
+                                        data-testid="button-search-suppliers"
+                                      >
+                                        <Search className="mr-2 h-4 w-4" />
+                                        Buscar fornecedores
+                                      </Button>
+                                    </div>
                                   )}
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                                {supplierResults.map((supplier) => (
+                                  <CommandItem
+                                    key={supplier.id}
+                                    value={`${supplier.tradeName} ${supplier.companyName} ${supplier.cnpj}`}
+                                    className="cursor-pointer hover:bg-accent-light"
+                                    onSelect={() => handleSelectSupplierFromSearch(supplier)}
+                                    data-testid={`supplier-item-${supplier.id}`}
+                                  >
+                                    <div className="flex flex-col w-full">
+                                      <div className="flex items-center gap-2">
+                                        <strong className="text-muted-foreground">
+                                          {supplier.tradeName || supplier.companyName}
+                                        </strong>
+                                        <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
+                                          {supplier.cnpj}
+                                        </span>
+                                      </div>
+                                      {supplier.tradeName && supplier.tradeName !== supplier.companyName && (
+                                        <span className="ml-2 text-foreground">
+                                          {supplier.companyName}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    
+                    {/* Mensagem quando não há itens OPME */}
+                    {(!selectedOpmeItems || selectedOpmeItems.length === 0) && (
+                      <p className="text-sm text-muted-foreground italic">
+                        Adicione pelo menos um material OPME para poder selecionar fornecedores.
+                      </p>
+                    )}
+                    
+                    {/* Mensagem quando há condutas mas nenhuma está selecionada */}
+                    {selectedOpmeItems && selectedOpmeItems.length > 0 && selectedSurgicalApproaches.length > 0 && (!manualAssociationApproachId || manualAssociationApproachId === "none") && (
+                      <p className="text-sm text-amber-600 dark:text-amber-400 italic">
+                        Selecione uma conduta cirúrgica acima para adicionar fornecedores.
+                      </p>
+                    )}
+                  </div>
                   
-                  {/* Campo de fabricante para Fornecedor 2 */}
-                  {selectedSupplier2 && (
-                    <div className="mt-2">
-                      <Label className="text-xs text-muted-foreground">
-                        Fabricante (opcional)
+                  {/* Lista de fornecedores adicionados - Agrupados por Conduta Cirúrgica */}
+                  {selectedSuppliers.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="text-sm text-foreground font-medium">
+                        Fornecedores adicionados ({selectedSuppliers.length})
                       </Label>
-                      <Input
-                        type="text"
-                        placeholder="Ex: Arthrex Brasil, Smith & Nephew..."
-                        value={manufacturer2}
-                        onChange={(e) => handleManufacturerChange(e.target.value, 2)}
-                        className="w-full bg-card text-foreground border-border placeholder:text-muted-foreground text-sm"
-                        maxLength={255}
-                      />
+                      <div className="space-y-4">
+                        {(() => {
+                          // Agrupar fornecedores por conduta cirúrgica
+                          const groupedSuppliers = selectedSuppliers.reduce((acc: any, supplier: any, index: number) => {
+                            const procedureName = supplier.sourceProcedureName || null;
+                            const approachName = supplier.sourceApproachName || null;
+                            const approachId = supplier.sourceApproachId || null;
+                            const procedureId = supplier.sourceProcedureId || null;
+                            
+                            let groupKey: string;
+                            let isManual = false;
+                            
+                            if (procedureId && approachId) {
+                              groupKey = `${procedureName} → ${approachName}`;
+                            } else if (procedureId) {
+                              groupKey = procedureName || 'Procedimento não especificado';
+                            } else if (approachId) {
+                              groupKey = `Via: ${approachName}`;
+                            } else {
+                              groupKey = 'Fornecedores Gerais';
+                              isManual = true;
+                            }
+                            
+                            if (!acc[groupKey]) {
+                              acc[groupKey] = {
+                                items: [],
+                                procedureId,
+                                approachId,
+                                isManual
+                              };
+                            }
+                            acc[groupKey].items.push({ ...supplier, originalIndex: index });
+                            return acc;
+                          }, {});
+                          
+                          const groupKeys = Object.keys(groupedSuppliers);
+                          
+                          // Se só houver um grupo "Fornecedores Gerais", mostrar sem agrupamento visual
+                          if (groupKeys.length === 1 && groupKeys[0] === 'Fornecedores Gerais') {
+                            return (
+                              <div className="space-y-2">
+                                {selectedSuppliers.map((supplier, index) => (
+                                  <div
+                                    key={`supplier-${supplier.id}-${index}`}
+                                    className="flex items-center justify-between p-3 bg-accent/20 rounded-md border border-border"
+                                    data-testid={`supplier-row-${index}`}
+                                  >
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <Building2 className="h-4 w-4 text-medsync-blue" />
+                                        <span className="font-medium text-foreground">
+                                          {supplier.tradeName || supplier.companyName}
+                                        </span>
+                                        <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
+                                          {supplier.cnpj}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => handleRemoveSupplier(index)}
+                                      data-testid={`button-remove-supplier-${index}`}
+                                    >
+                                      Remover
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          }
+                          
+                          // Mostrar agrupado por conduta
+                          return groupKeys.map((groupKey) => (
+                            <div key={groupKey} className="border border-border rounded-lg overflow-hidden">
+                              {/* Cabeçalho do grupo */}
+                              <div className={`px-3 py-2 text-sm font-medium flex items-center ${
+                                groupedSuppliers[groupKey].isManual 
+                                  ? 'bg-muted/50 text-muted-foreground' 
+                                  : 'bg-medsync-blue/10 text-medsync-blue'
+                              }`}>
+                                {groupedSuppliers[groupKey].isManual ? (
+                                  <span>📝 {groupKey}</span>
+                                ) : (
+                                  <span>🔗 {groupKey}</span>
+                                )}
+                                <span className="ml-2 text-xs px-2 py-0.5 bg-background rounded-full">
+                                  {groupedSuppliers[groupKey].items.length} fornecedor{groupedSuppliers[groupKey].items.length > 1 ? 'es' : ''}
+                                </span>
+                              </div>
+                              {/* Itens do grupo */}
+                              <div className="divide-y divide-border">
+                                {groupedSuppliers[groupKey].items.map((item: any) => (
+                                  <div
+                                    key={`supplier-${item.id}-${item.originalIndex}`}
+                                    className="flex items-center justify-between p-3 bg-accent/10"
+                                    data-testid={`supplier-row-${item.originalIndex}`}
+                                  >
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <Building2 className="h-4 w-4 text-medsync-blue" />
+                                        <span className="font-medium text-foreground">
+                                          {item.tradeName || item.companyName}
+                                        </span>
+                                        <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
+                                          {item.cnpj}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => handleRemoveSupplier(item.originalIndex)}
+                                      data-testid={`button-remove-supplier-${item.originalIndex}`}
+                                    >
+                                      Remover
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
                     </div>
                   )}
-                </div>
-
-                {/* Terceiro fornecedor */}
-                <div className="space-y-2">
-                  <Label className="text-sm text-foreground">
-                    Fornecedor 3
-                  </Label>
-                  <Popover
-                    open={supplier3Open}
-                    onOpenChange={(open) => {
-                      setSupplier3Open(open);
-                      if (open) loadAllSuppliers();
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={supplier3Open}
-                        className="combobox-medsync"
-                        disabled={!selectedOpmeItems || selectedOpmeItems.length === 0}
-                      >
-                        <span className={selectedSupplier3 ? "combobox-value" : "combobox-placeholder"}>
-                          {supplierLoading ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Buscando fornecedores...
-                            </span>
-                          ) : selectedSupplier3 ? (
-                            <span className="flex flex-col text-left truncate">
-                              <span className="font-medium">
-                                {selectedSupplier3.tradeName ||
-                                  selectedSupplier3.companyName}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                CNPJ: {selectedSupplier3.cnpj}
-                              </span>
-                            </span>
-                          ) : (
-                            "Selecionar fornecedor"
-                          )}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[500px] p-0 bg-popover border-border shadow-md" align="start" side="bottom" sideOffset={4}>
-                      <Command className="bg-popover text-popover-foreground">
-                        <CommandInput
-                          placeholder="Buscar nome da empresa ou CNPJ..."
-                          value={supplierSearchTerm}
-                          onValueChange={setSupplierSearchTerm}
-                          className="bg-background text-foreground border-input placeholder:text-muted-foreground"
-                        />
-                        <CommandList className="text-popover-foreground bg-popover">
-                          <CommandEmpty>
-                            {supplierSearchTerm.length < 3 ? (
-                              <p className="py-3 px-4 text-sm text-center text-muted-foreground">
-                                Digite pelo menos 3 caracteres para buscar
-                              </p>
-                            ) : supplierLoading ? (
-                              <div className="py-6 flex items-center justify-center">
-                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                              </div>
-                            ) : (
-                              <p className="py-3 px-4 text-sm text-center text-muted-foreground">
-                                Nenhum fornecedor encontrado
-                              </p>
-                            )}
-                          </CommandEmpty>
-                          <CommandGroup className="text-muted-foreground">
-                            {supplierSearchTerm.length >= 3 &&
-                              !supplierLoading && (
-                                <div className="p-2">
-                                  <Button
-                                    className="w-full justify-center bg-primary hover:bg-primary/90"
-                                    onClick={handleSupplierSearch}
-                                  >
-                                    <Search className="mr-2 h-4 w-4" />
-                                    Buscar fornecedores
-                                  </Button>
-                                </div>
-                              )}
-                            {supplierResults.map((supplier) => (
-                              <CommandItem
-                                key={supplier.id}
-                                value={`${supplier.tradeName} ${supplier.companyName} ${supplier.cnpj}`}
-                                className="cursor-pointer hover:bg-accent-light"
-                                onSelect={() => handleSelectSupplier3(supplier)}
-                              >
-                                <div className="flex flex-col w-full">
-                                  <div className="flex items-center gap-2">
-                                    <strong className="text-muted-foreground">
-                                      {supplier.tradeName || supplier.companyName}
-                                    </strong>
-                                    <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
-                                      {supplier.cnpj}
-                                    </span>
-                                  </div>
-                                  {supplier.tradeName && supplier.tradeName !== supplier.companyName && (
-                                    <span className="ml-2 text-foreground">
-                                      {supplier.companyName}
-                                    </span>
-                                  )}
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  
-                  {/* Campo de fabricante para Fornecedor 3 */}
-                  {selectedSupplier3 && (
+                  {/* Campo de texto rico para observações adicionais sobre fornecedores */}
+                  <div className="mt-4">
+                    <Label htmlFor="supplier-notes" className="text-sm font-medium text-foreground">
+                      Observações Adicionais (Fornecedores)
+                    </Label>
                     <div className="mt-2">
-                      <Label className="text-xs text-muted-foreground">
-                        Fabricante (opcional)
-                      </Label>
-                      <Input
-                        type="text"
-                        placeholder="Ex: Arthrex Brasil, Smith & Nephew..."
-                        value={manufacturer3}
-                        onChange={(e) => handleManufacturerChange(e.target.value, 3)}
-                        className="w-full bg-card text-foreground border-border placeholder:text-muted-foreground text-sm"
-                        maxLength={255}
+                      <RichTextEditor
+                        id="supplier-notes"
+                        value={supplierAdditionalNotes}
+                        onChange={setSupplierAdditionalNotes}
+                        placeholder="Insira aqui informações ou descrições adicionais sobre os fornecedores..."
+                        minHeight="min-h-[100px]"
                       />
                     </div>
-                  )}
-                </div>
                   </div>
                 </div>
               </div>
@@ -4755,12 +5561,13 @@ export function SurgeryData({
                       Insira uma sugestão de justificativa clínica para o
                       procedimento
                     </Label>
-                    <Textarea
+                    <RichTextEditor
                       id="clinical-justification"
                       placeholder="Digite a sugestão de justificativa clínica..."
                       value={clinicalJustification}
-                      onChange={(e) => setClinicalJustification(e.target.value)}
-                      className="min-h-48 bg-card text-foreground border-border resize-y"
+                      onChange={(value) => setClinicalJustification(value)}
+                      minHeight="min-h-48"
+                      disabled={isGeneratingAI}
                     />
                     
                     {/* Nota Informativa sobre a IA */}
@@ -4874,7 +5681,7 @@ export function SurgeryData({
                             isPrimary: association.isPreferred || false
                           };
                           
-                          // Criar nova linha CID + Conduta
+                          // Criar nova linha CID + Conduta - FORMATO NORMALIZADO
                           const newCidWithApproach = {
                             cid: {
                               id: selectedCidForApproach.id,
@@ -4882,13 +5689,28 @@ export function SurgeryData({
                               description: selectedCidForApproach.description,
                               category: selectedCidForApproach.category
                             },
-                            surgicalApproach: {
-                              id: association.surgicalApproachId,
-                              name: association.approachName,
-                              description: association.approachDescription,
-                              isPrimary: association.isPreferred || false
-                            }
+                            // Formato normalizado do frontend
+                            sourceProcedureId: procedureId,
+                            sourceProcedureName: procedureName,
+                            sourceApproachId: association.surgicalApproachId,
+                            sourceApproachName: association.approachName
                           };
+
+                          // Verificar se o CID já existe NA MESMA CONDUTA
+                          // Dados já normalizados - usar apenas formato frontend (sourceApproachId/sourceProcedureId)
+                          const cidAlreadyExists = multipleCids.some((item: any) => {
+                            if (item.cid.id !== selectedCidForApproach.id) return false;
+                            return item.sourceProcedureId === procedureId && item.sourceApproachId === association.surgicalApproachId;
+                          });
+
+                          if (cidAlreadyExists) {
+                            toast({
+                              title: "CID já adicionado",
+                              description: `${selectedCidForApproach.code} já está associado à conduta "${association.approachName}".`,
+                              variant: "destructive",
+                            });
+                            return;
+                          }
 
                           // Adicionar à lista de CIDs (criando linha separada)
                           if (setMultipleCids) {
@@ -4999,53 +5821,36 @@ export function SurgeryData({
                                 }
                               }
                               
-                              // Auto-preencher fornecedores
-                              if (completeData.suppliers && completeData.suppliers.length > 0) {
-                                const suppliers = completeData.suppliers.slice(0, 3); // Máximo 3 fornecedores
+                              // Auto-preencher fornecedores (novo sistema dinâmico)
+                              if (completeData.suppliers && completeData.suppliers.length > 0 && setSupplierDetails) {
+                                const newSuppliers = completeData.suppliers.map((supplier: any) => ({
+                                  id: supplier.id,
+                                  companyName: supplier.companyName,
+                                  tradeName: supplier.tradeName,
+                                  cnpj: supplier.cnpj,
+                                  municipalityId: supplier.municipalityId,
+                                  address: supplier.address,
+                                  phone: supplier.phone,
+                                  email: supplier.email,
+                                  active: supplier.active,
+                                  sourceApproachId: association.surgicalApproachId,
+                                  sourceApproachName: association.approachName,
+                                  sourceProcedureId: procedureId,
+                                  sourceProcedureName: procedureName
+                                }));
                                 
-                                console.log(`🏢 Auto-preenchendo ${suppliers.length} fornecedores`);
+                                console.log(`🏢 Auto-preenchendo ${newSuppliers.length} fornecedores`);
                                 
-                                if (suppliers[0]) {
-                                  setSelectedSupplier1({
-                                    id: suppliers[0].id,
-                                    companyName: suppliers[0].companyName,
-                                    tradeName: suppliers[0].tradeName,
-                                    cnpj: suppliers[0].cnpj,
-                                    municipalityId: suppliers[0].municipalityId,
-                                    address: suppliers[0].address,
-                                    phone: suppliers[0].phone,
-                                    email: suppliers[0].email,
-                                    active: suppliers[0].active
-                                  });
-                                }
+                                // Adicionar fornecedores evitando duplicatas por CNPJ
+                                const currentSuppliers = [...(supplierDetails || [])];
+                                newSuppliers.forEach((newSupplier: any) => {
+                                  const exists = currentSuppliers.some((s: any) => s.cnpj === newSupplier.cnpj);
+                                  if (!exists) {
+                                    currentSuppliers.push(newSupplier);
+                                  }
+                                });
                                 
-                                if (suppliers[1]) {
-                                  setSelectedSupplier2({
-                                    id: suppliers[1].id,
-                                    companyName: suppliers[1].companyName,
-                                    tradeName: suppliers[1].tradeName,
-                                    cnpj: suppliers[1].cnpj,
-                                    municipalityId: suppliers[1].municipalityId,
-                                    address: suppliers[1].address,
-                                    phone: suppliers[1].phone,
-                                    email: suppliers[1].email,
-                                    active: suppliers[1].active
-                                  });
-                                }
-                                
-                                if (suppliers[2]) {
-                                  setSelectedSupplier3({
-                                    id: suppliers[2].id,
-                                    companyName: suppliers[2].companyName,
-                                    tradeName: suppliers[2].tradeName,
-                                    cnpj: suppliers[2].cnpj,
-                                    municipalityId: suppliers[2].municipalityId,
-                                    address: suppliers[2].address,
-                                    phone: suppliers[2].phone,
-                                    email: suppliers[2].email,
-                                    active: suppliers[2].active
-                                  });
-                                }
+                                setSupplierDetails(currentSuppliers);
                               }
                               
                               // Auto-preencher justificativa clínica SOMENTE se não existir
@@ -5302,7 +6107,7 @@ export const AnatomicalRegionSelector: React.FC<AnatomicalRegionSelectorProps> =
                 </p>
               )}
               
-              {/* Mostrar status de carregamento de procedimentos */}
+              {/* Mostrar status de carregamento de procedimentos fgf */}
               {loadingRegionProcedures && (
                 <div className="mt-3 flex items-center justify-center text-accent-foreground">
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
