@@ -16,7 +16,7 @@ export function PricingSection({ onPlanSelection, selectedPlanId, onAdvanceToPay
   const [hoveredPlan, setHoveredPlan] = useState<'START' | 'PRO' | 'CLINICA' | null>(null);
   const { toast } = useToast();
 
-  // Buscar planos de assinatura teaffdsfdsfdsfdsf
+  // Buscar planos de assinatura
   const { data: subscriptionPlans = [], isLoading } = useQuery({
     queryKey: ['/api/subscriptions/plans'],
   });
@@ -914,7 +914,7 @@ export function PricingSection({ onPlanSelection, selectedPlanId, onAdvanceToPay
             Voltar aos Dados
           </button>
           
-          {/* Botão dinâmico baseado no plano selecionado */}
+          {/* Botão dinâmico baseado no ddd plano selecionaddo */}
           <button
             onClick={onAdvanceToPayment}
             disabled={!selectedPlanCard}
