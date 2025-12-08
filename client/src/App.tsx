@@ -24,11 +24,8 @@ import ContactPage from "@/pages/contact-page";
 import ContactMessages from "@/pages/admin/contact-messages";
 import ManufacturerDemo from "@/pages/manufacturer-demo";
 import FontDemo from "@/pages/font-demo";
-import SubscriptionPlans from "@/pages/subscription-plans";
-import Checkout from "@/pages/checkout";
 import CheckoutSuccess from "@/pages/checkout-success";
 import CheckoutCancel from "@/pages/checkout-cancel";
-import Upgrade from "@/pages/upgrade";
 import StripeTest from "@/pages/stripe-test";
 import LogoTest from "@/pages/logo-test";
 
@@ -39,7 +36,7 @@ import SurgicalApproaches from "@/pages/admin/surgical-approaches";
 import ProcedureAssociations from "@/pages/admin/procedure-associations";
 import AdminSubscriptionPlans from "@/pages/admin/subscription-plans";
 import AdminDiscountCodes from "@/pages/admin/discount-codes";
-import TestOrderPreview from "@/pages/test-order-preview";
+import ImportStripeCodes from "@/pages/admin/import-stripe-codes";
 
 import { useEffect } from "react";
 import { AuthProvider } from "@/hooks/use-auth";
@@ -81,15 +78,10 @@ function Router() {
       <ProtectedRoute path="/admin/procedure-associations" component={ProcedureAssociations} />
       <ProtectedRoute path="/admin/subscription-plans" component={AdminSubscriptionPlans} />
       <ProtectedRoute path="/admin/discount-codes" component={AdminDiscountCodes} />
-      <ProtectedRoute path="/test-order-preview" component={TestOrderPreview} />
+      <ProtectedRoute path="/admin/import-stripe-codes" component={ImportStripeCodes} />
       <ProtectedRoute path="/manufacturer-demo" component={ManufacturerDemo} />
       <ProtectedRoute path="/font-demo" component={FontDemo} />
       <ProtectedRoute path="/logo-test" component={LogoTest} />
-      
-      {/* Subscription and Payment Routes */}
-      <ProtectedRoute path="/subscription-plans" component={SubscriptionPlans} />
-      <ProtectedRoute path="/checkout" component={Checkout} />
-      <ProtectedRoute path="/upgrade" component={Upgrade} />
       
       {/* Checkout success/cancel pages - não precisam de autenticação */}
       <Route path="/checkout/success" component={CheckoutSuccess} />
@@ -106,7 +98,7 @@ function Router() {
 
 function App() {
   useEffect(() => {
-    // Set document title
+    // Set document title 23
     document.title = "MedSync - Sistema para Ortopedistas";
   }, []);
 
