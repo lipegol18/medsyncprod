@@ -1,6 +1,6 @@
 /**
  * Rotas de Admin para Gerenciamento de Descontos
- * Endpoints para criar e gerenciar cupons e códigos promocionais do Stripe ddd
+ * Endpoints para criar e gerenciar cupons e códigos promocionais do Stripe
  */
 
 import { Router, Request, Response, NextFunction } from "express";
