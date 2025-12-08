@@ -1,6 +1,6 @@
 // Definição de tipos para o sistema MedSync
 
-// Interface para pedidos médicos (medical_orders)
+// Interface para pedidos médicos (medical_orders) dfd
 export interface MedicalOrder {
   // Identificação básica
   id?: number; // opcional para novos pedidos
@@ -52,7 +52,7 @@ export interface MedicalOrder {
   updatedAt?: string;
 }
 
-// Interface para a resposta da API de pedidos médicos  fr
+// Interface para a resposta da API de pedidos médicos fff
 export interface MedicalOrderResponse extends MedicalOrder {
   // Campos específicos da resposta
   created_at: string;
