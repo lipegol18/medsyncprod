@@ -1477,17 +1477,19 @@ export default function Orders() {
                                       {order.patientName || 'Paciente não informado'}
                                     </h3>
                                   </div>
-                                  <p className="text-sm text-medsync-blue font-bold mb-1">
-                                    {order.procedureName || 'Procedimento não informado'}
-                                    {order.surgicalApproaches && order.surgicalApproaches.length > 0 && (
-                                      <>
-                                        <br />
-                                        <span className="text-sm text-medsync-blue font-bold mb-1">
-                                          {order.surgicalApproaches.map((approach: any) => approach.name).join(', ')}
-                                        </span>
-                                      </>
+                                  <div className="text-sm text-medsync-blue font-bold mb-1">
+                                    {order.surgicalApproaches && order.surgicalApproaches.length > 0 ? (
+                                      <div className="space-y-0.5">
+                                        {order.surgicalApproaches.map((approach: any, index: number) => (
+                                          <div key={`${approach.surgicalProcedureId}-${approach.id}-${index}`}>
+                                            {approach.procedureName || order.procedureName || 'Procedimento'} → {approach.name || 'Conduta não informada'}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span>{order.procedureName || 'Procedimento não informado'}</span>
                                     )}
-                                  </p>
+                                  </div>
                                 </div>
                               </div>
                               
@@ -2244,7 +2246,7 @@ export default function Orders() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Modal de Mudança de Status */}
+      {/* Modal de Mudança de Status fff*/}
       <StatusChangeModal
         isOpen={showStatusChangeModal}
         onClose={() => {
