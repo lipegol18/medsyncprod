@@ -6,6 +6,11 @@ import {
   medicalOrderProcedures,
   medicalOrderSurgicalApproaches,
   procedures,
+  surgicalApproaches,
+  surgicalProcedures,
+  suppliers,
+  cidCodes,
+  opmeItems,
   type InsertMedicalOrderCid, 
   type InsertMedicalOrderOpmeItem, 
   type InsertMedicalOrderSupplier,
@@ -15,53 +20,72 @@ import {
 import { eq, and } from 'drizzle-orm';
 
 export class RelationalOrderService {
-  // Gerenciar CIDs do pedido
-  async updateOrderCids(orderId: number, cidIds: number[]): Promise<void> {
+  // Gerenciar CIDs do pedido - suporta formato antigo (array de IDs) e novo (com surgicalApproachId/surgicalProcedureId)
+  async updateOrderCids(orderId: number, cids: number[] | Array<{ cidCodeId: number; surgicalApproachId?: number | null; surgicalProcedureId?: number | null }>): Promise<void> {
     // Remover CIDs existentes
     await db.delete(medicalOrderCids).where(eq(medicalOrderCids.orderId, orderId));
     
     // Inserir novos CIDs
-    if (cidIds.length > 0) {
-      const cidsToInsert: InsertMedicalOrderCid[] = cidIds.map(cidId => ({
-        orderId,
-        cidCodeId: cidId
-      }));
+    if (cids.length > 0) {
+      // Detectar formato: array de números ou objetos
+      const isSimpleFormat = typeof cids[0] === 'number';
+      
+      const cidsToInsert: InsertMedicalOrderCid[] = isSimpleFormat 
+        ? (cids as number[]).map(cidId => ({
+            orderId,
+            cidCodeId: cidId
+          }))
+        : (cids as Array<{ cidCodeId: number; surgicalApproachId?: number | null; surgicalProcedureId?: number | null }>).map(cid => ({
+            orderId,
+            cidCodeId: cid.cidCodeId,
+            surgicalApproachId: cid.surgicalApproachId || null,
+            surgicalProcedureId: cid.surgicalProcedureId || null
+          }));
+      
       await db.insert(medicalOrderCids).values(cidsToInsert);
     }
   }
 
-  async getOrderCids(orderId: number): Promise<Array<{ id: number; code: string; description: string; category?: string; }>> {
+  async getOrderCids(orderId: number): Promise<Array<{ cid: { id: number; code: string; description: string; category?: string }; surgicalApproach: { id: number; name: string } | null; surgicalProcedure: { id: number; name: string } | null; }>> {
     try {
-      const orderCids = await db
-        .select({ cidCodeId: medicalOrderCids.cidCodeId })
-        .from(medicalOrderCids)
-        .where(eq(medicalOrderCids.orderId, orderId));
-      
-      // Buscar dados completos dos CIDs
-      const { cidCodes } = await import('@shared/schema');
-      const enrichedCids = await Promise.all(
-        orderCids.map(async (oc) => {
-          try {
-            const [cidData] = await db
-              .select()
-              .from(cidCodes)
-              .where(eq(cidCodes.id, oc.cidCodeId));
-            
-            return cidData ? {
-              id: cidData.id,
-              code: cidData.code,
-              description: cidData.description,
-              category: cidData.category
-            } : null;
-          } catch (error) {
-            console.error(`Erro ao buscar CID ${oc.cidCodeId}:`, error);
-            return null;
-          }
+      // OTIMIZADO: Uma única query com JOINs em vez de 3N+1 queries
+      // ORDER BY id para preservar ordem de inserção (ordem de adição)
+      const result = await db
+        .select({
+          // Dados do CID
+          cidId: cidCodes.id,
+          cidCode: cidCodes.code,
+          cidDescription: cidCodes.description,
+          cidCategory: cidCodes.category,
+          // Dados do Surgical Approach
+          approachId: surgicalApproaches.id,
+          approachName: surgicalApproaches.name,
+          // Dados do Surgical Procedure
+          procedureId: surgicalProcedures.id,
+          procedureName: surgicalProcedures.name
         })
-      );
+        .from(medicalOrderCids)
+        .leftJoin(cidCodes, eq(medicalOrderCids.cidCodeId, cidCodes.id))
+        .leftJoin(surgicalApproaches, eq(medicalOrderCids.surgicalApproachId, surgicalApproaches.id))
+        .leftJoin(surgicalProcedures, eq(medicalOrderCids.surgicalProcedureId, surgicalProcedures.id))
+        .where(eq(medicalOrderCids.orderId, orderId))
+        .orderBy(medicalOrderCids.id);
       
-      const validCids = enrichedCids.filter(cid => cid !== null) as Array<{ id: number; code: string; description: string; category?: string; }>;
-      console.log(`Encontrados ${validCids.length} CIDs para pedido ${orderId}`);
+      // Transformar resultado em formato esperado pelo frontend
+      const validCids = result
+        .filter(row => row.cidId !== null)
+        .map(row => ({
+          cid: {
+            id: row.cidId!,
+            code: row.cidCode!,
+            description: row.cidDescription!,
+            category: row.cidCategory || undefined
+          },
+          surgicalApproach: row.approachId ? { id: row.approachId, name: row.approachName! } : null,
+          surgicalProcedure: row.procedureId ? { id: row.procedureId, name: row.procedureName! } : null
+        }));
+      
+      console.log(`Encontrados ${validCids.length} CIDs para pedido ${orderId} (query otimizada)`);
       return validCids;
     } catch (error) {
       console.error(`Erro ao buscar CIDs para pedido ${orderId}:`, error);
@@ -69,60 +93,79 @@ export class RelationalOrderService {
     }
   }
 
-  // Gerenciar OPME Items do pedido
-  async updateOrderOpmeItems(orderId: number, opmeItems: { opmeItemId: number; quantity: number; procedureId?: number }[]): Promise<void> {
+  // Gerenciar OPME Items do pedido - suporta formato com surgicalApproachId/surgicalProcedureId
+  async updateOrderOpmeItems(orderId: number, opmeItems: { opmeItemId: number; quantity: number; procedureId?: number; surgicalApproachId?: number | null; surgicalProcedureId?: number | null }[]): Promise<void> {
     console.log(`=== Atualizando itens OPME para pedido ${orderId} ===`);
-    console.log('Itens OPME recebidos:', opmeItems);
+    console.log('Itens OPME recebidos:', JSON.stringify(opmeItems, null, 2));
     
-    // Remover itens OPME existentes
-    await db.delete(medicalOrderOpmeItems).where(eq(medicalOrderOpmeItems.orderId, orderId));
-    
-    // Inserir novos itens OPME
-    if (opmeItems.length > 0) {
-      const itemsToInsert: InsertMedicalOrderOpmeItem[] = opmeItems.map(item => ({
-        orderId,
-        procedureId: item.procedureId || null, // Tornar procedureId opcional
-        opmeItemId: item.opmeItemId,
-        quantity: item.quantity
-      }));
-      await db.insert(medicalOrderOpmeItems).values(itemsToInsert);
-      console.log(`Inseridos ${itemsToInsert.length} itens OPME`);
+    try {
+      // Remover itens OPME existentes
+      await db.delete(medicalOrderOpmeItems).where(eq(medicalOrderOpmeItems.orderId, orderId));
+      console.log('Itens OPME existentes removidos com sucesso');
+      
+      // Inserir novos itens OPME
+      if (opmeItems.length > 0) {
+        const itemsToInsert: InsertMedicalOrderOpmeItem[] = opmeItems.map(item => ({
+          orderId,
+          procedureId: item.procedureId || null, // Tornar procedureId opcional
+          opmeItemId: item.opmeItemId,
+          quantity: item.quantity,
+          surgicalApproachId: item.surgicalApproachId || null,
+          surgicalProcedureId: item.surgicalProcedureId || null
+        }));
+        console.log('Itens OPME preparados para inserção:', JSON.stringify(itemsToInsert, null, 2));
+        await db.insert(medicalOrderOpmeItems).values(itemsToInsert);
+        console.log(`Inseridos ${itemsToInsert.length} itens OPME com sucesso`);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar itens OPME:', error);
+      throw error;
     }
   }
 
-  async getOrderOpmeItems(orderId: number): Promise<Array<{ item: any; quantity: number }>> {
+  async getOrderOpmeItems(orderId: number): Promise<Array<{ item: { id: number; technicalName: string; commercialName?: string | null; anvisaRegistrationNumber?: string | null }; quantity: number; surgicalApproach: { id: number; name: string } | null; surgicalProcedure: { id: number; name: string } | null }>> {
     try {
-      const orderItems = await db
+      // OTIMIZADO: Uma única query com JOINs em vez de 3N+1 queries
+      // ORDER BY id para preservar ordem de inserção (ordem de adição)
+      const result = await db
         .select({
-          opmeItemId: medicalOrderOpmeItems.opmeItemId,
-          quantity: medicalOrderOpmeItems.quantity
+          // Dados do Item OPME
+          itemId: opmeItems.id,
+          technicalName: opmeItems.technicalName,
+          commercialName: opmeItems.commercialName,
+          anvisaRegistrationNumber: opmeItems.anvisaRegistrationNumber,
+          // Quantidade
+          quantity: medicalOrderOpmeItems.quantity,
+          // Dados do Surgical Approach
+          approachId: surgicalApproaches.id,
+          approachName: surgicalApproaches.name,
+          // Dados do Surgical Procedure
+          procedureId: surgicalProcedures.id,
+          procedureName: surgicalProcedures.name
         })
         .from(medicalOrderOpmeItems)
-        .where(eq(medicalOrderOpmeItems.orderId, orderId));
+        .leftJoin(opmeItems, eq(medicalOrderOpmeItems.opmeItemId, opmeItems.id))
+        .leftJoin(surgicalApproaches, eq(medicalOrderOpmeItems.surgicalApproachId, surgicalApproaches.id))
+        .leftJoin(surgicalProcedures, eq(medicalOrderOpmeItems.surgicalProcedureId, surgicalProcedures.id))
+        .where(eq(medicalOrderOpmeItems.orderId, orderId))
+        .orderBy(medicalOrderOpmeItems.id);
       
-      // Buscar dados completos dos itens OPME
-      const { opmeItems } = await import('@shared/schema');
-      const enrichedItems = await Promise.all(
-        orderItems.map(async (item) => {
-          try {
-            const [itemData] = await db
-              .select()
-              .from(opmeItems)
-              .where(eq(opmeItems.id, item.opmeItemId));
-            
-            return itemData ? {
-              item: itemData,
-              quantity: item.quantity
-            } : null;
-          } catch (error) {
-            console.error(`Erro ao buscar item OPME ${item.opmeItemId}:`, error);
-            return null;
-          }
-        })
-      );
+      // Transformar resultado em formato esperado pelo frontend
+      const validItems = result
+        .filter(row => row.itemId !== null)
+        .map(row => ({
+          item: {
+            id: row.itemId!,
+            technicalName: row.technicalName!,
+            commercialName: row.commercialName,
+            anvisaRegistrationNumber: row.anvisaRegistrationNumber
+          },
+          quantity: row.quantity,
+          surgicalApproach: row.approachId ? { id: row.approachId, name: row.approachName! } : null,
+          surgicalProcedure: row.procedureId ? { id: row.procedureId, name: row.procedureName! } : null
+        }));
       
-      const validItems = enrichedItems.filter(item => item !== null) as Array<{ item: any; quantity: number }>;
-      console.log(`Encontrados ${validItems.length} itens OPME para pedido ${orderId}`);
+      console.log(`Encontrados ${validItems.length} itens OPME para pedido ${orderId} (query otimizada)`);
       return validItems;
     } catch (error) {
       console.error(`Erro ao buscar itens OPME para pedido ${orderId}:`, error);
@@ -130,73 +173,14 @@ export class RelationalOrderService {
     }
   }
 
-  // Gerenciar Suppliers do pedido
-  async updateOrderSuppliers(orderId: number, supplierIds: number[]): Promise<void> {
-    // Remover fornecedores existentes
-    await db.delete(medicalOrderSuppliers).where(eq(medicalOrderSuppliers.orderId, orderId));
-    
-    // Inserir novos fornecedores
-    if (supplierIds.length > 0) {
-      const suppliersToInsert: InsertMedicalOrderSupplier[] = supplierIds.map(supplierId => ({
-        orderId,
-        supplierId
-      }));
-      await db.insert(medicalOrderSuppliers).values(suppliersToInsert);
-    }
-  }
-
-  async getOrderSuppliers(orderId: number): Promise<Array<{ id: number; companyName: string; tradeName: string | null; cnpj: string; municipalityId: number; address: string | null; phone: string | null; email: string | null; active: boolean; }>> {
-    try {
-      const orderSuppliers = await db
-        .select({
-          supplierId: medicalOrderSuppliers.supplierId
-        })
-        .from(medicalOrderSuppliers)
-        .where(eq(medicalOrderSuppliers.orderId, orderId));
-      
-      // Buscar dados completos dos fornecedores
-      const { suppliers } = await import('@shared/schema');
-      const enrichedSuppliers = await Promise.all(
-        orderSuppliers.map(async (os) => {
-          try {
-            const [supplierData] = await db
-              .select()
-              .from(suppliers)
-              .where(eq(suppliers.id, os.supplierId));
-            
-            return supplierData ? {
-              id: supplierData.id,
-              companyName: supplierData.companyName,
-              tradeName: supplierData.tradeName,
-              cnpj: supplierData.cnpj,
-              municipalityId: supplierData.municipalityId,
-              address: supplierData.address,
-              phone: supplierData.phone,
-              email: supplierData.email,
-              active: supplierData.active
-            } : null;
-          } catch (error) {
-            console.error(`Erro ao buscar fornecedor ${os.supplierId}:`, error);
-            return null;
-          }
-        })
-      );
-      
-      const validSuppliers = enrichedSuppliers.filter(supplier => supplier !== null) as Array<{ id: number; companyName: string; tradeName: string | null; cnpj: string; municipalityId: number; address: string | null; phone: string | null; email: string | null; active: boolean; }>;
-      console.log(`Encontrados ${validSuppliers.length} fornecedores para pedido ${orderId}`);
-      return validSuppliers;
-    } catch (error) {
-      console.error(`Erro ao buscar fornecedores para pedido ${orderId}:`, error);
-      return [];
-    }
-  }
-
   // === GESTÃO DE PROCEDIMENTOS CBHPM ===
   
-  async updateOrderProcedures(orderId: number, procedures: Array<{
+  async updateOrderProcedures(orderId: number, proceduresInput: Array<{
     procedureId: number;
     quantityRequested: number;
     isMain?: boolean;
+    surgicalApproachId?: number | null;
+    surgicalProcedureId?: number | null;
   }>): Promise<void> {
     console.log(`=== Atualizando procedimentos para pedido ${orderId} ===`);
     
@@ -204,11 +188,11 @@ export class RelationalOrderService {
     await db.delete(medicalOrderProcedures).where(eq(medicalOrderProcedures.orderId, orderId));
     
     // Inserir novos procedimentos
-    if (procedures.length > 0) {
+    if (proceduresInput.length > 0) {
       // Buscar dados de porte para determinar o procedimento principal
       const { procedures: proceduresTable } = await import('@shared/schema');
       const proceduresWithPorte = await Promise.all(
-        procedures.map(async (proc) => {
+        proceduresInput.map(async (proc) => {
           const [procedureData] = await db
             .select({ porte: proceduresTable.porte })
             .from(proceduresTable)
@@ -252,13 +236,15 @@ export class RelationalOrderService {
 
       console.log(`Procedimento principal determinado pelo maior porte: índice ${mainProcedureIndex} (porte valor: ${maxPorteValue})`);
       
-      // Criar procedimentos com marcação correta do principal
+      // Criar procedimentos com marcação correta do principal e associações cirúrgicas
       const proceduresToInsert: InsertMedicalOrderProcedure[] = proceduresWithPorte.map((proc, index) => ({
         orderId,
         procedureId: proc.procedureId,
         quantityRequested: proc.quantityRequested,
         isMain: index === mainProcedureIndex, // Procedimento com maior porte é o principal
-        status: 'em_analise'
+        status: 'em_analise',
+        surgicalApproachId: proc.surgicalApproachId || null,
+        surgicalProcedureId: proc.surgicalProcedureId || null
       }));
       
       await db.insert(medicalOrderProcedures).values(proceduresToInsert);
@@ -266,14 +252,25 @@ export class RelationalOrderService {
     }
   }
 
-  async getOrderProcedures(orderId: number): Promise<Array<MedicalOrderProcedure & { procedure?: any }>> {
+  async getOrderProcedures(orderId: number): Promise<Array<{ 
+    procedure: { id: number; code: string; name: string; description?: string | null; porte?: string | null; porteAnestesista?: string | null; numeroAuxiliares?: number | null }; 
+    quantity: number; 
+    isMain: boolean;
+    status: string;
+    quantityApproved?: number | null;
+    receivedValue?: string | null;
+    surgicalApproach: { id: number; name: string } | null; 
+    surgicalProcedure: { id: number; name: string } | null 
+  }>> {
     try {
+      // IMPORTANTE: ORDER BY id para preservar ordem de inserção (ordem de adição)
       const orderProcedures = await db
         .select()
         .from(medicalOrderProcedures)
-        .where(eq(medicalOrderProcedures.orderId, orderId));
+        .where(eq(medicalOrderProcedures.orderId, orderId))
+        .orderBy(medicalOrderProcedures.id);
       
-      // Enriquecer com dados do procedimento CBHPM
+      // Enriquecer com dados do procedimento CBHPM e associações cirúrgicas
       const enrichedProcedures = await Promise.all(
         orderProcedures.map(async (proc) => {
           try {
@@ -282,22 +279,54 @@ export class RelationalOrderService {
               .from(procedures)
               .where(eq(procedures.id, proc.procedureId));
             
-            return {
-              ...proc,
-              procedure: procedureData || null
-            };
+            // Buscar dados de surgicalApproach se existir (formato padronizado: { id, name })
+            let surgicalApproachRef: { id: number; name: string } | null = null;
+            if (proc.surgicalApproachId) {
+              const [approach] = await db
+                .select({ id: surgicalApproaches.id, name: surgicalApproaches.name })
+                .from(surgicalApproaches)
+                .where(eq(surgicalApproaches.id, proc.surgicalApproachId));
+              surgicalApproachRef = approach || null;
+            }
+            
+            // Buscar dados de surgicalProcedure se existir (formato padronizado: { id, name })
+            let surgicalProcedureRef: { id: number; name: string } | null = null;
+            if (proc.surgicalProcedureId) {
+              const [surgicalProc] = await db
+                .select({ id: surgicalProcedures.id, name: surgicalProcedures.name })
+                .from(surgicalProcedures)
+                .where(eq(surgicalProcedures.id, proc.surgicalProcedureId));
+              surgicalProcedureRef = surgicalProc || null;
+            }
+            
+            return procedureData ? {
+              procedure: {
+                id: procedureData.id,
+                code: procedureData.code,
+                name: procedureData.name,
+                description: procedureData.description,
+                porte: procedureData.porte,
+                porteAnestesista: procedureData.porteAnestesista,
+                numeroAuxiliares: procedureData.numeroAuxiliares
+              },
+              quantity: proc.quantityRequested,
+              isMain: proc.isMain,
+              status: proc.status,
+              quantityApproved: proc.quantityApproved,
+              receivedValue: proc.receivedValue,
+              surgicalApproach: surgicalApproachRef,
+              surgicalProcedure: surgicalProcedureRef
+            } : null;
           } catch (error) {
             console.error(`Erro ao buscar procedimento ${proc.procedureId}:`, error);
-            return {
-              ...proc,
-              procedure: null
-            };
+            return null;
           }
         })
       );
       
-      console.log(`Encontrados ${enrichedProcedures.length} procedimentos para pedido ${orderId}`);
-      return enrichedProcedures;
+      const validProcedures = enrichedProcedures.filter(p => p !== null) as Array<{ procedure: { id: number; code: string; name: string; description?: string | null; porte?: string | null; porteAnestesista?: string | null; numeroAuxiliares?: number | null }; quantity: number; isMain: boolean; status: string; quantityApproved?: number | null; receivedValue?: string | null; surgicalApproach: { id: number; name: string } | null; surgicalProcedure: { id: number; name: string } | null }>;
+      console.log(`Encontrados ${validProcedures.length} procedimentos para pedido ${orderId}`);
+      return validProcedures;
     } catch (error) {
       console.error(`Erro ao buscar procedimentos para pedido ${orderId}:`, error);
       return [];
@@ -383,6 +412,102 @@ export class RelationalOrderService {
     } catch (error) {
       console.error("Erro ao remover procedimento:", error);
       return false;
+    }
+  }
+
+  // === GESTÃO DE FORNECEDORES ===
+
+  // Gerenciar Fornecedores do pedido - suporta formato com surgicalApproachId/surgicalProcedureId para agrupamento por conduta
+  async updateOrderSuppliers(orderId: number, supplierItems: Array<{ 
+    supplierId: number; 
+    surgicalApproachId?: number | null; 
+    surgicalProcedureId?: number | null;
+    isApproved?: boolean;
+    approvedBy?: number | null;
+    approvedAt?: Date | null;
+  }>): Promise<void> {
+    console.log(`=== Atualizando fornecedores para pedido ${orderId} ===`);
+    console.log('🔍 DEBUG BACKEND - Fornecedores recebidos:', JSON.stringify(supplierItems, null, 2));
+    console.log('🔍 DEBUG BACKEND - Detalhamento de cada fornecedor:');
+    supplierItems.forEach((item, index) => {
+      console.log(`  [${index}] supplierId=${item.supplierId}, surgicalApproachId=${item.surgicalApproachId}, surgicalProcedureId=${item.surgicalProcedureId}`);
+    });
+    
+    // Remover fornecedores existentes
+    await db.delete(medicalOrderSuppliers).where(eq(medicalOrderSuppliers.orderId, orderId));
+    
+    // Inserir novos fornecedores
+    if (supplierItems.length > 0) {
+      const itemsToInsert: InsertMedicalOrderSupplier[] = supplierItems.map(item => ({
+        orderId,
+        supplierId: item.supplierId,
+        surgicalApproachId: item.surgicalApproachId || null,
+        surgicalProcedureId: item.surgicalProcedureId || null,
+        isApproved: item.isApproved || false,
+        approvedBy: item.approvedBy || null,
+        approvedAt: item.approvedAt || null
+      }));
+      await db.insert(medicalOrderSuppliers).values(itemsToInsert);
+      console.log(`Inseridos ${itemsToInsert.length} fornecedores`);
+    }
+  }
+
+  async getOrderSuppliers(orderId: number): Promise<Array<{ 
+    supplier: { id: number; name: string; cnpj?: string | null; phone?: string | null; email?: string | null }; 
+    surgicalApproach: { id: number; name: string } | null; 
+    surgicalProcedure: { id: number; name: string } | null;
+    isApproved: boolean | null;
+  }>> {
+    try {
+      // OTIMIZADO: Uma única query com JOINs em vez de 3N+1 queries
+      // ORDER BY id para preservar ordem de inserção (ordem de adição)
+      const result = await db
+        .select({
+          // Dados do Fornecedor
+          supplierId: suppliers.id,
+          companyName: suppliers.companyName,
+          tradeName: suppliers.tradeName,
+          cnpj: suppliers.cnpj,
+          phone: suppliers.phone,
+          email: suppliers.email,
+          // Status de aprovação
+          isApproved: medicalOrderSuppliers.isApproved,
+          // Dados do Surgical Approach
+          approachId: surgicalApproaches.id,
+          approachName: surgicalApproaches.name,
+          // Dados do Surgical Procedure
+          procedureId: surgicalProcedures.id,
+          procedureName: surgicalProcedures.name
+        })
+        .from(medicalOrderSuppliers)
+        .leftJoin(suppliers, eq(medicalOrderSuppliers.supplierId, suppliers.id))
+        .leftJoin(surgicalApproaches, eq(medicalOrderSuppliers.surgicalApproachId, surgicalApproaches.id))
+        .leftJoin(surgicalProcedures, eq(medicalOrderSuppliers.surgicalProcedureId, surgicalProcedures.id))
+        .where(eq(medicalOrderSuppliers.orderId, orderId))
+        .orderBy(medicalOrderSuppliers.id);
+      
+      // Transformar resultado em formato esperado pelo frontend
+      const validSuppliers = result
+        .filter(row => row.supplierId !== null)
+        .map(row => ({
+          supplier: {
+            id: row.supplierId!,
+            name: row.companyName!,
+            tradeName: row.tradeName,
+            cnpj: row.cnpj,
+            phone: row.phone,
+            email: row.email
+          },
+          surgicalApproach: row.approachId ? { id: row.approachId, name: row.approachName! } : null,
+          surgicalProcedure: row.procedureId ? { id: row.procedureId, name: row.procedureName! } : null,
+          isApproved: row.isApproved
+        }));
+      
+      console.log(`Encontrados ${validSuppliers.length} fornecedores para pedido ${orderId} (query otimizada)`);
+      return validSuppliers;
+    } catch (error) {
+      console.error(`Erro ao buscar fornecedores para pedido ${orderId}:`, error);
+      return [];
     }
   }
 
