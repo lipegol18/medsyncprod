@@ -208,7 +208,7 @@ router.post('/upload-attachments/:orderId', uploadForOrder.array('files', 10), a
         size: file.size,
         uploadedAt: new Date().toISOString(),
         orderId: parseInt(orderId),
-        source: 'order_details' as 'order_details' // Marcando como anexo adicionado na tela de detalhes
+        source: 'order_details' as 'order_details' // Marcando como anexo adicionado na tela de detalhes ff
       });
       
       console.log(`📁 Arquivo salvo em: ${newFilePath}`);
@@ -268,7 +268,7 @@ router.patch('/orders/:orderId/attachments', async (req, res) => {
       return res.status(401).json({ error: 'Usuário não autenticado' });
     }
 
-    // Validar se o pedido existe e pertence ao usuário
+    // Validar se o pedido existe e pertence ao usuário fff
     const order = await storage.getMedicalOrder(parseInt(orderId));
     if (!order) {
       return res.status(404).json({ error: 'Pedido não encontrado' });
@@ -294,6 +294,7 @@ router.patch('/orders/:orderId/attachments', async (req, res) => {
 router.delete('/delete-attachment/:orderId/:filename', async (req, res) => {
   try {
     const { orderId, filename } = req.params;
+    const decodedFilename = decodeURIComponent(filename);
     
     if (!req.user) {
       return res.status(401).json({ error: 'Usuário não autenticado' });
@@ -309,16 +310,69 @@ router.delete('/delete-attachment/:orderId/:filename', async (req, res) => {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
-    const filePath = path.join(process.cwd(), 'uploads', 'orders', orderId, filename);
+    const filePath = path.join(process.cwd(), 'uploads', 'orders', orderId, decodedFilename);
     console.log('🗑️ Tentando excluir arquivo:', filePath);
+    console.log('🔍 Filename recebido:', decodedFilename);
     
+    // 1. Tentar remover o arquivo físico
+    let fileDeleted = false;
     try {
       await fs.unlink(filePath);
-      console.log('✅ Arquivo excluído com sucesso:', filename);
-      res.json({ success: true, message: 'Arquivo excluído com sucesso' });
-    } catch (error) {
-      console.error('❌ Erro ao remover arquivo:', error);
-      res.status(404).json({ error: 'Arquivo não encontrado' });
+      fileDeleted = true;
+      console.log('✅ Arquivo físico excluído com sucesso:', decodedFilename);
+    } catch (fileError: any) {
+      // Se o arquivo não existe, ainda assim continuar para limpar o banco de dados
+      if (fileError.code === 'ENOENT') {
+        console.log('⚠️ Arquivo físico não encontrado, continuando para limpar banco de dados');
+      } else {
+        console.error('❌ Erro ao remover arquivo físico:', fileError);
+        return res.status(500).json({ error: 'Erro ao remover arquivo' });
+      }
+    }
+    
+    // 2. Atualizar o banco de dados removendo o anexo do array
+    try {
+      const currentAttachments = order.attachments || [];
+      const updatedAttachments = currentAttachments.filter((attachment: any) => {
+        // Extrair o basename da URL do anexo (última parte do caminho)
+        const urlBasename = attachment.url?.split('/').pop() || '';
+        // Também verificar pelo campo filename para compatibilidade
+        const storedFilename = attachment.filename || '';
+        
+        // Remover se o basename da URL corresponder OU se o filename corresponder
+        // (considerando que o filename da URL pode ter timestamp prefixado)
+        const matchesUrl = urlBasename === decodedFilename;
+        const matchesFilename = storedFilename === decodedFilename;
+        const urlContainsFilename = urlBasename.includes(storedFilename) && storedFilename.length > 0;
+        
+        console.log(`🔍 Comparando: urlBasename="${urlBasename}", storedFilename="${storedFilename}", target="${decodedFilename}"`);
+        
+        // Manter o anexo apenas se NÃO corresponder a nenhum critério
+        return !matchesUrl && !matchesFilename;
+      });
+      
+      // 3. Salvar os anexos atualizados no banco de dados
+      await storage.updateMedicalOrder(parseInt(orderId), {
+        attachments: updatedAttachments
+      });
+      
+      console.log('✅ Registro do anexo removido do banco de dados');
+      console.log(`📊 Anexos antes: ${currentAttachments.length}, depois: ${updatedAttachments.length}`);
+      
+      res.json({ 
+        success: true, 
+        message: 'Arquivo excluído com sucesso',
+        fileDeleted,
+        attachmentsRemoved: currentAttachments.length - updatedAttachments.length
+      });
+    } catch (dbError) {
+      console.error('❌ Erro ao atualizar banco de dados:', dbError);
+      // Se o arquivo foi deletado mas o banco falhou, informar o erro específico
+      return res.status(500).json({ 
+        error: 'Erro ao atualizar banco de dados',
+        fileDeleted,
+        warning: fileDeleted ? 'O arquivo físico foi removido, mas o registro no banco de dados pode estar inconsistente' : undefined
+      });
     }
   } catch (error) {
     console.error('❌ Erro ao remover anexo:', error);
