@@ -5,28 +5,47 @@ import { isAuthenticated } from './auth';
 
 const router = Router();
 
-// Schema para validação
+// Schema para validação - suporta múltiplos formatos de entrada
 const updateCidsSchema = z.object({
-  cidIds: z.array(z.number()).default([])
+  // Formato legado: array de IDs simples
+  cidIds: z.array(z.number()).optional(),
+  // Formato novo: array de objetos com associações cirúrgicas
+  cids: z.array(z.object({
+    cidId: z.number(),
+    surgicalApproachId: z.number().nullable().optional(),
+    surgicalProcedureId: z.number().nullable().optional()
+  })).optional()
 });
 
 const updateOpmeItemsSchema = z.object({
   opmeItems: z.array(z.object({
     opmeItemId: z.number(),
     quantity: z.number().min(1),
-    procedureId: z.number().optional()
+    procedureId: z.number().optional(),
+    surgicalApproachId: z.number().nullable().optional(),
+    surgicalProcedureId: z.number().nullable().optional()
   })).default([])
 });
 
 const updateSuppliersSchema = z.object({
-  supplierIds: z.array(z.number()).default([])
+  // Formato legado: array de IDs simples
+  supplierIds: z.array(z.number()).optional(),
+  // Formato novo: array de objetos com associações cirúrgicas
+  suppliers: z.array(z.object({
+    supplierId: z.number(),
+    surgicalApproachId: z.number().nullable().optional(),
+    surgicalProcedureId: z.number().nullable().optional(),
+    isApproved: z.boolean().optional()
+  })).optional()
 });
 
 const updateProceduresSchema = z.object({
   procedures: z.array(z.object({
     procedureId: z.number(),
     quantityRequested: z.number().min(1),
-    isMain: z.boolean().optional()
+    isMain: z.boolean().optional(),
+    surgicalApproachId: z.number().nullable().optional(),
+    surgicalProcedureId: z.number().nullable().optional()
   })).default([])
 });
 
@@ -36,7 +55,7 @@ const addProcedureSchema = z.object({
 });
 
 // Rotas para CIDs
-router.get('/orders/:orderId/cids', async (req, res) => {
+router.get('/orders/:orderId/cids', isAuthenticated, async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId);
     console.log(`=== GET /orders/${orderId}/cids ===`);
@@ -52,9 +71,29 @@ router.get('/orders/:orderId/cids', async (req, res) => {
 router.put('/orders/:orderId/cids', isAuthenticated, async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId);
-    const { cidIds } = updateCidsSchema.parse(req.body);
+    const { cidIds, cids } = updateCidsSchema.parse(req.body);
     
-    await relationalOrderService.updateOrderCids(orderId, cidIds);
+    // Converter para formato unificado com associações cirúrgicas
+    let cidsToSave: { cidCodeId: number; surgicalApproachId?: number | null; surgicalProcedureId?: number | null }[] = [];
+    
+    if (cids && cids.length > 0) {
+      // Novo formato com associações
+      cidsToSave = cids.map(c => ({
+        cidCodeId: c.cidId,
+        surgicalApproachId: c.surgicalApproachId || null,
+        surgicalProcedureId: c.surgicalProcedureId || null
+      }));
+    } else if (cidIds && cidIds.length > 0) {
+      // Formato legado (apenas IDs)
+      cidsToSave = cidIds.map(id => ({
+        cidCodeId: id,
+        surgicalApproachId: null,
+        surgicalProcedureId: null
+      }));
+    }
+    
+    console.log(`PUT /orders/${orderId}/cids - Salvando ${cidsToSave.length} CIDs:`, cidsToSave);
+    await relationalOrderService.updateOrderCids(orderId, cidsToSave);
     res.json({ message: 'CIDs atualizados com sucesso' });
   } catch (error) {
     console.error('Erro ao atualizar CIDs do pedido:', error);
@@ -63,7 +102,7 @@ router.put('/orders/:orderId/cids', isAuthenticated, async (req, res) => {
 });
 
 // Rotas para OPME Items
-router.get('/orders/:orderId/opme-items', async (req, res) => {
+router.get('/orders/:orderId/opme-items', isAuthenticated, async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId);
     console.log(`=== GET /orders/${orderId}/opme-items ===`);
@@ -102,7 +141,7 @@ router.put('/orders/:orderId/opme-items', isAuthenticated, async (req, res) => {
 });
 
 // Rotas para Suppliers
-router.get('/orders/:orderId/suppliers', async (req, res) => {
+router.get('/orders/:orderId/suppliers', isAuthenticated, async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId);
     console.log(`=== GET /orders/${orderId}/suppliers ===`);
@@ -118,9 +157,39 @@ router.get('/orders/:orderId/suppliers', async (req, res) => {
 router.put('/orders/:orderId/suppliers', isAuthenticated, async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId);
-    const { supplierIds } = updateSuppliersSchema.parse(req.body);
+    console.log(`=== PUT /orders/${orderId}/suppliers ===`);
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
     
-    await relationalOrderService.updateOrderSuppliers(orderId, supplierIds);
+    const { supplierIds, suppliers } = updateSuppliersSchema.parse(req.body);
+    
+    // Converter para formato unificado com associações cirúrgicas
+    let suppliersToSave: { 
+      supplierId: number; 
+      surgicalApproachId?: number | null; 
+      surgicalProcedureId?: number | null;
+      isApproved?: boolean;
+    }[] = [];
+    
+    if (suppliers && suppliers.length > 0) {
+      // Novo formato com associações
+      suppliersToSave = suppliers.map(s => ({
+        supplierId: s.supplierId,
+        surgicalApproachId: s.surgicalApproachId || null,
+        surgicalProcedureId: s.surgicalProcedureId || null,
+        isApproved: s.isApproved || false
+      }));
+    } else if (supplierIds && supplierIds.length > 0) {
+      // Formato legado (apenas IDs)
+      suppliersToSave = supplierIds.map(id => ({
+        supplierId: id,
+        surgicalApproachId: null,
+        surgicalProcedureId: null,
+        isApproved: false
+      }));
+    }
+    
+    console.log(`PUT /orders/${orderId}/suppliers - Salvando ${suppliersToSave.length} fornecedores:`, suppliersToSave);
+    await relationalOrderService.updateOrderSuppliers(orderId, suppliersToSave);
     res.json({ message: 'Fornecedores atualizados com sucesso' });
   } catch (error) {
     console.error('Erro ao atualizar fornecedores do pedido:', error);
@@ -131,7 +200,7 @@ router.put('/orders/:orderId/suppliers', isAuthenticated, async (req, res) => {
 // === ROTAS PARA PROCEDIMENTOS CBHPM ===
 
 // GET /api/orders/:orderId/procedures - Buscar procedimentos de um pedido
-router.get('/orders/:orderId/procedures', async (req, res) => {
+router.get('/orders/:orderId/procedures', isAuthenticated, async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId);
     console.log(`=== GET /orders/${orderId}/procedures ===`);
@@ -150,7 +219,7 @@ router.get('/orders/:orderId/procedures', async (req, res) => {
 });
 
 // PUT /api/orders/:orderId/procedures - Atualizar procedimentos de um pedido
-router.put('/orders/:orderId/procedures', async (req, res) => {
+router.put('/orders/:orderId/procedures', isAuthenticated, async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId);
     console.log(`=== PUT /orders/${orderId}/procedures ===`);
@@ -174,7 +243,7 @@ router.put('/orders/:orderId/procedures', async (req, res) => {
 });
 
 // POST /api/orders/:orderId/procedures - Adicionar procedimento a um pedido
-router.post('/orders/:orderId/procedures', async (req, res) => {
+router.post('/orders/:orderId/procedures', isAuthenticated, async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId);
     console.log(`=== POST /orders/${orderId}/procedures ===`);
@@ -204,7 +273,7 @@ router.post('/orders/:orderId/procedures', async (req, res) => {
 });
 
 // DELETE /api/orders/procedures/:procedureOrderId - Remover procedimento de um pedido
-router.delete('/orders/procedures/:procedureOrderId', async (req, res) => {
+router.delete('/orders/procedures/:procedureOrderId', isAuthenticated, async (req, res) => {
   try {
     const procedureOrderId = parseInt(req.params.procedureOrderId);
     console.log(`=== DELETE /orders/procedures/${procedureOrderId} ===`);
