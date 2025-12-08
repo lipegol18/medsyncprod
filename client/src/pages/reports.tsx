@@ -62,7 +62,7 @@ import {
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 
-// Componente para listar cirurgias por hospital   adadadsada
+// Componente para listar cirurgias por hospital
 function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
   const {
     data: hospitalSurgeries,
@@ -1161,7 +1161,7 @@ export default function Reports() {
       // Se houvesse urgência, desenharia um setor sobre o círculo azul
       // Como só há eletivas (100%), o círculo azul representa tudo
 
-      // Adicionar legendas
+      // Adicionar legendas dff
       let legendY = yPosition + 70;
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
@@ -1398,7 +1398,7 @@ export default function Reports() {
     return queryString ? `${baseUrl}${separator}${queryString}` : baseUrl;
   };
 
-  // Função para aplicar filtros
+  // Função para aplicar filtros  fff
   const handleApplyFilters = () => {
     setFiltersLoading(true);
 
