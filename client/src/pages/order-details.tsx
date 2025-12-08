@@ -403,8 +403,26 @@ const AttachmentUploader = ({ orderId }: { orderId: number }) => {
   );
 };
 
+// Função para extrair observação de um grupo específico do texto de observações adicionais
+const extractGroupNotes = (fullNotes: string, procedureName: string, approachName: string): string => {
+  if (!fullNotes) return '';
+  
+  // Padrão do subtítulo: ### Procedimento → Conduta
+  const escapedProcedure = procedureName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedApproach = approachName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  // Regex para encontrar a seção (com ou sem IDs legados)
+  const sectionRegex = new RegExp(
+    `### ${escapedProcedure} → ${escapedApproach}(?: \\[PID:\\d+\\]\\[AID:\\d+\\])?\\n([\\s\\S]*?)(?=### |$)`,
+    'g'
+  );
+  
+  const match = sectionRegex.exec(fullNotes);
+  return match ? match[1].trim() : '';
+};
+
 // Componente para lista de procedimentos CBHPM
-const ProceduresList = ({ orderId, orderStatus }: { orderId: number; orderStatus: string }) => {
+const ProceduresList = ({ orderId, orderStatus, cbhpmAdditionalNotes }: { orderId: number; orderStatus: string; cbhpmAdditionalNotes?: string }) => {
   const { data: procedures, isLoading, error } = useQuery({
     queryKey: ['/api/medical-orders', orderId, 'procedures'],
     queryFn: () => apiRequest(`/api/medical-orders/${orderId}/procedures`, 'GET'),
@@ -596,104 +614,158 @@ const ProceduresList = ({ orderId, orderStatus }: { orderId: number; orderStatus
     );
   }
 
-  // Ordenar procedimentos por porte (maior para menor)
-  const sortedProcedures = [...procedures].sort((a: ProcedureItem, b: ProcedureItem) => 
-    parsePorteValue(b.procedureDetails.porte) - parsePorteValue(a.procedureDetails.porte)
-  );
+  // Agrupar procedimentos por combinação procedimento cirúrgico + conduta
+  const groupedProcedures: Record<string, {
+    surgicalProcedureName: string;
+    surgicalApproachName: string;
+    procedures: any[];
+  }> = {};
+  
+  procedures.forEach((proc: any) => {
+    const surgicalProcId = proc.surgicalProcedureId || 0;
+    const surgicalApprId = proc.surgicalApproachId || 0;
+    const key = `${surgicalProcId}-${surgicalApprId}`;
+    
+    if (!groupedProcedures[key]) {
+      groupedProcedures[key] = {
+        surgicalProcedureName: proc.surgicalProcedureName || 'Procedimento não especificado',
+        surgicalApproachName: proc.surgicalApproachName || 'Conduta não especificada',
+        procedures: []
+      };
+    }
+    
+    groupedProcedures[key].procedures.push(proc);
+  });
+  
+  // Ordenar procedimentos dentro de cada grupo por porte
+  Object.values(groupedProcedures).forEach(group => {
+    group.procedures.sort((a: ProcedureItem, b: ProcedureItem) => 
+      parsePorteValue(b.procedureDetails.porte) - parsePorteValue(a.procedureDetails.porte)
+    );
+  });
 
   return (
-    <div className="space-y-4">
-      {sortedProcedures.map((procedure: ProcedureItem, index: number) => {
-        const statusConfig = getProcedureStatusFromOrder(orderStatus, procedure.status);
-        const StatusIcon = statusConfig.icon;
+    <div className="space-y-6">
+      {Object.entries(groupedProcedures).map(([key, group]) => {
+        // Extrair observações adicionais para este grupo
+        const groupNotes = cbhpmAdditionalNotes ? extractGroupNotes(
+          cbhpmAdditionalNotes, 
+          group.surgicalProcedureName, 
+          group.surgicalApproachName
+        ) : '';
         
         return (
-          <div key={procedure.id} className="bg-white border border-border rounded-md p-4">
-            <div className="flex justify-between items-start mb-3">
-              <div className="flex-1">
-                <div className="flex items-start gap-3 flex-wrap">
-                  <span className="inline-flex items-center justify-center px-3 py-1 bg-medsync-blue text-white text-sm font-semibold rounded flex-shrink-0">
-                    {procedure.code}
-                  </span>
-                  <div className="flex items-center gap-2 flex-wrap flex-1">
-                    <h3 className="font-medium text-foreground">
-                      {procedure.name}
-                    </h3>
-                    {index === 0 && (
-                      <Badge variant="secondary" className="text-xs bg-medsync-blue text-white">
-                        Procedimento Principal
-                      </Badge>
+          <div key={key} className="space-y-3">
+            {/* Subtítulo do grupo */}
+            <div className="flex items-center gap-2 pb-2 border-b border-border">
+              <span className="text-sm font-semibold text-medsync-blue">
+                {group.surgicalProcedureName} → {group.surgicalApproachName}
+              </span>
+            </div>
+            
+            {/* Procedimentos do grupo */}
+            <div className="space-y-4 pl-2">
+              {group.procedures.map((procedure: ProcedureItem, index: number) => {
+                const statusConfig = getProcedureStatusFromOrder(orderStatus, procedure.status);
+                const StatusIcon = statusConfig.icon;
+                
+                return (
+                  <div key={procedure.id} className="bg-white border border-border rounded-md p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-start gap-3 flex-wrap">
+                          <span className="inline-flex items-center justify-center px-3 py-1 bg-medsync-blue text-white text-sm font-semibold rounded flex-shrink-0">
+                            {procedure.code}
+                          </span>
+                          <div className="flex items-center gap-2 flex-wrap flex-1">
+                            <h3 className="font-medium text-foreground">
+                              {procedure.name}
+                            </h3>
+                            {procedure.isMain && (
+                              <Badge variant="secondary" className="text-xs bg-medsync-blue text-white">
+                                Procedimento Principal
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {statusConfig.showStatus && (
+                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${statusConfig.bgColor}`}>
+                          <StatusIcon className={`h-4 w-4 ${statusConfig.color}`} />
+                          <span className={`text-sm font-medium ${statusConfig.color}`}>
+                            {statusConfig.label}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-foreground">Quantidade Solicitada:</span>{' '}
+                          <span className="text-foreground font-semibold">{procedure.quantityRequested}</span>
+                        </div>
+                        {(orderStatus === 'aceito' || orderStatus === 'autorizado_parcial' || orderStatus === 'cirurgia_realizada' || orderStatus === 'recebido') && (
+                          <div>
+                            <span className="text-foreground">Quantidade Aprovada:</span>{' '}
+                            <span className="text-foreground font-semibold">
+                              {orderStatus === 'aceito' || orderStatus === 'cirurgia_realizada' ? 
+                                procedure.quantityRequested :
+                                (procedure.quantityApproved !== null ? procedure.quantityApproved : 'Pendente')
+                              }
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {(orderStatus === 'cirurgia_realizada' || orderStatus === 'recebido') && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4 text-emerald-600" />
+                            <span className="text-foreground">Valor Recebido:</span>
+                          </div>
+                          <div className="ml-6">
+                            <span className="text-foreground font-semibold">
+                              {formatCurrency(procedure.receivedValue)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-foreground">Porte:</span>{' '}
+                          <span className="text-foreground">
+                            {procedure.procedureDetails.porte || 'Não informado'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-foreground">Auxiliares:</span>{' '}
+                          <span className="text-foreground">
+                            {procedure.procedureDetails.numeroAuxiliares || 'Não informado'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {procedure.description && (
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-foreground text-xs">
+                          {procedure.description}
+                        </p>
+                      </div>
                     )}
                   </div>
-                </div>
-              </div>
-              
-              {statusConfig.showStatus && (
-                <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${statusConfig.bgColor}`}>
-                  <StatusIcon className={`h-4 w-4 ${statusConfig.color}`} />
-                  <span className={`text-sm font-medium ${statusConfig.color}`}>
-                    {statusConfig.label}
-                  </span>
-                </div>
-              )}
+                );
+              })}
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="space-y-2">
-                <div>
-                  <span className="text-foreground">Quantidade Solicitada:</span>{' '}
-                  <span className="text-foreground font-semibold">{procedure.quantityRequested}</span>
-                </div>
-                {/* Mostrar quantidade aprovada baseada no status do pedido */}
-                {(orderStatus === 'aceito' || orderStatus === 'autorizado_parcial' || orderStatus === 'cirurgia_realizada' || orderStatus === 'recebido') && (
-                  <div>
-                    <span className="text-foreground">Quantidade Aprovada:</span>{' '}
-                    <span className="text-foreground font-semibold">
-                      {orderStatus === 'aceito' || orderStatus === 'cirurgia_realizada' ? 
-                        procedure.quantityRequested : // Para pedidos aceitos totalmente, quantidade aprovada = solicitada
-                        (procedure.quantityApproved !== null ? procedure.quantityApproved : 'Pendente')
-                      }
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Mostrar valor recebido apenas para pedidos finalizados */}
-              {(orderStatus === 'cirurgia_realizada' || orderStatus === 'recebido') && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-emerald-600" />
-                    <span className="text-foreground">Valor Recebido:</span>
-                  </div>
-                  <div className="ml-6">
-                    <span className="text-foreground font-semibold">
-                      {formatCurrency(procedure.receivedValue)}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <div>
-                  <span className="text-foreground">Porte:</span>{' '}
-                  <span className="text-foreground">
-                    {procedure.procedureDetails.porte || 'Não informado'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-foreground">Auxiliares:</span>{' '}
-                  <span className="text-foreground">
-                    {procedure.procedureDetails.numeroAuxiliares || 'Não informado'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {procedure.description && (
-              <div className="mt-3 pt-3 border-t border-border">
-                <p className="text-foreground text-xs">
-                  {procedure.description}
-                </p>
+            
+            {/* Observações adicionais do grupo */}
+            {groupNotes && (
+              <div className="mt-3 pl-2 p-3 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-md">
+                <p className="text-sm font-medium text-medsync-blue mb-1">Observações Adicionais:</p>
+                <p className="text-sm text-foreground whitespace-pre-line">{groupNotes}</p>
               </div>
             )}
           </div>
@@ -706,7 +778,6 @@ const ProceduresList = ({ orderId, orderStatus }: { orderId: number; orderStatus
           <span className="text-foreground">
             Total de procedimentos: <span className="text-foreground font-semibold">{procedures.length}</span>
           </span>
-          {/* Mostrar valor total apenas para pedidos finalizados */}
           {(orderStatus === 'cirurgia_realizada' || orderStatus === 'recebido') && (
             <span className="text-foreground">
               Valor total recebido:{' '}
@@ -726,7 +797,7 @@ const ProceduresList = ({ orderId, orderStatus }: { orderId: number; orderStatus
 };
 
 // Componente para exibir materiais OPME
-const OpmeItemsList = ({ orderId }: { orderId: number }) => {
+const OpmeItemsList = ({ orderId, opmeAdditionalNotes }: { orderId: number; opmeAdditionalNotes?: string }) => {
   const { data: opmeItems, isLoading, isError } = useQuery<OpmeItem[]>({
     queryKey: [`/api/medical-orders/${orderId}/opme-items`],
     queryFn: async () => {
@@ -773,6 +844,31 @@ const OpmeItemsList = ({ orderId }: { orderId: number }) => {
     );
   }
 
+  // Agrupar materiais OPME por combinação procedimento cirúrgico + conduta
+  const groupedOpme: Record<string, {
+    surgicalProcedureName: string;
+    surgicalApproachName: string;
+    items: any[];
+  }> = {};
+  
+  if (opmeItems) {
+    opmeItems.forEach((item: any) => {
+      const surgicalProcId = item.surgicalProcedureId || 0;
+      const surgicalApprId = item.surgicalApproachId || 0;
+      const key = `${surgicalProcId}-${surgicalApprId}`;
+      
+      if (!groupedOpme[key]) {
+        groupedOpme[key] = {
+          surgicalProcedureName: item.surgicalProcedureName || 'Procedimento não especificado',
+          surgicalApproachName: item.surgicalApproachName || 'Conduta não especificada',
+          items: []
+        };
+      }
+      
+      groupedOpme[key].items.push(item);
+    });
+  }
+
   return (
     <Card className="border border-border bg-card">
       <CardHeader>
@@ -781,75 +877,105 @@ const OpmeItemsList = ({ orderId }: { orderId: number }) => {
       </CardHeader>
       <CardContent>
         {opmeItems && opmeItems.length > 0 ? (
-          <div className="space-y-2">
-            {opmeItems.map((item: OpmeItem, index: number) => (
-              <div key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-sky-50'} border border-border rounded-md p-3`}>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h3 className="font-medium text-foreground">
-                      {item.opmeItem.commercialName}
-                    </h3>
+          <div className="space-y-6">
+            {Object.entries(groupedOpme).map(([key, group]) => {
+              const groupNotes = opmeAdditionalNotes ? extractGroupNotes(
+                opmeAdditionalNotes, 
+                group.surgicalProcedureName, 
+                group.surgicalApproachName
+              ) : '';
+              
+              return (
+                <div key={key} className="space-y-3">
+                  {/* Subtítulo do grupo */}
+                  <div className="flex items-center gap-2 pb-2 border-b border-border">
+                    <span className="text-sm font-semibold text-medsync-blue">
+                      {group.surgicalProcedureName} → {group.surgicalApproachName}
+                    </span>
                   </div>
-                  <Badge variant="secondary" className="bg-medsync-blue text-white">
-                    Qtd: {item.quantity}
-                  </Badge>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                  {item.opmeItem.anvisaRegistrationNumber && (
-                    <div>
-                      <span className="text-foreground">Registro ANVISA:</span>{' '}
-                      <span className="text-foreground">{item.opmeItem.anvisaRegistrationNumber}</span>
-                    </div>
-                  )}
                   
-                  {item.opmeItem.processNumber && (
-                    <div>
-                      <span className="text-foreground">Processo:</span>{' '}
-                      <span className="text-foreground">{item.opmeItem.processNumber}</span>
-                    </div>
-                  )}
-                  
-                  {item.opmeItem.riskClass && (
-                    <div>
-                      <span className="text-foreground">Classe de Risco:</span>{' '}
-                      <span className="text-foreground">{item.opmeItem.riskClass}</span>
-                    </div>
-                  )}
-                  
-                  {item.opmeItem.countryOfManufacture && (
-                    <div>
-                      <span className="text-foreground">País:</span>{' '}
-                      <span className="text-foreground">{item.opmeItem.countryOfManufacture}</span>
-                    </div>
-                  )}
-                </div>
-
-                {(item.opmeItem.registrationDate || item.opmeItem.expirationDate) && (
-                  <div className="mt-4 pt-4 border-t border-border">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                      {item.opmeItem.registrationDate && (
-                        <div>
-                          <span className="text-foreground">Data de Registro:</span>{' '}
-                          <span className="text-foreground">
-                            {format(new Date(item.opmeItem.registrationDate), "dd/MM/yyyy", { locale: ptBR })}
-                          </span>
+                  {/* Itens OPME do grupo */}
+                  <div className="space-y-2 pl-2">
+                    {group.items.map((item: OpmeItem, index: number) => (
+                      <div key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-sky-50'} border border-border rounded-md p-3`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h3 className="font-medium text-foreground">
+                              {item.opmeItem.commercialName}
+                            </h3>
+                          </div>
+                          <Badge variant="secondary" className="bg-medsync-blue text-white">
+                            Qtd: {item.quantity}
+                          </Badge>
                         </div>
-                      )}
-                      
-                      {item.opmeItem.expirationDate && (
-                        <div>
-                          <span className="text-foreground">Validade:</span>{' '}
-                          <span className="text-foreground">
-                            {format(new Date(item.opmeItem.expirationDate), "dd/MM/yyyy", { locale: ptBR })}
-                          </span>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                          {item.opmeItem.anvisaRegistrationNumber && (
+                            <div>
+                              <span className="text-foreground">Registro ANVISA:</span>{' '}
+                              <span className="text-foreground">{item.opmeItem.anvisaRegistrationNumber}</span>
+                            </div>
+                          )}
+                          
+                          {item.opmeItem.processNumber && (
+                            <div>
+                              <span className="text-foreground">Processo:</span>{' '}
+                              <span className="text-foreground">{item.opmeItem.processNumber}</span>
+                            </div>
+                          )}
+                          
+                          {item.opmeItem.riskClass && (
+                            <div>
+                              <span className="text-foreground">Classe de Risco:</span>{' '}
+                              <span className="text-foreground">{item.opmeItem.riskClass}</span>
+                            </div>
+                          )}
+                          
+                          {item.opmeItem.countryOfManufacture && (
+                            <div>
+                              <span className="text-foreground">País:</span>{' '}
+                              <span className="text-foreground">{item.opmeItem.countryOfManufacture}</span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+
+                        {(item.opmeItem.registrationDate || item.opmeItem.expirationDate) && (
+                          <div className="mt-4 pt-4 border-t border-border">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                              {item.opmeItem.registrationDate && (
+                                <div>
+                                  <span className="text-foreground">Data de Registro:</span>{' '}
+                                  <span className="text-foreground">
+                                    {format(new Date(item.opmeItem.registrationDate), "dd/MM/yyyy", { locale: ptBR })}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {item.opmeItem.expirationDate && (
+                                <div>
+                                  <span className="text-foreground">Validade:</span>{' '}
+                                  <span className="text-foreground">
+                                    {format(new Date(item.opmeItem.expirationDate), "dd/MM/yyyy", { locale: ptBR })}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
-            ))}
+                  
+                  {/* Observações adicionais do grupo */}
+                  {groupNotes && (
+                    <div className="mt-3 pl-2 p-3 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-md">
+                      <p className="text-sm font-medium text-medsync-blue mb-1">Observações Adicionais:</p>
+                      <p className="text-sm text-foreground whitespace-pre-line">{groupNotes}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="text-center py-8">
@@ -863,7 +989,7 @@ const OpmeItemsList = ({ orderId }: { orderId: number }) => {
 };
 
 // Componente para exibir fornecedores
-const SuppliersList = ({ orderId }: { orderId: number }) => {
+const SuppliersList = ({ orderId, supplierAdditionalNotes }: { orderId: number; supplierAdditionalNotes?: string }) => {
   const { data: suppliers, isLoading, isError } = useQuery<SupplierItem[]>({
     queryKey: [`/api/medical-orders/${orderId}/suppliers`],
     queryFn: async () => {
@@ -876,105 +1002,132 @@ const SuppliersList = ({ orderId }: { orderId: number }) => {
     enabled: !!orderId,
   });
 
-  const formatCnpj = (cnpj: string) => {
-    if (!cnpj) return '';
-    return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-  };
-
   if (isLoading) {
     return (
-      <Card className="border border-border bg-card">
-        <CardHeader>
-          <CardTitle className="text-lg text-foreground">Fornecedores</CardTitle>
-          <CardDescription>Fornecedores aprovados para este pedido médico</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex justify-center items-center py-8">
-            <Spinner className="h-8 w-8 text-primary-foreground" />
-            <span className="ml-2 text-primary-foreground">Carregando fornecedores...</span>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex justify-center items-center py-8">
+        <Spinner className="h-8 w-8 text-primary-foreground" />
+        <span className="ml-2 text-primary-foreground">Carregando fornecedores...</span>
+      </div>
     );
   }
 
   if (isError) {
     return (
-      <Card className="border border-border bg-card">
-        <CardHeader>
-          <CardTitle className="text-lg text-foreground">Fornecedores</CardTitle>
-          <CardDescription>Fornecedores aprovados para este pedido médico</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8">
-            <AlertCircle className="h-10 w-10 text-destructive mx-auto mb-4" />
-            <p className="text-destructive">Erro ao carregar fornecedores</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="text-center py-8">
+        <AlertCircle className="h-10 w-10 text-destructive mx-auto mb-4" />
+        <p className="text-destructive">Erro ao carregar fornecedores</p>
+      </div>
     );
+  }
+
+  // Agrupar fornecedores por combinação procedimento cirúrgico + conduta
+  const groupedSuppliers: Record<string, {
+    surgicalProcedureName: string;
+    surgicalApproachName: string;
+    items: any[];
+  }> = {};
+  
+  if (suppliers) {
+    suppliers.forEach((item: any) => {
+      const surgicalProcId = item.surgicalProcedureId || 0;
+      const surgicalApprId = item.surgicalApproachId || 0;
+      const key = `${surgicalProcId}-${surgicalApprId}`;
+      
+      if (!groupedSuppliers[key]) {
+        groupedSuppliers[key] = {
+          surgicalProcedureName: item.surgicalProcedureName || 'Procedimento não especificado',
+          surgicalApproachName: item.surgicalApproachName || 'Conduta não especificada',
+          items: []
+        };
+      }
+      
+      groupedSuppliers[key].items.push(item);
+    });
   }
 
   return (
     <>
       {suppliers && suppliers.length > 0 ? (
-        <div className="space-y-4">
-          {suppliers.map((supplierItem: SupplierItem) => (
-            <div key={supplierItem.id} className="bg-background p-6 rounded-lg border border-border">
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-accent rounded-lg">
-                    <Truck className="h-6 w-6 text-primary-foreground" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-foreground text-lg mb-1">
-                      {supplierItem.supplier.tradeName}
-                    </h3>
-                    <p className="text-primary-foreground text-sm">
-                      {supplierItem.supplier.companyName}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <Badge 
-                    variant={supplierItem.isApproved ? "default" : "secondary"} 
-                    className={supplierItem.isApproved 
-                      ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 border-emerald-600" 
-                      : "bg-amber-100 dark:bg-amber-900/20 text-amber-600 border-amber-600"
-                    }
-                  >
-                    {supplierItem.isApproved ? (
-                      <>
-                        <CheckCircle className="h-3 w-3 mr-1" />
-                        Aprovado
-                      </>
-                    ) : (
-                      <>
-                        <Clock className="h-3 w-3 mr-1" />
-                        Pendente
-                      </>
-                    )}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-foreground">CNPJ:</span>{' '}
-                  <span className="text-white font-mono">{formatCnpj(supplierItem.supplier.cnpj)}</span>
+        <div className="space-y-6">
+          {Object.entries(groupedSuppliers).map(([key, group]) => {
+            const groupNotes = supplierAdditionalNotes ? extractGroupNotes(
+              supplierAdditionalNotes, 
+              group.surgicalProcedureName, 
+              group.surgicalApproachName
+            ) : '';
+            
+            return (
+              <div key={key} className="space-y-3">
+                {/* Subtítulo do grupo */}
+                <div className="flex items-center gap-2 pb-2 border-b border-border">
+                  <span className="text-sm font-semibold text-medsync-blue">
+                    {group.surgicalProcedureName} → {group.surgicalApproachName}
+                  </span>
                 </div>
                 
-                {supplierItem.approvedAt && (
-                  <div>
-                    <span className="text-foreground">Aprovado em:</span>{' '}
-                    <span className="text-foreground">
-                      {format(new Date(supplierItem.approvedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                    </span>
+                {/* Fornecedores do grupo */}
+                <div className="space-y-4 pl-2">
+                  {group.items.map((supplierItem: SupplierItem) => (
+                    <div key={supplierItem.id} className="bg-background p-6 rounded-lg border border-border">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-accent rounded-lg">
+                            <Truck className="h-6 w-6 text-primary-foreground" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-foreground text-lg mb-1">
+                              {supplierItem.supplier.tradeName}
+                            </h3>
+                            <p className="text-primary-foreground text-sm">
+                              {supplierItem.supplier.companyName}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <Badge 
+                            variant={supplierItem.isApproved ? "default" : "secondary"} 
+                            className={supplierItem.isApproved 
+                              ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 border-emerald-600" 
+                              : "bg-amber-100 dark:bg-amber-900/20 text-amber-600 border-amber-600"
+                            }
+                          >
+                            {supplierItem.isApproved ? (
+                              <>
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Aprovado
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="h-3 w-3 mr-1" />
+                                Pendente
+                              </>
+                            )}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {supplierItem.approvedAt && (
+                        <div className="text-sm">
+                          <span className="text-foreground">Aprovado em:</span>{' '}
+                          <span className="text-foreground">
+                            {format(new Date(supplierItem.approvedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Observações adicionais do grupo */}
+                {groupNotes && (
+                  <div className="mt-3 pl-2 p-3 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-md">
+                    <p className="text-sm font-medium text-medsync-blue mb-1">Observações Adicionais:</p>
+                    <p className="text-sm text-foreground whitespace-pre-line">{groupNotes}</p>
                   </div>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="text-center py-8">
@@ -1750,23 +1903,64 @@ export default function OrderDetails() {
             </CardHeader>
             <CardContent>
               {order.cidCodes && order.cidCodes.length > 0 ? (
-                <div className="space-y-3">
-                  {order.cidCodes.map((cid: any, index: number) => (
-                    <div key={index} className="bg-white border border-border rounded-md p-4">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0">
-                          <span className="inline-flex items-center justify-center px-3 py-1 bg-medsync-blue text-white text-sm font-semibold rounded">
-                            {cid.code}
+                <div className="space-y-6">
+                  {(() => {
+                    // Agrupar CIDs por combinação procedimento+conduta
+                    const groupedCids: Record<string, { 
+                      procedureName: string; 
+                      approachName: string; 
+                      cids: any[] 
+                    }> = {};
+                    
+                    order.cidCodes.forEach((cid: any) => {
+                      const procedureId = cid.surgicalProcedureId || cid.surgicalProcedure?.id || 0;
+                      const approachId = cid.surgicalApproachId || cid.surgicalApproach?.id || 0;
+                      const key = `${procedureId}-${approachId}`;
+                      
+                      if (!groupedCids[key]) {
+                        groupedCids[key] = {
+                          procedureName: cid.surgicalProcedure?.name || 'Procedimento não especificado',
+                          approachName: cid.surgicalApproach?.name || 'Conduta não especificada',
+                          cids: []
+                        };
+                      }
+                      
+                      // Adicionar o CID (pode vir como objeto com .cid ou diretamente)
+                      const cidData = cid.cid || cid;
+                      groupedCids[key].cids.push(cidData);
+                    });
+                    
+                    return Object.entries(groupedCids).map(([key, group]) => (
+                      <div key={key} className="space-y-3">
+                        {/* Subtítulo do grupo */}
+                        <div className="flex items-center gap-2 pb-2 border-b border-border">
+                          <span className="text-sm font-semibold text-medsync-blue">
+                            {group.procedureName} → {group.approachName}
                           </span>
                         </div>
-                        <div className="flex-1">
-                          <p className="text-foreground text-sm leading-relaxed">
-                            {cid.description || t('orderDetails.diagnostics.descriptionNotAvailable')}
-                          </p>
+                        
+                        {/* CIDs do grupo */}
+                        <div className="space-y-2 pl-2">
+                          {group.cids.map((cidItem: any, index: number) => (
+                            <div key={`${key}-${index}`} className="bg-white border border-border rounded-md p-4">
+                              <div className="flex items-start gap-4">
+                                <div className="flex-shrink-0">
+                                  <span className="inline-flex items-center justify-center px-3 py-1 bg-medsync-blue text-white text-sm font-semibold rounded">
+                                    {cidItem.code}
+                                  </span>
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-foreground text-sm leading-relaxed">
+                                    {cidItem.description || t('orderDetails.diagnostics.descriptionNotAvailable')}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                 </div>
               ) : (
                 <div className="text-center py-8">
@@ -1815,14 +2009,21 @@ export default function OrderDetails() {
               </div>
             </CardHeader>
             <CardContent>
-              <ProceduresList orderId={order.id} orderStatus={order.statusCode} />
+              <ProceduresList 
+                orderId={order.id} 
+                orderStatus={order.statusCode} 
+                cbhpmAdditionalNotes={order.cbhpmAdditionalNotes || ''}
+              />
             </CardContent>
           </Card>
         </TabsContent>
         
         {/* Aba Materiais OPME */}
         <TabsContent value="materiais">
-          <OpmeItemsList orderId={order.id} />
+          <OpmeItemsList 
+            orderId={order.id} 
+            opmeAdditionalNotes={order.opmeAdditionalNotes || ''}
+          />
         </TabsContent>
         
         {/* Aba Fornecedores */}
@@ -1849,7 +2050,10 @@ export default function OrderDetails() {
               </div>
             </CardHeader>
             <CardContent>
-              <SuppliersList orderId={order.id} />
+              <SuppliersList 
+                orderId={order.id} 
+                supplierAdditionalNotes={order.supplierAdditionalNotes || ''}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1992,7 +2196,7 @@ export default function OrderDetails() {
         </DialogContent>
       </Dialog>
 
-      {/* StatusChangeModal */}
+      {/* StatusChangeModal ff */}
       <StatusChangeModal
         isOpen={showStatusChangeModal}
         onClose={() => setShowStatusChangeModal(false)}
@@ -2013,6 +2217,7 @@ export default function OrderDetails() {
           setShowReceivedValuesModal(true);
           setShowStatusChangeModal(false);
         }}
+        order={order}
       />
     </div>
   );
