@@ -45,6 +45,12 @@ import {
 } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
+// Interface base para referência de conduta/procedimento cirúrgico
+interface SurgicalRef {
+  id: number;
+  name: string;
+}
+
 // Interface local para procedimento compatível com o componente OpmeSelection
 interface LocalProcedure {
   id: number;
@@ -56,6 +62,8 @@ interface LocalProcedure {
   custoOperacional?: string;
   porteAnestesista?: string;
   numeroAuxiliares?: number;
+  sourceApproachId?: number;
+  sourceProcedureId?: number;
 }
 
 // Interface para procedimentos secundários, estendendo LocalProcedure
@@ -63,6 +71,39 @@ interface LocalProcedure {
 interface SecondaryProcedure {
   procedure: LocalProcedure;
   quantity: number;
+  surgicalApproach?: SurgicalRef | null;
+  surgicalProcedure?: SurgicalRef | null;
+}
+
+// Interface para item CID com associação cirúrgica
+interface CidItemWithAssociation {
+  cid: {
+    id: number;
+    code: string;
+    description: string;
+    category?: string;
+    sourceApproachId?: number;
+    sourceProcedureId?: number;
+  };
+  surgicalApproach?: SurgicalRef | null;
+  surgicalProcedure?: SurgicalRef | null;
+  sourceApproachId?: number;
+  sourceProcedureId?: number;
+}
+
+// Interface para item OPME com associação cirúrgica
+interface OpmeItemWithAssociation {
+  item: {
+    id: number;
+    technicalName: string;
+    commercialName?: string | null;
+    anvisaCode?: string | null;
+    sourceApproachId?: number;
+    sourceProcedureId?: number;
+  };
+  quantity: number;
+  surgicalApproach?: SurgicalRef | null;
+  surgicalProcedure?: SurgicalRef | null;
 }
 
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -81,6 +122,8 @@ import {
 } from "@/lib/file-upload";
 import { FileManager } from "@/lib/file-manager";
 import { SupplierDisplay } from "@/components/supplier-display";
+import { LoadingLogo } from "@/components/loading-logo";
+import { MarkdownViewer } from "@/components/markdown-editor";
 
 const steps = [
   { number: 1, label: "Paciente e Hospital" },
@@ -132,16 +175,7 @@ export default function CreateOrder() {
   // cidLaterality removido - funcionalidade descontinuada
 
   // Novo estado para múltiplos CIDs (similar aos procedimentos secundários)
-  const [multipleCids, setMultipleCids] = useState<
-    Array<{
-      cid: {
-        id: number;
-        code: string;
-        description: string;
-        category?: string;
-      };
-    }>
-  >([]);
+  const [multipleCids, setMultipleCids] = useState<CidItemWithAssociation[]>([]);
   
   // Flag para controlar se já carregamos CIDs com condutas cirúrgicas no modo edição
   const [cidsWithSurgicalApproachesLoaded, setCidsWithSurgicalApproachesLoaded] = useState(false);
@@ -198,9 +232,7 @@ export default function CreateOrder() {
   >([]);
   const [orderId, setOrderId] = useState<number | null>(null);
   // Estados para os itens OPME e fornecedores
-  const [selectedOpmeItems, setSelectedOpmeItems] = useState<
-    Array<{ item: any; quantity: number }>
-  >([]);
+  const [selectedOpmeItems, setSelectedOpmeItems] = useState<OpmeItemWithAssociation[]>([]);
   // Estados para fornecedores - usando formato compatível com SurgeryData
   const [suppliers, setSuppliers] = useState<{
     supplier1: number | null;
@@ -211,17 +243,23 @@ export default function CreateOrder() {
   // Estado para armazenar dados dos fornecedores carregados
   const [supplierData, setSupplierData] = useState<any[]>([]);
 
-  // Estado para dados completos dos fornecedores (similar aos CIDs e OPME)
+  // Estado para dados completos dos fornecedores COM associações de conduta (similar aos CIDs e OPME)
   const [supplierDetails, setSupplierDetails] = useState<Array<{
     id: number;
     companyName: string;
     tradeName: string | null;
     cnpj: string;
-    municipalityId: number;
+    municipalityId?: number;
     address: string | null;
     phone: string | null;
     email: string | null;
-    active: boolean;
+    active?: boolean;
+    // Campos de associação com conduta cirúrgica
+    sourceApproachId?: number | null;
+    sourceApproachName?: string | null;
+    sourceProcedureId?: number | null;
+    sourceProcedureName?: string | null;
+    isApproved?: boolean;
   }>>([]);
 
   // Função para buscar dados dos fornecedores
@@ -258,8 +296,19 @@ export default function CreateOrder() {
   const [clinicalJustification, setClinicalJustification] =
     useState<string>("");
 
+  // Estados para observações adicionais de CBHPM, OPME e Fornecedores
+  const [cbhpmAdditionalNotes, setCbhpmAdditionalNotes] = useState<string>("");
+  const [opmeAdditionalNotes, setOpmeAdditionalNotes] = useState<string>("");
+  const [supplierAdditionalNotes, setSupplierAdditionalNotes] = useState<string>("");
+
   // Estado para evitar chamadas duplicadas
   const [isLoadingPatientOrder, setIsLoadingPatientOrder] = useState(false);
+  
+  // Estado para controlar loading de transição do passo 3 para 4 (visualização)
+  const [isPreparingPreview, setIsPreparingPreview] = useState(false);
+  
+  // Estado para controlar loading de criação do PDF (botão Finalizar no passo 4)
+  const [isCreatingPDF, setIsCreatingPDF] = useState(false);
 
   // Estados para o diálogo de pedido existente (RESTAURADO - usuário precisa escolher)
   const [showExistingOrderDialog, setShowExistingOrderDialog] = useState(false);
@@ -388,6 +437,8 @@ export default function CreateOrder() {
       setSecondaryProcedures([]);
       setOrderId(null);
       setCurrentOrderData(null);
+      setCbhpmAdditionalNotes("");
+      setOpmeAdditionalNotes("");
     };
 
     // DESABILITADO: Só deve verificar DEPOIS de selecionar paciente
@@ -604,6 +655,8 @@ export default function CreateOrder() {
       setSecondaryProcedures([]);
       setOrderId(null);
       setCurrentOrderData(null);
+      setCbhpmAdditionalNotes("");
+      setOpmeAdditionalNotes("");
     };
 
     // DESABILITADO: Só deve verificar DEPOIS de selecionar paciente
@@ -673,6 +726,20 @@ export default function CreateOrder() {
         console.log('⚠️ JUSTIFICATIVA CLÍNICA não encontrada ou vazia no banco de dados');
       }
       
+      // Carregar observações adicionais de CBHPM, OPME e Fornecedores
+      if (orderBasicData.cbhpmAdditionalNotes) {
+        setCbhpmAdditionalNotes(orderBasicData.cbhpmAdditionalNotes);
+        console.log('📋 CBHPM Notes carregados:', orderBasicData.cbhpmAdditionalNotes.substring(0, 50) + '...');
+      }
+      if (orderBasicData.opmeAdditionalNotes) {
+        setOpmeAdditionalNotes(orderBasicData.opmeAdditionalNotes);
+        console.log('📋 OPME Notes carregados:', orderBasicData.opmeAdditionalNotes.substring(0, 50) + '...');
+      }
+      if (orderBasicData.supplierAdditionalNotes) {
+        setSupplierAdditionalNotes(orderBasicData.supplierAdditionalNotes);
+        console.log('📋 Supplier Notes carregados:', orderBasicData.supplierAdditionalNotes.substring(0, 50) + '...');
+      }
+      
       // Carregar região anatômica se existir
       if (orderBasicData.anatomicalRegionId) {
         try {
@@ -701,37 +768,25 @@ export default function CreateOrder() {
         console.log('ℹ️ Nenhum attachment encontrado para o pedido');
       }
 
-      // **ETAPA 3: REUTILIZAR DADOS QUE JÁ VÊM DO orderBasicData**
-      console.log('⚡ ETAPA 3: OTIMIZAÇÃO - Reutilizando dados que já vieram carregados...');
+      // **ETAPA 3: CARREGAR CONDUTAS E PROCEDIMENTOS CIRÚRGICOS (já vêm no orderBasicData)**
+      console.log('⚡ ETAPA 3: Processando condutas e procedimentos cirúrgicos...');
       
-      // 1. CIDs - JÁ VÊM no orderBasicData.cidCodes (sem chamada API extra!)
-      const cidData = orderBasicData.cidCodes || [];
-      if (cidData.length > 0) {
-        const simpleCids = cidData.map((cid: any) => ({
-          cid
-        }));
-        
-        setMultipleCids(simpleCids);
-        setCidsWithSurgicalApproachesLoaded(true);
-        
-        const firstCid = cidData[0];
-        setCidCode(firstCid.code || "");
-        setCidDescription(firstCid.description || "");
-        setSelectedCidId(firstCid.id);
-        
-        console.log(`✅ REUTILIZADO: ${cidData.length} CIDs do orderBasicData (sem chamada API extra)`);
-      }
-
-      // 2. Condutas Cirúrgicas - JÁ VÊM no orderBasicData.surgicalApproaches (sem chamada API extra!)
+      // 1. Condutas Cirúrgicas - JÁ VÊM no orderBasicData.surgicalApproaches COM surgicalProcedureId (sem chamada API extra!)
       const surgicalApproaches = orderBasicData.surgicalApproaches || [];
       if (surgicalApproaches.length > 0) {
         console.log(`✅ REUTILIZADO: ${surgicalApproaches.length} condutas do orderBasicData (sem chamada API extra)`);
+        console.log('📋 Condutas brutas do backend:', surgicalApproaches.map((sa: any) => ({
+          id: sa.id,
+          name: sa.name,
+          surgicalProcedureId: sa.surgicalProcedureId,
+          procedureName: sa.procedureName
+        })));
         
         const conductApproaches = surgicalApproaches.map((sa: any) => ({
-          surgicalProcedureId: sa.surgicalProcedureId || 1,
+          surgicalProcedureId: sa.surgicalProcedureId || null,
           surgicalApproachId: sa.id,
           approachName: sa.name,
-          procedureName: "Procedimento",
+          procedureName: sa.procedureName || "Procedimento não definido",
           isPrimary: sa.isPrimary || false
         }));
         
@@ -756,21 +811,99 @@ export default function CreateOrder() {
         console.log(`✅ REUTILIZADO: Estado selectedSurgicalProcedures atualizado:`, proceduresData);
       }
 
-      // **ETAPA 4: APENAS 3 CHAMADAS NECESSÁRIAS (dados detalhados)**
-      console.log('⚡ ETAPA 4: Carregando apenas dados detalhados (3 chamadas)...');
+      // **ETAPA 4: TODAS AS CHAMADAS EM PARALELO (CIDs, CBHPM, OPME, Fornecedores)**
+      console.log('⚡ ETAPA 4: Carregando todos os dados relacionais em paralelo (4 chamadas)...');
+      
+      // Usar Promise.allSettled para capturar erros individuais sem interromper as outras chamadas
       const [
-        procedures,
-        opmeItems,
-        suppliers
-      ] = await Promise.all([
+        cidResult,
+        proceduresResult,
+        opmeResult,
+        suppliersResult
+      ] = await Promise.allSettled([
+        apiRequest(`/api/orders/${currentOrderId}/cids`, "GET"),
         apiRequest(`/api/orders/${currentOrderId}/procedures`, "GET"),
         apiRequest(`/api/orders/${currentOrderId}/opme-items`, "GET"),
         apiRequest(`/api/orders/${currentOrderId}/suppliers`, "GET")
       ]);
+      
+      // Extrair dados com tratamento de erros individual
+      let cidData: any[] = [];
+      let cidLoadFailed = false;
+      if (cidResult.status === 'fulfilled') {
+        cidData = cidResult.value || [];
+      } else {
+        cidLoadFailed = true;
+        console.error('❌ Erro ao carregar CIDs com associações:', cidResult.reason);
+      }
+      
+      const procedures = proceduresResult.status === 'fulfilled' ? proceduresResult.value : [];
+      const opmeItems = opmeResult.status === 'fulfilled' ? opmeResult.value : [];
+      const suppliers = suppliersResult.status === 'fulfilled' ? suppliersResult.value : [];
+      
+      if (proceduresResult.status === 'rejected') console.error('❌ Erro ao carregar procedimentos:', proceduresResult.reason);
+      if (opmeResult.status === 'rejected') console.error('❌ Erro ao carregar OPME:', opmeResult.reason);
+      if (suppliersResult.status === 'rejected') console.error('❌ Erro ao carregar fornecedores:', suppliersResult.reason);
 
-      console.log(`✅ OTIMIZADO: Reduzido de 6 para 3 chamadas API!`);
+      console.log(`✅ OTIMIZADO: 4 chamadas API executadas em paralelo!`);
 
-      // 2. Carregar procedimentos - SISTEMA UNIFICADO
+      // 1. Processar CIDs com associações cirúrgicas - NORMALIZADO
+      if (cidData && cidData.length > 0) {
+        // Converter formato backend (surgicalApproach/surgicalProcedure) para formato frontend (sourceApproachId/etc)
+        const cidsWithAssociations = cidData.map((cidItem: any) => {
+          let sourceApproachId = cidItem.surgicalApproach?.id || null;
+          let sourceApproachName = cidItem.surgicalApproach?.name || null;
+          const sourceProcedureId = cidItem.surgicalProcedure?.id || null;
+          const sourceProcedureName = cidItem.surgicalProcedure?.name || null;
+          
+          // CORREÇÃO DE DADOS LEGADOS: Inferir approach a partir do procedure
+          if (!sourceApproachId && sourceProcedureId && surgicalApproaches && surgicalApproaches.length > 0) {
+            const matchingApproach = surgicalApproaches.find((sa: any) => 
+              sa.surgicalProcedureId === sourceProcedureId
+            );
+            
+            if (matchingApproach) {
+              sourceApproachId = matchingApproach.id;
+              sourceApproachName = matchingApproach.name;
+              console.log(`🔧 CORREÇÃO: CID ${cidItem.cid?.code} inferiu approachId=${sourceApproachId} a partir do procedureId=${sourceProcedureId}`);
+            }
+          }
+          
+          return {
+            cid: cidItem.cid || cidItem,
+            // Formato normalizado do frontend
+            sourceApproachId,
+            sourceApproachName,
+            sourceProcedureId,
+            sourceProcedureName
+          };
+        });
+        
+        setMultipleCids(cidsWithAssociations);
+        setCidsWithSurgicalApproachesLoaded(true);
+        
+        const firstCid = cidData[0]?.cid || cidData[0];
+        setCidCode(firstCid.code || "");
+        setCidDescription(firstCid.description || "");
+        setSelectedCidId(firstCid.id);
+        
+        console.log(`✅ CIDs carregados com associações cirúrgicas: ${cidData.length} CIDs`);
+        console.log('📋 CIDs detalhados:', cidsWithAssociations.map((c: any) => ({
+          cidId: c.cid?.id,
+          code: c.cid?.code,
+          surgicalApproachId: c.surgicalApproach?.id,
+          surgicalProcedureId: c.surgicalProcedure?.id
+        })));
+      } else if (cidLoadFailed) {
+        // Fallback para orderBasicData.cidCodes APENAS se a API falhou (não se retornou vazio)
+        const fallbackCids = orderBasicData.cidCodes || [];
+        if (fallbackCids.length > 0) {
+          setMultipleCids(fallbackCids.map((cid: any) => ({ cid })));
+          console.log(`⚠️ Usando fallback: ${fallbackCids.length} CIDs sem associações (API falhou)`);
+        }
+      }
+
+      // 2. Carregar procedimentos CBHPM - SISTEMA UNIFICADO
       if (procedures && procedures.length > 0) {
         console.log(`✅ OTIMIZADO: ${procedures.length} procedimentos encontrados - aplicando sistema unificado`);
         console.log('📋 PROCEDIMENTOS CARREGADOS:', procedures.map(p => ({
@@ -778,62 +911,153 @@ export default function CreateOrder() {
           codigo: p.procedure?.code,
           descricao: p.procedure?.description,
           porte: p.procedure?.porte,
-          quantidade: p.quantityRequested
+          quantidade: p.quantity
         })));
         
-        // Função para calcular valor do porte
-        const parsePorteValue = (porte: string | null | undefined): number => {
-          if (!porte) return 0;
-          const match = porte.match(/^(\d+)([A-Za-z]?)$/);
-          if (!match) return 0;
-          const numero = parseInt(match[1], 10);
-          const letra = match[2]?.toUpperCase() || 'A';
-          const valorLetra = letra.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
-          return (numero * 100) + valorLetra;
-        };
-
-        // Ordenar TODOS os procedimentos por porte (maior para menor)
-        const sortedProcedures = procedures.sort((a: any, b: any) => 
-          parsePorteValue(b.procedure.porte) - parsePorteValue(a.procedure.porte)
-        );
-
-        // Carregar TODOS os procedimentos como lista unificada
-        const allProceduresData = sortedProcedures.map((p: any) => ({
-          procedure: p.procedure,
-          quantity: p.quantityRequested
-        }));
+        // IMPORTANTE: Manter ordem original de inserção dos procedimentos
+        // A ordenação por porte acontece apenas na visualização (preview), dentro de cada grupo
+        
+        // Carregar TODOS os procedimentos como lista unificada (convertendo associações para formato esperado)
+        const allProceduresData = procedures.map((p: any) => {
+          // Converter formato backend (surgicalApproach/surgicalProcedure) para formato frontend (sourceApproachId/etc)
+          const procedureWithAssociations = {
+            ...p.procedure,
+            // Adicionar campos de associação no formato esperado pelo frontend
+            sourceApproachId: p.surgicalApproach?.id || null,
+            sourceApproachName: p.surgicalApproach?.name || null,
+            sourceProcedureId: p.surgicalProcedure?.id || null,
+            sourceProcedureName: p.surgicalProcedure?.name || null
+          };
+          
+          return {
+            procedure: procedureWithAssociations,
+            quantity: p.quantity || 1
+          };
+        });
         
         setSecondaryProcedures(allProceduresData);
-        console.log(`✅ OTIMIZADO: ${allProceduresData.length} procedimentos carregados em lista unificada ordenada por porte`);
+        console.log(`✅ OTIMIZADO: ${allProceduresData.length} procedimentos CBHPM carregados com associações cirúrgicas`);
+        console.log('📋 Procedimentos com associações:', allProceduresData.map(p => ({
+          codigo: p.procedure.code,
+          sourceApproachId: p.procedure.sourceApproachId,
+          sourceApproachName: p.procedure.sourceApproachName,
+          sourceProcedureName: p.procedure.sourceProcedureName
+        })));
         
         // ❌ LEGADO: Limpeza de estados de procedimento principal (descontinuado)
         // setSelectedProcedure(null);
         // setProcedureQuantity(1);
       }
 
-      // 3. Carregar itens OPME
+      // 3. Carregar itens OPME (convertendo associações para formato esperado)
+      // CORREÇÃO: Inferir sourceApproachId a partir de sourceProcedureId quando approach não está definido
       if (opmeItems && opmeItems.length > 0) {
-        setSelectedOpmeItems(opmeItems);
-        console.log(`✅ OTIMIZADO: ${opmeItems.length} itens OPME carregados`);
-        console.log('🏥 ITENS OPME CARREGADOS:', opmeItems.map(item => ({
+        const opmeItemsWithAssociations = opmeItems.map((opmeEntry: any) => {
+          let sourceApproachId = opmeEntry.surgicalApproach?.id || null;
+          let sourceApproachName = opmeEntry.surgicalApproach?.name || null;
+          const sourceProcedureId = opmeEntry.surgicalProcedure?.id || null;
+          const sourceProcedureName = opmeEntry.surgicalProcedure?.name || null;
+          
+          // CORREÇÃO DE DADOS LEGADOS: Inferir approach a partir do procedure
+          if (!sourceApproachId && sourceProcedureId && surgicalApproaches && surgicalApproaches.length > 0) {
+            const matchingApproach = surgicalApproaches.find((sa: any) => 
+              sa.surgicalProcedureId === sourceProcedureId
+            );
+            
+            if (matchingApproach) {
+              sourceApproachId = matchingApproach.id;
+              sourceApproachName = matchingApproach.name;
+              console.log(`🔧 CORREÇÃO: Item OPME ${opmeEntry.item?.technicalName} inferiu approachId=${sourceApproachId} a partir do procedureId=${sourceProcedureId}`);
+            }
+          }
+          
+          // Converter formato backend para formato frontend
+          const itemWithAssociations = {
+            ...opmeEntry.item,
+            // Adicionar campos de associação no formato esperado pelo frontend
+            sourceApproachId,
+            sourceApproachName,
+            sourceProcedureId,
+            sourceProcedureName
+          };
+          
+          return {
+            item: itemWithAssociations,
+            quantity: opmeEntry.quantity
+          };
+        });
+        
+        setSelectedOpmeItems(opmeItemsWithAssociations);
+        console.log(`✅ OTIMIZADO: ${opmeItems.length} itens OPME carregados com associações cirúrgicas`);
+        console.log('🏥 ITENS OPME com associações:', opmeItemsWithAssociations.map(item => ({
           id: item.item?.id,
-          codigo: item.item?.anvisaRegistration,
-          nome: item.item?.name,
-          descricao: item.item?.description,
-          quantidade: item.quantityRequested,
-          fabricante: item.item?.manufacturer
+          technicalName: item.item?.technicalName,
+          sourceApproachId: item.item?.sourceApproachId,
+          sourceApproachName: item.item?.sourceApproachName,
+          sourceProcedureName: item.item?.sourceProcedureName
         })));
       }
 
-      // 4. Carregar fornecedores
+      // 4. Carregar fornecedores (convertendo associações para formato esperado)
       if (suppliers && suppliers.length > 0) {
-        setSupplierDetails(suppliers);
-        setSuppliers({
-          supplier1: suppliers[0]?.id || null,
-          supplier2: suppliers[1]?.id || null,
-          supplier3: suppliers[2]?.id || null,
+        // Converter formato backend (surgicalApproach/surgicalProcedure) para formato frontend (sourceApproachId/etc)
+        // CORREÇÃO: Inferir sourceApproachId a partir de sourceProcedureId quando approach não está definido
+        const suppliersWithAssociations = suppliers.map((supplierEntry: any) => {
+          let sourceApproachId = supplierEntry.surgicalApproach?.id || null;
+          let sourceApproachName = supplierEntry.surgicalApproach?.name || null;
+          const sourceProcedureId = supplierEntry.surgicalProcedure?.id || null;
+          const sourceProcedureName = supplierEntry.surgicalProcedure?.name || null;
+          
+          // CORREÇÃO DE DADOS LEGADOS: Se temos procedimento mas não temos approach,
+          // tentar inferir o approach a partir das condutas do pedido
+          if (!sourceApproachId && sourceProcedureId && surgicalApproaches && surgicalApproaches.length > 0) {
+            // Buscar a conduta que corresponde a este procedimento
+            const matchingApproach = surgicalApproaches.find((sa: any) => 
+              sa.surgicalProcedureId === sourceProcedureId
+            );
+            
+            if (matchingApproach) {
+              sourceApproachId = matchingApproach.id;
+              sourceApproachName = matchingApproach.name;
+              console.log(`🔧 CORREÇÃO: Fornecedor inferiu approachId=${sourceApproachId} (${sourceApproachName}) a partir do procedureId=${sourceProcedureId}`);
+            }
+          }
+          
+          return {
+            id: supplierEntry.supplier?.id || supplierEntry.id,
+            companyName: supplierEntry.supplier?.name || supplierEntry.supplier?.companyName || supplierEntry.companyName,
+            tradeName: supplierEntry.supplier?.tradeName || supplierEntry.tradeName,
+            cnpj: supplierEntry.supplier?.cnpj || supplierEntry.cnpj,
+            phone: supplierEntry.supplier?.phone || supplierEntry.phone,
+            email: supplierEntry.supplier?.email || supplierEntry.email,
+            address: supplierEntry.supplier?.address || supplierEntry.address,
+            // Adicionar campos de associação no formato esperado pelo frontend
+            sourceApproachId,
+            sourceApproachName,
+            sourceProcedureId,
+            sourceProcedureName,
+            isApproved: supplierEntry.isApproved || false
+          };
         });
-        console.log(`✅ OTIMIZADO: ${suppliers.length} fornecedores carregados`);
+        
+        setSupplierDetails(suppliersWithAssociations);
+        
+        // Manter compatibilidade com formato legado (primeiro 3 fornecedores únicos)
+        const uniqueSupplierIds = [...new Set(suppliersWithAssociations.map((s: any) => s.id))].slice(0, 3);
+        setSuppliers({
+          supplier1: uniqueSupplierIds[0] || null,
+          supplier2: uniqueSupplierIds[1] || null,
+          supplier3: uniqueSupplierIds[2] || null,
+        });
+        
+        console.log(`✅ OTIMIZADO: ${suppliers.length} fornecedores carregados com associações cirúrgicas`);
+        console.log('🏢 FORNECEDORES com associações:', suppliersWithAssociations.map((s: any) => ({
+          id: s.id,
+          companyName: s.companyName,
+          sourceApproachId: s.sourceApproachId,
+          sourceApproachName: s.sourceApproachName,
+          sourceProcedureName: s.sourceProcedureName
+        })));
         
         // 4.1 Carregar fabricantes associados aos fornecedores (se houver)
         try {
@@ -944,26 +1168,15 @@ export default function CreateOrder() {
         if (procedures && procedures.length > 0) {
           console.log(`MODO EDIÇÃO: Procedimentos salvos encontrados: ${procedures.length} procedimentos`);
           
-          // Função para calcular valor do porte
-          const parsePorteValue = (porte: string | null | undefined): number => {
-            if (!porte) return 0;
-            const match = porte.match(/^(\d+)([A-Za-z]?)$/);
-            if (!match) return 0;
-            const numero = parseInt(match[1], 10);
-            const letra = match[2]?.toUpperCase() || 'A';
-            const valorLetra = letra.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
-            return (numero * 100) + valorLetra;
-          };
-
-          // Ordenar todos os procedimentos por porte (maior para menor)
-          const sortedProcedures = procedures.sort((a: any, b: any) => 
-            parsePorteValue(b.procedure.porte) - parsePorteValue(a.procedure.porte)
-          );
-
-          // Carregar todos os procedimentos como secundários na lista unificada
-          const allProceduresData = sortedProcedures.map((p: any) => ({
+          // IMPORTANTE: Manter ordem original de inserção dos procedimentos
+          // A ordenação por porte acontece apenas na visualização (preview), dentro de cada grupo
+          
+          // Carregar todos os procedimentos como secundários na lista unificada (preservando associações cirúrgicas e ordem original)
+          const allProceduresData = procedures.map((p: any) => ({
             procedure: p.procedure,
-            quantity: p.quantityRequested
+            quantity: p.quantity || 1,
+            surgicalApproach: p.surgicalApproach || null,
+            surgicalProcedure: p.surgicalProcedure || null
           }));
           
           console.log(`MODO EDIÇÃO: Carregando ${allProceduresData.length} procedimentos em lista unificada`);
@@ -981,24 +1194,75 @@ export default function CreateOrder() {
         console.error("MODO EDIÇÃO: Erro ao carregar procedimentos:", error);
       }
 
-      // 3. Carregar fornecedores salvos - CORRIGIDO para objetos completos
+      // 3. Carregar fornecedores salvos - CORRIGIDO para objetos completos com associações de conduta
       try {
         const supplierData = await apiRequest(`/api/orders/${currentOrderId}/suppliers`, "GET");
+        
+        // Também carregar condutas para poder inferir approachId quando faltando
+        let orderApproaches: any[] = [];
+        try {
+          orderApproaches = await apiRequest(`/api/medical-order-surgical-approaches/order/${currentOrderId}`, "GET");
+          console.log(`MODO EDIÇÃO: Condutas carregadas para inferência: ${orderApproaches?.length || 0}`);
+        } catch (e) {
+          console.log(`MODO EDIÇÃO: Nenhuma conduta encontrada para inferência`);
+        }
+        
         if (supplierData && supplierData.length > 0) {
           console.log(`MODO EDIÇÃO: Fornecedores salvos encontrados: ${supplierData.length} fornecedores`);
           console.log(`MODO EDIÇÃO: Dados dos fornecedores recebidos:`, supplierData);
           
+          // Mapear dados do backend para o formato esperado pelo frontend
+          // CORREÇÃO: Inferir sourceApproachId a partir de sourceProcedureId quando approach não está definido
+          const mappedSuppliers = supplierData.map((item: any) => {
+            // Formato: { supplier: {...}, surgicalApproach: {...}, surgicalProcedure: {...} }
+            const supplier = item.supplier || item;
+            
+            let sourceApproachId = item.surgicalApproach?.id || null;
+            let sourceApproachName = item.surgicalApproach?.name || null;
+            const sourceProcedureId = item.surgicalProcedure?.id || null;
+            const sourceProcedureName = item.surgicalProcedure?.name || null;
+            
+            // CORREÇÃO DE DADOS LEGADOS: Inferir approach a partir do procedure
+            if (!sourceApproachId && sourceProcedureId && orderApproaches && orderApproaches.length > 0) {
+              const matchingApproach = orderApproaches.find((sa: any) => 
+                sa.surgicalProcedureId === sourceProcedureId
+              );
+              
+              if (matchingApproach) {
+                sourceApproachId = matchingApproach.id;
+                sourceApproachName = matchingApproach.name;
+                console.log(`🔧 CORREÇÃO EDIÇÃO: Fornecedor ${supplier.name || supplier.companyName} inferiu approachId=${sourceApproachId} a partir do procedureId=${sourceProcedureId}`);
+              }
+            }
+            
+            return {
+              id: supplier.id,
+              companyName: supplier.name || supplier.companyName,
+              tradeName: supplier.tradeName || supplier.name,
+              cnpj: supplier.cnpj,
+              phone: supplier.phone,
+              email: supplier.email,
+              isApproved: item.isApproved || false,
+              // Associações de conduta para agrupamento
+              sourceApproachId,
+              sourceApproachName,
+              sourceProcedureId,
+              sourceProcedureName
+            };
+          });
+          
           // Atualizar primeiro os detalhes completos
-          setSupplierDetails(supplierData);
+          setSupplierDetails(mappedSuppliers);
           
           // Em seguida, definir os IDs para sincronização
           setSuppliers({
-            supplier1: supplierData[0]?.id || null,
-            supplier2: supplierData[1]?.id || null,
-            supplier3: supplierData[2]?.id || null
+            supplier1: mappedSuppliers[0]?.id || null,
+            supplier2: mappedSuppliers[1]?.id || null,
+            supplier3: mappedSuppliers[2]?.id || null
           });
           
-          console.log(`MODO EDIÇÃO: Fornecedores carregados:`, supplierData.map((s: any) => s.companyName).join(', '));
+          console.log(`MODO EDIÇÃO: Fornecedores carregados:`, mappedSuppliers.map((s: any) => s.companyName).join(', '));
+          console.log(`MODO EDIÇÃO: Fornecedores com conduta:`, mappedSuppliers.filter((s: any) => s.sourceApproachId).length);
         }
       } catch (error) {
         console.error("MODO EDIÇÃO: Erro ao carregar fornecedores:", error);
@@ -1157,8 +1421,15 @@ export default function CreateOrder() {
             
             // Verificar se já temos CIDs carregados do modo edição (com condutas cirúrgicas)
             if (!cidsWithSurgicalApproachesLoaded) {
-              console.log(`Carregando CIDs via API relacional (sem condutas cirúrgicas)`);
-              setMultipleCids(cidData.map((cid: any) => ({ cid })));
+              console.log(`Carregando CIDs via API relacional - NORMALIZANDO`);
+              // Converter formato backend para formato frontend (normalizado)
+              setMultipleCids(cidData.map((cidItem: any) => ({
+                cid: cidItem.cid || cidItem,
+                sourceApproachId: cidItem.surgicalApproach?.id || null,
+                sourceApproachName: cidItem.surgicalApproach?.name || null,
+                sourceProcedureId: cidItem.surgicalProcedure?.id || null,
+                sourceProcedureName: cidItem.surgicalProcedure?.name || null
+              })));
             } else {
               console.log(`🛡️ CIDs já carregados no modo edição (COM condutas) - não sobrescrever`);
             }
@@ -1180,11 +1451,13 @@ export default function CreateOrder() {
           if (procedures && procedures.length > 0) {
             console.log(`Procedimentos salvos encontrados: ${procedures.length} procedimentos`);
             
-            // Converter para formato padronizado: { item: procedure, quantity: number, isMain: boolean }
+            // Converter para formato padronizado (preservando associações cirúrgicas)
             const formattedProcedures = procedures.map((p: any) => ({
               item: p.procedure,
-              quantity: p.quantityRequested || 1,
-              isMain: p.isMain
+              quantity: p.quantity || 1,
+              isMain: p.isMain,
+              surgicalApproach: p.surgicalApproach || null,
+              surgicalProcedure: p.surgicalProcedure || null
             }));
             
             const mainProcedure = formattedProcedures.find((p: any) => p.isMain);
@@ -1198,53 +1471,117 @@ export default function CreateOrder() {
             }
             
             if (secondaryProcs.length > 0) {
+              // Normalizar para formato frontend (sourceApproachId/sourceProcedureId)
               const secondaryData = secondaryProcs.map((p: any) => ({
-                procedure: p.item,
+                procedure: {
+                  ...p.item,
+                  sourceApproachId: p.surgicalApproach?.id || null,
+                  sourceApproachName: p.surgicalApproach?.name || null,
+                  sourceProcedureId: p.surgicalProcedure?.id || null,
+                  sourceProcedureName: p.surgicalProcedure?.name || null
+                },
                 quantity: p.quantity
               }));
               setSecondaryProcedures(secondaryData);
-              console.log(`Procedimentos secundários carregados: ${secondaryProcs.length} procedimentos`);
+              console.log(`Procedimentos secundários carregados (NORMALIZADOS): ${secondaryProcs.length} procedimentos`);
             }
           }
         } catch (error) {
           console.error("Erro ao carregar procedimentos:", error);
         }
 
-        // 3. Carregar fornecedores salvos - PADRONIZADO como OPME
+        // 3. Carregar fornecedores salvos - COM ASSOCIAÇÕES DE CONDUTA
         try {
           const supplierData = await apiRequest(`/api/orders/${order.id}/suppliers`, "GET");
+          
+          // Também carregar condutas para poder inferir approachId quando faltando
+          let orderApproaches: any[] = [];
+          try {
+            orderApproaches = await apiRequest(`/api/medical-order-surgical-approaches/order/${order.id}`, "GET");
+            console.log(`Condutas carregadas para inferência: ${orderApproaches?.length || 0}`);
+          } catch (e) {
+            console.log(`Nenhuma conduta encontrada para inferência`);
+          }
+          
           if (supplierData && supplierData.length > 0) {
             console.log(`Fornecedores salvos encontrados: ${supplierData.length} fornecedores`);
             
-            // Converter para formato padronizado: { item: supplier, quantity: 1 }
-            const formattedSuppliers = supplierData.map((supplier: any) => ({
-              item: supplier,
-              quantity: 1 // Fornecedores não têm quantidade, mas mantemos consistência
-            }));
+            // Mapear dados do backend para o formato esperado pelo frontend
+            // CORREÇÃO: Inferir sourceApproachId a partir de sourceProcedureId quando approach não está definido
+            const mappedSuppliers = supplierData.map((item: any) => {
+              // Formato: { supplier: {...}, surgicalApproach: {...}, surgicalProcedure: {...} }
+              const supplier = item.supplier || item;
+              
+              let sourceApproachId = item.surgicalApproach?.id || null;
+              let sourceApproachName = item.surgicalApproach?.name || null;
+              const sourceProcedureId = item.surgicalProcedure?.id || null;
+              const sourceProcedureName = item.surgicalProcedure?.name || null;
+              
+              // CORREÇÃO DE DADOS LEGADOS: Inferir approach a partir do procedure
+              if (!sourceApproachId && sourceProcedureId && orderApproaches && orderApproaches.length > 0) {
+                const matchingApproach = orderApproaches.find((sa: any) => 
+                  sa.surgicalProcedureId === sourceProcedureId
+                );
+                
+                if (matchingApproach) {
+                  sourceApproachId = matchingApproach.id;
+                  sourceApproachName = matchingApproach.name;
+                  console.log(`🔧 CORREÇÃO: Fornecedor ${supplier.name || supplier.companyName} inferiu approachId=${sourceApproachId} a partir do procedureId=${sourceProcedureId}`);
+                }
+              }
+              
+              return {
+                id: supplier.id,
+                companyName: supplier.name || supplier.companyName,
+                tradeName: supplier.tradeName || supplier.name,
+                cnpj: supplier.cnpj,
+                phone: supplier.phone,
+                email: supplier.email,
+                isApproved: item.isApproved || false,
+                // Associações de conduta para agrupamento
+                sourceApproachId,
+                sourceApproachName,
+                sourceProcedureId,
+                sourceProcedureName
+              };
+            });
             
+            // Atualizar primeiro os detalhes completos
+            setSupplierDetails(mappedSuppliers);
             
             // Manter formato atual do estado para compatibilidade (apenas IDs)
             const suppliersState = {
-              supplier1: supplierData[0]?.id || null,
-              supplier2: supplierData[1]?.id || null,
-              supplier3: supplierData[2]?.id || null
+              supplier1: mappedSuppliers[0]?.id || null,
+              supplier2: mappedSuppliers[1]?.id || null,
+              supplier3: mappedSuppliers[2]?.id || null
             };
             setSuppliers(suppliersState);
-            console.log(`Fornecedores carregados:`, supplierData.map((s: any) => s.companyName).join(', '));
+            console.log(`Fornecedores carregados:`, mappedSuppliers.map((s: any) => s.companyName).join(', '));
+            console.log(`Fornecedores com conduta:`, mappedSuppliers.filter((s: any) => s.sourceApproachId).length);
           }
         } catch (error) {
           console.error("Erro ao carregar fornecedores:", error);
         }
 
-        // 4. Carregar itens OPME salvos (dados completos já retornados pela API)
+        // 4. Carregar itens OPME salvos - COM NORMALIZAÇÃO
         try {
           const opmeItems = await apiRequest(`/api/orders/${order.id}/opme-items`, "GET");
           if (opmeItems && opmeItems.length > 0) {
             console.log(`Itens OPME salvos encontrados: ${opmeItems.length} itens`);
             
-            // A API já retorna dados completos, não precisamos fazer chamadas individuais
-            setSelectedOpmeItems(opmeItems);
-            console.log(`Itens OPME carregados: ${opmeItems.length} itens`);
+            // Normalizar para formato frontend (sourceApproachId/sourceProcedureId)
+            const normalizedOpme = opmeItems.map((opmeEntry: any) => ({
+              item: {
+                ...(opmeEntry.item || opmeEntry),
+                sourceApproachId: opmeEntry.surgicalApproach?.id || opmeEntry.sourceApproachId || null,
+                sourceApproachName: opmeEntry.surgicalApproach?.name || opmeEntry.sourceApproachName || null,
+                sourceProcedureId: opmeEntry.surgicalProcedure?.id || opmeEntry.sourceProcedureId || null,
+                sourceProcedureName: opmeEntry.surgicalProcedure?.name || opmeEntry.sourceProcedureName || null
+              },
+              quantity: opmeEntry.quantity || 1
+            }));
+            setSelectedOpmeItems(normalizedOpme);
+            console.log(`Itens OPME carregados (NORMALIZADOS): ${normalizedOpme.length} itens`);
           }
         } catch (error) {
           console.error("Erro ao carregar itens OPME:", error);
@@ -1272,17 +1609,27 @@ export default function CreateOrder() {
 
     console.log("✅ Dados relacionais carregados com sucesso - procedimentos e fornecedores já processados via API relacional");
 
-    // Carregar itens OPME via API relacional (dados completos já retornados)
+    // Carregar itens OPME via API relacional - COM NORMALIZAÇÃO
     try {
       const opmeResponse = await fetch(`/api/orders/${order.id}/opme-items`);
       if (opmeResponse.ok) {
         const opmeRelations = await opmeResponse.json();
         console.log("Itens OPME encontrados via API relacional:", opmeRelations);
 
-        // A API já retorna dados completos, não precisamos fazer chamadas individuais
         if (opmeRelations && opmeRelations.length > 0) {
-          console.log("Itens OPME carregados:", opmeRelations);
-          setSelectedOpmeItems(opmeRelations);
+          // Normalizar para formato frontend (sourceApproachId/sourceProcedureId)
+          const normalizedOpme = opmeRelations.map((opmeEntry: any) => ({
+            item: {
+              ...(opmeEntry.item || opmeEntry),
+              sourceApproachId: opmeEntry.surgicalApproach?.id || opmeEntry.sourceApproachId || null,
+              sourceApproachName: opmeEntry.surgicalApproach?.name || opmeEntry.sourceApproachName || null,
+              sourceProcedureId: opmeEntry.surgicalProcedure?.id || opmeEntry.sourceProcedureId || null,
+              sourceProcedureName: opmeEntry.surgicalProcedure?.name || opmeEntry.sourceProcedureName || null
+            },
+            quantity: opmeEntry.quantity || 1
+          }));
+          console.log("Itens OPME carregados (NORMALIZADOS):", normalizedOpme);
+          setSelectedOpmeItems(normalizedOpme);
         }
       } else {
         console.log("Nenhum item OPME encontrado via API relacional");
@@ -1315,19 +1662,23 @@ export default function CreateOrder() {
       setSuppliers({ supplier1: null, supplier2: null, supplier3: null });
     }
 
-    // Carregar CIDs via API relacional
+    // Carregar CIDs via API relacional - COM NORMALIZAÇÃO
     try {
       const cidsResponse = await fetch(`/api/orders/${order.id}/cids`);
       if (cidsResponse.ok) {
         const cidRelations = await cidsResponse.json();
         console.log("CIDs encontrados via API relacional:", cidRelations);
         
-        // A API relacional já retorna objetos CID completos, não precisamos fazer chamadas adicionais
+        // Normalizar para formato frontend (sourceApproachId/sourceProcedureId)
         const cidsList = cidRelations.map((cidData: any) => ({
-          cid: cidData,
-          laterality: "nao_aplicavel" // Default laterality
+          cid: cidData.cid || cidData,
+          sourceApproachId: cidData.surgicalApproach?.id || null,
+          sourceApproachName: cidData.surgicalApproach?.name || null,
+          sourceProcedureId: cidData.surgicalProcedure?.id || null,
+          sourceProcedureName: cidData.surgicalProcedure?.name || null
         }));
         
+        console.log("CIDs carregados (NORMALIZADOS):", cidsList);
         setMultipleCids(cidsList);
       } else {
         setMultipleCids([]);
@@ -1525,6 +1876,9 @@ export default function CreateOrder() {
           clinicalJustification: clinicalJustification,
           procedureType: procedureType,
           procedureLaterality: procedureLaterality === "null" || procedureLaterality === "" ? null : procedureLaterality,
+          cbhpmAdditionalNotes: cbhpmAdditionalNotes || null,
+          opmeAdditionalNotes: opmeAdditionalNotes || null,
+          supplierAdditionalNotes: supplierAdditionalNotes || null,
           // **PRESERVAR ATTACHMENTS**
           attachments: currentAttachments,
         };
@@ -1633,17 +1987,28 @@ export default function CreateOrder() {
       if (currentStep === 3 && orderId) {
         console.log("🔄 PASSO 3 - Salvando dados relacionais específicos do passo de cirurgia");
         
-        // Salvar CIDs relacionais
+        // Salvar CIDs relacionais (com associações cirúrgicas)
         try {
-          const cidIds = multipleCids.map((item) => {
+          const cids = multipleCids.map((item) => {
             // Suportar ambas as estruturas: item.cid.id ou item.id
             const cidId = item.cid?.id;
             if (!cidId) {
               console.warn("saveProgress - CID sem ID encontrado:", item);
             }
-            return cidId;
-          }).filter(id => id !== undefined); // Remove undefined IDs
-          console.log(`saveProgress - Salvando ${cidIds.length} CIDs relacionais para pedido ${orderId}:`, cidIds);
+            // Buscar associações em múltiplos locais possíveis:
+            // 1. item.surgicalApproach?.id (formato padrão com objetos)
+            // 2. item.sourceApproachId (formato direto usado pelo auto-preenchimento)
+            // 3. item.cid?.sourceApproachId (formato legado)
+            const surgicalApproachId = item.surgicalApproach?.id || item.sourceApproachId || item.cid?.sourceApproachId || null;
+            const surgicalProcedureId = item.surgicalProcedure?.id || item.sourceProcedureId || item.cid?.sourceProcedureId || null;
+            
+            return {
+              cidId,
+              surgicalApproachId,
+              surgicalProcedureId
+            };
+          }).filter(cid => cid.cidId !== undefined); // Remove undefined IDs
+          console.log(`saveProgress - Salvando ${cids.length} CIDs relacionais para pedido ${orderId}:`, cids);
           
           const cidResponse = await fetch(`/api/orders/${orderId}/cids`, {
             method: 'PUT',
@@ -1651,7 +2016,7 @@ export default function CreateOrder() {
               'Content-Type': 'application/json',
             },
             credentials: 'include',
-            body: JSON.stringify({ cidIds })
+            body: JSON.stringify({ cids })
           });
 
           if (cidResponse.ok) {
@@ -1678,12 +2043,15 @@ export default function CreateOrder() {
           // }
           
           // Adicionar procedimentos da lista unificada (backend determina qual é o principal)
+          // Inclui associações cirúrgicas para agrupamento
           secondaryProcedures.forEach((proc) => {
             if (proc.procedure?.id) {
               procedures.push({
                 procedureId: proc.procedure.id,
                 quantityRequested: proc.quantity || 1,
-                isMain: false
+                isMain: false,
+                surgicalApproachId: proc.surgicalApproach?.id || proc.procedure?.sourceApproachId || null,
+                surgicalProcedureId: proc.surgicalProcedure?.id || proc.procedure?.sourceProcedureId || null
               });
             }
           });
@@ -1736,12 +2104,14 @@ export default function CreateOrder() {
           console.error("saveProgress - Erro ao salvar procedimentos cirúrgicos relacionais:", error);
         }
 
-        // Salvar itens OPME relacionais
+        // Salvar itens OPME relacionais (com associações cirúrgicas)
         if (selectedOpmeItems && selectedOpmeItems.length > 0) {
           try {
             const opmeItems = selectedOpmeItems.map(item => ({
               opmeItemId: item.item.id,
-              quantity: item.quantity || 1
+              quantity: item.quantity || 1,
+              surgicalApproachId: item.surgicalApproach?.id || item.item?.sourceApproachId || null,
+              surgicalProcedureId: item.surgicalProcedure?.id || item.item?.sourceProcedureId || null
             }));
             
             console.log(`saveProgress - Salvando ${opmeItems.length} itens OPME relacionais para pedido ${orderId}:`, opmeItems);
@@ -1765,15 +2135,44 @@ export default function CreateOrder() {
           }
         }
 
-        // Salvar fornecedores relacionais
+        // Salvar fornecedores relacionais (com associações de conduta quando existirem)
         try {
-          const supplierIds = [
-            suppliers.supplier1,
-            suppliers.supplier2,
-            suppliers.supplier3
-          ].filter(Boolean) as number[]; // Remove valores null e undefined
+          let suppliersPayload: any;
           
-          console.log(`saveProgress - Salvando ${supplierIds.length} fornecedores relacionais para pedido ${orderId}:`, supplierIds);
+          // DEBUG: Log detalhado do supplierDetails antes de processar
+          console.log(`🔍 DEBUG SUPPLIERS - supplierDetails original:`, supplierDetails.map(s => ({
+            id: s.id,
+            companyName: s.companyName,
+            sourceApproachId: s.sourceApproachId,
+            sourceApproachName: s.sourceApproachName,
+            sourceProcedureId: s.sourceProcedureId,
+            sourceProcedureName: s.sourceProcedureName
+          })));
+          
+          // SEMPRE usar o novo formato se há fornecedores em supplierDetails
+          // Isso garante que TODOS os fornecedores sejam salvos, não apenas os 3 primeiros
+          if (supplierDetails.length > 0) {
+            // Novo formato: fornecedores com associações de conduta (mesmo que vazias)
+            suppliersPayload = {
+              suppliers: supplierDetails.map(supplier => ({
+                supplierId: supplier.id,
+                surgicalApproachId: supplier.sourceApproachId || null,
+                surgicalProcedureId: supplier.sourceProcedureId || null,
+                isApproved: supplier.isApproved || false
+              }))
+            };
+            console.log(`🔍 DEBUG SUPPLIERS - Payload preparado:`, suppliersPayload);
+            console.log(`saveProgress - Salvando ${supplierDetails.length} fornecedores:`, suppliersPayload);
+          } else {
+            // Fallback: Formato legado apenas se não houver supplierDetails
+            const supplierIds = [
+              suppliers.supplier1,
+              suppliers.supplier2,
+              suppliers.supplier3
+            ].filter(Boolean) as number[];
+            suppliersPayload = { supplierIds };
+            console.log(`saveProgress - Salvando ${supplierIds.length} fornecedores (formato legado):`, supplierIds);
+          }
           
           const suppliersResponse = await fetch(`/api/orders/${orderId}/suppliers`, {
             method: 'PUT',
@@ -1781,7 +2180,7 @@ export default function CreateOrder() {
               'Content-Type': 'application/json',
             },
             credentials: 'include',
-            body: JSON.stringify({ supplierIds })
+            body: JSON.stringify(suppliersPayload)
           });
 
           if (suppliersResponse.ok) {
@@ -2105,29 +2504,21 @@ export default function CreateOrder() {
       }
 
       // Carregar CIDs atualizados do banco de dados antes de gerar o PDF
+      // IMPORTANTE: O backend /api/orders/:id/cids já retorna as associações de surgicalApproach e surgicalProcedure para cada CID
       console.log("🔄 Carregando CIDs atualizados do banco para o PDF...");
       const freshCidData = await apiRequest(`/api/orders/${orderId}/cids`, "GET");
-      const freshSurgicalApproaches = await apiRequest(`/api/medical-order-surgical-approaches/order/${orderId}`, "GET");
       
-      // Combinar CIDs com condutas cirúrgicas (mesma lógica do modo edição)
-      let freshMultipleCids = [];
+      // Usar os dados do backend diretamente - eles já contêm as associações corretas de cada CID
+      let freshMultipleCids: any[] = [];
       if (freshCidData && freshCidData.length > 0) {
-        freshMultipleCids = freshCidData.map((cid: any) => {
-          const primaryApproach = freshSurgicalApproaches?.find((sa: any) => sa.is_primary);
-          const anyApproach = freshSurgicalApproaches?.length > 0 ? freshSurgicalApproaches[0] : null;
-          const selectedApproach = primaryApproach || anyApproach;
-          
-          return {
-            cid,
-            surgicalApproach: selectedApproach ? {
-              id: selectedApproach.surgicalApproachId || selectedApproach.surgical_approach_id,
-              name: selectedApproach.surgicalApproachName || selectedApproach.surgical_approach_name,
-              description: selectedApproach.surgicalApproachDescription || selectedApproach.surgical_approach_description,
-              isPrimary: selectedApproach.isPrimary || selectedApproach.is_primary || false
-            } : undefined
-          };
-        });
-        console.log("✅ CIDs carregados para PDF:", freshMultipleCids.length, "CIDs com condutas");
+        // Formato do backend: { cid: {...}, surgicalApproach: {...} | null, surgicalProcedure: {...} | null }
+        freshMultipleCids = freshCidData.map((cidItem: any) => ({
+          cid: cidItem.cid,
+          surgicalApproach: cidItem.surgicalApproach,
+          surgicalProcedure: cidItem.surgicalProcedure
+        }));
+        console.log("✅ CIDs carregados para PDF:", freshMultipleCids.length, "CIDs com associações cirúrgicas:", 
+          freshMultipleCids.map((c: any) => `${c.cid?.code} → ${c.surgicalProcedure?.name || 'sem proc'} → ${c.surgicalApproach?.name || 'sem conduta'}`));
       }
 
       toast({
@@ -2144,47 +2535,33 @@ export default function CreateOrder() {
       const { pdf } = await import('@react-pdf/renderer');
       const { OrderPDFDocument } = await import('@/components/order-pdf-document');
 
-      // Preparar fornecedores com fabricantes para o PDF
+      // Preparar fornecedores com associações de conduta cirúrgica para o PDF
+      // IMPORTANTE: Usar rota /api/orders/:id/suppliers que retorna surgicalApproach e surgicalProcedure
       let suppliersArray: any[] = [];
       try {
-        const suppliersWithManufacturersResponse = await fetch(`/api/medical-orders/${orderId}/suppliers-with-manufacturers`, {
-          credentials: 'include'
-        });
+        const suppliersResponse = await apiRequest(`/api/orders/${orderId}/suppliers`, "GET");
+        console.log("🏭 PDF - Fornecedores com associações cirúrgicas:", suppliersResponse);
         
-        if (suppliersWithManufacturersResponse.ok) {
-          const suppliersWithManufacturers = await suppliersWithManufacturersResponse.json();
-          console.log("🏭 PDF - Fornecedores com fabricantes carregados:", suppliersWithManufacturers);
-          suppliersArray = suppliersWithManufacturers;
-        } else {
-          // Fallback para o sistema antigo se não conseguir carregar fabricantes
-          if (suppliers.supplier1) {
-            const supplier1Data = supplierDetails.find(s => s.id === suppliers.supplier1);
-            if (supplier1Data) suppliersArray.push(supplier1Data);
-          }
-          if (suppliers.supplier2) {
-            const supplier2Data = supplierDetails.find(s => s.id === suppliers.supplier2);
-            if (supplier2Data) suppliersArray.push(supplier2Data);
-          }
-          if (suppliers.supplier3) {
-            const supplier3Data = supplierDetails.find(s => s.id === suppliers.supplier3);
-            if (supplier3Data) suppliersArray.push(supplier3Data);
-          }
+        if (suppliersResponse && suppliersResponse.length > 0) {
+          // Formato do backend: { supplier: {...}, surgicalApproach: {...} | null, surgicalProcedure: {...} | null }
+          suppliersArray = suppliersResponse.map((item: any) => ({
+            supplierId: item.supplier?.id,
+            supplierName: item.supplier?.tradeName || item.supplier?.name,
+            cnpj: item.supplier?.cnpj,
+            surgicalApproach: item.surgicalApproach,
+            surgicalProcedure: item.surgicalProcedure,
+            isApproved: item.isApproved,
+            // Adicionar campos de compatibilidade para o agrupamento no PDF
+            sourceApproachId: item.surgicalApproach?.id || null,
+            sourceApproachName: item.surgicalApproach?.name || null,
+            sourceProcedureId: item.surgicalProcedure?.id || null,
+            sourceProcedureName: item.surgicalProcedure?.name || null
+          }));
+          console.log("✅ Fornecedores carregados para PDF:", suppliersArray.length, "fornecedores com associações:",
+            suppliersArray.map((s: any) => `${s.supplierName} → ${s.surgicalProcedure?.name || 'sem proc'} → ${s.surgicalApproach?.name || 'sem conduta'}`));
         }
       } catch (error) {
-        console.error("🏭 PDF - Erro ao carregar fornecedores com fabricantes:", error);
-        // Fallback para o sistema antigo
-        if (suppliers.supplier1) {
-          const supplier1Data = supplierDetails.find(s => s.id === suppliers.supplier1);
-          if (supplier1Data) suppliersArray.push(supplier1Data);
-        }
-        if (suppliers.supplier2) {
-          const supplier2Data = supplierDetails.find(s => s.id === suppliers.supplier2);
-          if (supplier2Data) suppliersArray.push(supplier2Data);
-        }
-        if (suppliers.supplier3) {
-          const supplier3Data = supplierDetails.find(s => s.id === suppliers.supplier3);
-          if (supplier3Data) suppliersArray.push(supplier3Data);
-        }
+        console.error("🏭 PDF - Erro ao carregar fornecedores:", error);
       }
 
       // Preparar dados para o PDF com quebra automática
@@ -2196,6 +2573,9 @@ export default function CreateOrder() {
           procedureLaterality: currentOrderData?.procedureLaterality,
           secondaryProcedureQuantities: currentOrderData?.secondaryProcedureQuantities,
           opmeItemQuantities: currentOrderData?.opmeItemQuantities,
+          cbhpmAdditionalNotes: cbhpmAdditionalNotes ?? currentOrderData?.cbhpmAdditionalNotes ?? currentOrderData?.cbhpm_additional_notes,
+          opmeAdditionalNotes: opmeAdditionalNotes ?? currentOrderData?.opmeAdditionalNotes ?? currentOrderData?.opme_additional_notes,
+          supplierAdditionalNotes: supplierAdditionalNotes ?? currentOrderData?.supplierAdditionalNotes ?? currentOrderData?.supplier_additional_notes,
           doctorName: user?.name || "Dr. Médico Responsável",
           doctorCRM: user?.crm || "CRM XXXX",
           doctorLogoUrl: user?.logoUrl, // Logo do médico do campo logo_url
@@ -3027,9 +3407,15 @@ export default function CreateOrder() {
     if (currentStep < 5) {
       // Se estamos no passo 4 (Visualização), então finalizamos o pedido
       if (currentStep === 4) {
-        await handleComplete();
-        // Voltar ao topo da página após finalizar
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        // Ativar loading durante criação do PDF f
+        setIsCreatingPDF(true);
+        try {
+          await handleComplete();
+          // Voltar ao topo da página após finalizar
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } finally {
+          setIsCreatingPDF(false);
+        }
         return;
       }
       if (currentStep === 1) {
@@ -3218,11 +3604,17 @@ export default function CreateOrder() {
           return;
         }
 
-        await saveProgress();
-        setCurrentStep(currentStep + 1);
-        setTimeout(() => {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }, 50);
+        // Ativar loading durante transição do passo 3 para visualização
+        setIsPreparingPreview(true);
+        try {
+          await saveProgress();
+          setCurrentStep(currentStep + 1);
+          setTimeout(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }, 50);
+        } finally {
+          setIsPreparingPreview(false);
+        }
       } else {
         // Para outros passos, salvar o progresso e avançar
         // Lateralidade dos procedimentos secundários removida conforme solicitado
@@ -3469,6 +3861,12 @@ export default function CreateOrder() {
                   setSelectedSurgicalApproaches={updateSelectedSurgicalApproaches}
                   isEditMode={!!editOrderId}
                   selectedAnatomicalRegion={selectedAnatomicalRegion}
+                  cbhpmAdditionalNotes={cbhpmAdditionalNotes}
+                  setCbhpmAdditionalNotes={setCbhpmAdditionalNotes}
+                  opmeAdditionalNotes={opmeAdditionalNotes}
+                  setOpmeAdditionalNotes={setOpmeAdditionalNotes}
+                  supplierAdditionalNotes={supplierAdditionalNotes}
+                  setSupplierAdditionalNotes={setSupplierAdditionalNotes}
                 />
               </div>
             )}
@@ -3560,7 +3958,11 @@ export default function CreateOrder() {
                               minHeight: '72px',  // Altura mínima (equivale a ~3 linhas)
                               height: 'auto'      // Altura automática baseada no conteúdo
                             }}>
-                              <p className="whitespace-pre-wrap">{clinicalJustification || 'Justificativa clínica será exibida aqui'}</p>
+                              {clinicalJustification ? (
+                                <MarkdownViewer content={clinicalJustification} className="prose-xs" />
+                              ) : (
+                                <p className="text-muted-foreground italic">Justificativa clínica será exibida aqui</p>
+                              )}
                             </div>
                           </div>
 
@@ -3568,82 +3970,8 @@ export default function CreateOrder() {
                           <div className="space-y-4 mt-10">
                             <div className="pb-2">
                               <div className="space-y-2">
-                                
-                                {/* Códigos CID-10 */}
-                                <div>
-                                  <p className="font-bold text-xs text-foreground">Códigos CID-10:</p>
-                                  <div className="text-xs text-muted-foreground pl-4 space-y-0.5">
-                                    {multipleCids && multipleCids.length > 0 ? (
-                                      multipleCids.map((cidItem, index) => {
-                                        // Suportar ambas as estruturas: cidItem.cid.code ou cidItem.code
-                                        const code = cidItem.cid?.code;
-                                        const description = cidItem.cid?.description;
-                                        const id = cidItem.cid?.id;
-                                        
-                                        return (
-                                          <p key={id || index}>
-                                            {code} - {description}
-                                          </p>
-                                        );
-                                      })
-                                    ) : (
-                                      <p>Nenhum código CID selecionado</p>
-                                    )}
-                                  </div>
-                                </div>
-                                
-                                {/* Condutas Cirúrgicas Associadas */}
-                                {selectedSurgicalApproaches && selectedSurgicalApproaches.length > 0 && (
-                                  <div>
-                                    <p className="font-bold text-xs text-foreground">Condutas Cirúrgicas:</p>
-                                    <div className="text-xs text-muted-foreground pl-4 space-y-0.5">
-                                      {selectedSurgicalApproaches.map((approach, index) => {
-                                        const conductName = approach.approachName || 'Nome não encontrado';
-                                        return (
-                                          <p key={index}>
-                                            {conductName}
-                                          </p>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {/* Procedimentos Cirúrgicos Necessários - Lista Unificada */}
-                                {secondaryProcedures.length > 0 && (
-                                  <div>
-                                    <p className="font-bold text-xs text-foreground">Procedimentos Cirúrgicos Necessários:</p>
-                                    <div className="text-xs text-muted-foreground pl-4 space-y-0.5">
-                                      {(() => {
-                                        // Aplicar a mesma lógica de ordenação do salvamento
-                                        const parsePorteValue = (porte: string | null | undefined): number => {
-                                          if (!porte) return 0;
-                                          const match = porte.match(/^(\d+)([A-Za-z]?)$/);
-                                          if (!match) return 0;
-                                          const numero = parseInt(match[1], 10);
-                                          const letra = match[2]?.toUpperCase() || 'A';
-                                          const valorLetra = letra.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
-                                          return (numero * 100) + valorLetra;
-                                        };
 
-                                        const sortedProcedures = [...secondaryProcedures].sort(
-                                          (a, b) => parsePorteValue(b.procedure.porte) - parsePorteValue(a.procedure.porte)
-                                        );
-
-                                        // Mostrar todos os procedimentos ordenados por porte
-                                        // O primeiro é sempre o principal (maior porte)
-                                        return sortedProcedures.map((proc, index) => (
-                                          <p key={index}>
-                                            {proc.quantity} x {proc.procedure.code} - {proc.procedure.name}
-                                            {index === 0 ? ' (Procedimento Principal)' : ''}
-                                          </p>
-                                        ));
-                                      })()}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Informações do procedimento */}
+                                {/* Informações do procedimento - Caráter e Lateralidade */}
                                 <div className="flex text-xs">
                                   <div className="w-1/2">
                                     <p className="font-bold text-foreground">Caráter do Procedimento:</p>
@@ -3663,29 +3991,420 @@ export default function CreateOrder() {
                                   </div>
                                 </div>
 
-                                {/* Materiais OPME */}
-                                {selectedOpmeItems && selectedOpmeItems.length > 0 && (
-                                  <div>
-                                    <p className="font-bold text-xs text-foreground">Lista de Materiais Necessários:</p>
-                                    <div className="flex flex-col text-xs text-muted-foreground pl-4 gap-0.5">
-                                      {selectedOpmeItems.map((item, index) => (
-                                        <p key={index}>
-                                          {item.quantity} x {item.technicalName || item.item?.technicalName || 'Material não especificado'}
-                                        </p>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
+                                {/* Agrupamento por Procedimento/Conduta */}
+                                {(() => {
+                                  // Função para agrupar itens por procedimento/conduta (usando IDs para unicidade)
+                                  const groupItemsByApproach = () => {
+                                    const groups: Map<string, {
+                                      procedureId: number | null;
+                                      procedureName: string;
+                                      approachId: number | null;
+                                      approachName: string;
+                                      cids: any[];
+                                      cbhpmProcedures: any[];
+                                      opmeItems: any[];
+                                      suppliers: any[];
+                                    }> = new Map();
 
-                                {/* Fornecedores */}
-                                <SupplierDisplay 
-                                  orderId={orderId || currentOrderData?.id}
-                                  supplierIds={[
-                                    suppliers.supplier1,
-                                    suppliers.supplier2,
-                                    suppliers.supplier3
-                                  ].filter(Boolean) as number[]}
-                                />
+                                    // Agrupar CIDs - verificar surgicalApproach E sourceApproachId (na raiz e em cid)
+                                    if (multipleCids && multipleCids.length > 0) {
+                                      multipleCids.forEach((cidItem: any) => {
+                                        // Priorizar surgicalApproach (objeto), depois sourceApproachId (ID direto na raiz ou em cid)
+                                        const approach = cidItem.surgicalApproach || cidItem.cid?.surgicalApproach;
+                                        const approachId = approach?.id || cidItem.sourceApproachId || cidItem.cid?.sourceApproachId || null;
+                                        const approachName = approach?.name || cidItem.sourceApproachName || cidItem.cid?.sourceApproachName || 'Itens Gerais';
+                                        // Buscar procedimento cirúrgico (objeto ou ID direto)
+                                        const procedure = cidItem.surgicalProcedure || cidItem.cid?.surgicalProcedure;
+                                        const procedureId = procedure?.id || cidItem.sourceProcedureId || cidItem.cid?.sourceProcedureId || null;
+                                        const procedureName = procedure?.name || cidItem.sourceProcedureName || cidItem.cid?.sourceProcedureName || '';
+                                        // Chave baseada em IDs para unicidade
+                                        const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
+                                        
+                                        if (!groups.has(key)) {
+                                          groups.set(key, {
+                                            procedureId,
+                                            procedureName,
+                                            approachId,
+                                            approachName,
+                                            cids: [],
+                                            cbhpmProcedures: [],
+                                            opmeItems: [],
+                                            suppliers: []
+                                          });
+                                        }
+                                        groups.get(key)!.cids.push(cidItem);
+                                      });
+                                    }
+
+                                    // Agrupar procedimentos CBHPM
+                                    if (secondaryProcedures && secondaryProcedures.length > 0) {
+                                      secondaryProcedures.forEach((proc: any) => {
+                                        // Priorizar surgicalApproach (dados do backend), depois sourceApproachId (dados manuais)
+                                        const approach = proc.surgicalApproach || proc.procedure?.surgicalApproach;
+                                        const approachId = approach?.id || proc.procedure?.sourceApproachId || null;
+                                        const approachName = approach?.name || proc.procedure?.sourceApproachName || 'Itens Gerais';
+                                        // Buscar procedimento cirúrgico
+                                        const procedure = proc.surgicalProcedure || proc.procedure?.surgicalProcedure;
+                                        const procedureId = procedure?.id || proc.procedure?.sourceProcedureId || null;
+                                        const procedureName = procedure?.name || proc.procedure?.sourceProcedureName || '';
+                                        // Chave baseada em IDs para unicidade
+                                        const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
+                                        
+                                        if (!groups.has(key)) {
+                                          groups.set(key, {
+                                            procedureId,
+                                            procedureName,
+                                            approachId,
+                                            approachName,
+                                            cids: [],
+                                            cbhpmProcedures: [],
+                                            opmeItems: [],
+                                            suppliers: []
+                                          });
+                                        }
+                                        groups.get(key)!.cbhpmProcedures.push(proc);
+                                      });
+                                    }
+
+                                    // Agrupar itens OPME
+                                    if (selectedOpmeItems && selectedOpmeItems.length > 0) {
+                                      selectedOpmeItems.forEach((opmeItem: any) => {
+                                        const item = opmeItem.item || opmeItem;
+                                        // Priorizar surgicalApproach (dados do backend), depois sourceApproachId (dados manuais)
+                                        const approach = opmeItem.surgicalApproach || item?.surgicalApproach;
+                                        const approachId = approach?.id || item?.sourceApproachId || null;
+                                        const approachName = approach?.name || item?.sourceApproachName || 'Itens Gerais';
+                                        // Buscar procedimento cirúrgico
+                                        const procedure = opmeItem.surgicalProcedure || item?.surgicalProcedure;
+                                        const procedureId = procedure?.id || item?.sourceProcedureId || null;
+                                        const procedureName = procedure?.name || item?.sourceProcedureName || '';
+                                        // Chave baseada em IDs para unicidade
+                                        const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
+                                        
+                                        if (!groups.has(key)) {
+                                          groups.set(key, {
+                                            procedureId,
+                                            procedureName,
+                                            approachId,
+                                            approachName,
+                                            cids: [],
+                                            cbhpmProcedures: [],
+                                            opmeItems: [],
+                                            suppliers: []
+                                          });
+                                        }
+                                        groups.get(key)!.opmeItems.push(opmeItem);
+                                      });
+                                    }
+
+                                    // Agrupar fornecedores
+                                    if (supplierDetails && supplierDetails.length > 0) {
+                                      supplierDetails.forEach((supplier: any) => {
+                                        const approachId = supplier.sourceApproachId || null;
+                                        const approachName = supplier.sourceApproachName || 'Itens Gerais';
+                                        const procedureId = supplier.sourceProcedureId || null;
+                                        const procedureName = supplier.sourceProcedureName || '';
+                                        // Chave baseada em IDs para unicidade
+                                        const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
+                                        
+                                        if (!groups.has(key)) {
+                                          groups.set(key, {
+                                            procedureId,
+                                            procedureName,
+                                            approachId,
+                                            approachName,
+                                            cids: [],
+                                            cbhpmProcedures: [],
+                                            opmeItems: [],
+                                            suppliers: []
+                                          });
+                                        }
+                                        groups.get(key)!.suppliers.push(supplier);
+                                      });
+                                    }
+
+                                    // Converter para array - PRESERVAR ORDEM DE ADIÇÃO DOS BLOCOS
+                                    // Apenas colocar 'general' (itens sem conduta) no final
+                                    const entries = Array.from(groups.entries());
+                                    const generalEntry = entries.find(([key]) => key === 'general');
+                                    const otherEntries = entries.filter(([key]) => key !== 'general');
+                                    
+                                    // Retorna outros na ordem original de adição, com 'general' no final
+                                    return generalEntry ? [...otherEntries, generalEntry] : otherEntries;
+                                  };
+
+                                  const groupedItems = groupItemsByApproach();
+                                  const hasMultipleGroups = groupedItems.length > 1 || (groupedItems.length === 1 && groupedItems[0][0] !== 'general');
+
+                                  // 📝 Função para parsear notas por subtítulos de conduta
+                                  // Formato atual: ### [Procedimento] → [Conduta]
+                                  // Formato legado (compatibilidade): ### [Procedimento] → [Conduta] [PID:x][AID:y]
+                                  // IMPORTANTE: Ambos os formatos são normalizados para chave baseada em nomes
+                                  // Se houver múltiplas seções com a mesma chave, o conteúdo é mesclado
+                                  const parseNotesBySubtitle = (notes: string) => {
+                                    if (!notes) return { general: '', sections: new Map<string, string>() };
+                                    
+                                    const sections = new Map<string, string>();
+                                    const lines = notes.split('\n');
+                                    let currentKey: string | null = null;
+                                    let currentContent: string[] = [];
+                                    let generalContent: string[] = [];
+                                    
+                                    // Função auxiliar para salvar conteúdo (com merge se chave já existe)
+                                    const saveContent = (key: string, content: string) => {
+                                      if (!content) return;
+                                      const existing = sections.get(key);
+                                      if (existing) {
+                                        // Merge: concatenar conteúdo existente com novo
+                                        sections.set(key, `${existing}\n\n${content}`);
+                                      } else {
+                                        sections.set(key, content);
+                                      }
+                                    };
+                                    
+                                    lines.forEach(line => {
+                                      // Detectar subtítulo - suporta formato atual e legado
+                                      // Atual: ### [Procedimento] → [Conduta]
+                                      // Legado: ### [Procedimento] → [Conduta] [PID:x][AID:y]
+                                      const subtitleWithIdsMatch = line.match(/^###\s*(.+?)\s*→\s*(.+?)\s*\[PID:(\d+)\]\[AID:(\d+)\]\s*$/);
+                                      const subtitleMatch = line.match(/^###\s*(.+?)\s*→\s*(.+?)\s*$/);
+                                      
+                                      if (subtitleWithIdsMatch || subtitleMatch) {
+                                        // Salvar conteúdo anterior
+                                        if (currentKey) {
+                                          const content = currentContent.join('\n').trim();
+                                          saveContent(currentKey, content);
+                                        } else if (currentContent.length > 0) {
+                                          generalContent = [...generalContent, ...currentContent];
+                                        }
+                                        
+                                        // Extrair nomes do procedimento e conduta (ambos os formatos)
+                                        const procedureName = (subtitleWithIdsMatch || subtitleMatch)![1].trim();
+                                        const approachName = (subtitleWithIdsMatch || subtitleMatch)![2].trim();
+                                        
+                                        // Sempre usar chave baseada em nomes (canônica)
+                                        currentKey = `name:${procedureName}-${approachName}`;
+                                        currentContent = [];
+                                      } else {
+                                        currentContent.push(line);
+                                      }
+                                    });
+                                    
+                                    // Salvar última seção
+                                    if (currentKey) {
+                                      const content = currentContent.join('\n').trim();
+                                      saveContent(currentKey, content);
+                                    } else if (currentContent.length > 0) {
+                                      generalContent = [...generalContent, ...currentContent];
+                                    }
+                                    
+                                    return { general: generalContent.join('\n').trim(), sections };
+                                  };
+
+                                  // Parsear as 3 caixas de notas
+                                  const cbhpmNotes = parseNotesBySubtitle(cbhpmAdditionalNotes);
+                                  const opmeNotes = parseNotesBySubtitle(opmeAdditionalNotes);
+                                  const supplierNotes = parseNotesBySubtitle(supplierAdditionalNotes);
+
+                                  // Função helper para buscar nota por nome (chave única)
+                                  // Todas as seções são normalizadas para chave baseada em nomes
+                                  const findNote = (
+                                    sections: Map<string, string>,
+                                    procedureId: number | null,
+                                    approachId: number | null,
+                                    procedureName: string,
+                                    approachName: string
+                                  ): string | undefined => {
+                                    // Busca por nome (chave canônica)
+                                    const nameKey = `name:${procedureName}-${approachName}`;
+                                    return sections.get(nameKey);
+                                  };
+
+                                  // Função para ordenar procedimentos CBHPM por porte
+                                  const parsePorteValue = (porte: string | null | undefined): number => {
+                                    if (!porte) return 0;
+                                    const match = porte.match(/^(\d+)([A-Za-z]?)$/);
+                                    if (!match) return 0;
+                                    const numero = parseInt(match[1], 10);
+                                    const letra = match[2]?.toUpperCase() || 'A';
+                                    const valorLetra = letra.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
+                                    return (numero * 100) + valorLetra;
+                                  };
+
+                                  return groupedItems.map(([key, group], groupIndex) => (
+                                    <div key={key} className={`${groupIndex > 0 ? 'mt-4 pt-4 border-t border-gray-200' : ''}`}>
+                                      {/* Subtítulo do grupo - Procedimento Cirúrgico → Conduta */}
+                                      {hasMultipleGroups && group.approachId && (
+                                        <div className="mb-3">
+                                          <p className="font-bold text-base text-medsync-blue">
+                                            {group.procedureName} → {group.approachName}
+                                          </p>
+                                        </div>
+                                      )}
+
+                                      {/* Códigos CID-10 do grupo */}
+                                      {group.cids.length > 0 && (
+                                        <div className="mb-2">
+                                          <p className="font-bold text-xs text-foreground">Códigos CID-10:</p>
+                                          <div className="text-xs text-muted-foreground pl-4 space-y-0.5">
+                                            {group.cids.map((cidItem, index) => {
+                                              const code = cidItem.cid?.code;
+                                              const description = cidItem.cid?.description;
+                                              const id = cidItem.cid?.id;
+                                              return (
+                                                <p key={id || index}>
+                                                  {code} - {description}
+                                                </p>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Procedimentos CBHPM do grupo + Observações específicas */}
+                                      {group.cbhpmProcedures.length > 0 && (
+                                        <div className="mb-2">
+                                          <p className="font-bold text-xs text-foreground">Procedimentos Cirúrgicos Necessários:</p>
+                                          <div className="text-xs text-muted-foreground pl-4 space-y-0.5">
+                                            {(() => {
+                                              const sortedProcs = [...group.cbhpmProcedures].sort(
+                                                (a, b) => parsePorteValue(b.procedure?.porte) - parsePorteValue(a.procedure?.porte)
+                                              );
+                                              return sortedProcs.map((proc, index) => (
+                                                <p key={index}>
+                                                  {proc.quantity} x {proc.procedure?.code} - {proc.procedure?.name}
+                                                  {index === 0 && sortedProcs.length > 1 ? ' (Principal)' : ''}
+                                                </p>
+                                              ));
+                                            })()}
+                                          </div>
+                                          {/* Observação específica CBHPM - logo abaixo da lista */}
+                                          {(() => {
+                                            const cbhpmNote = findNote(cbhpmNotes.sections, group.procedureId, group.approachId, group.procedureName, group.approachName);
+                                            if (!cbhpmNote) return null;
+                                            return (
+                                              <div className="mt-1">
+                                                <p className="font-bold text-xs text-foreground">Observações:</p>
+                                                <div className="text-xs text-muted-foreground pl-4">
+                                                  <MarkdownViewer content={cbhpmNote} className="prose-xs" />
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      )}
+
+                                      {/* Materiais OPME do grupo + Observações específicas */}
+                                      {group.opmeItems.length > 0 && (
+                                        <div className="mb-2">
+                                          <p className="font-bold text-xs text-foreground">Lista de Materiais Necessários:</p>
+                                          <div className="flex flex-col text-xs text-muted-foreground pl-4 gap-0.5">
+                                            {group.opmeItems.map((item, index) => (
+                                              <p key={index}>
+                                                {item.quantity} x {item.technicalName || item.item?.technicalName || 'Material não especificado'}
+                                              </p>
+                                            ))}
+                                          </div>
+                                          {/* Observação específica OPME - logo abaixo da lista */}
+                                          {(() => {
+                                            const opmeNote = findNote(opmeNotes.sections, group.procedureId, group.approachId, group.procedureName, group.approachName);
+                                            if (!opmeNote) return null;
+                                            return (
+                                              <div className="mt-1">
+                                                <p className="font-bold text-xs text-foreground">Observações:</p>
+                                                <div className="text-xs text-muted-foreground pl-4">
+                                                  <MarkdownViewer content={opmeNote} className="prose-xs" />
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      )}
+
+                                      {/* Fornecedores do grupo + Observações específicas */}
+                                      {group.suppliers.length > 0 && (
+                                        <div className="mb-2">
+                                          <p className="font-bold text-xs text-foreground">Fornecedores:</p>
+                                          <div className="flex flex-col text-xs text-muted-foreground pl-4 gap-0.5">
+                                            {group.suppliers.map((supplier, index) => (
+                                              <p key={supplier.id || index}>
+                                                {index + 1}. {supplier.tradeName || supplier.companyName}
+                                              </p>
+                                            ))}
+                                          </div>
+                                          {/* Observação específica Fornecedores - logo abaixo da lista */}
+                                          {(() => {
+                                            const supplierNote = findNote(supplierNotes.sections, group.procedureId, group.approachId, group.procedureName, group.approachName);
+                                            if (!supplierNote) return null;
+                                            return (
+                                              <div className="mt-1">
+                                                <p className="font-bold text-xs text-foreground">Observações:</p>
+                                                <div className="text-xs text-muted-foreground pl-4">
+                                                  <MarkdownViewer content={supplierNote} className="prose-xs" />
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ));
+                                })()}
+
+                                {/* Observações gerais (não associadas a nenhuma conduta específica) */}
+                                {(() => {
+                                  // Função para parsear notas por subtítulos
+                                  const parseGeneralNotes = (notes: string | undefined | null) => {
+                                    if (!notes) return '';
+                                    const lines = notes.split('\n');
+                                    let currentKey: string | null = null;
+                                    let generalContent: string[] = [];
+                                    
+                                    lines.forEach(line => {
+                                      const subtitleMatch = line.match(/^###\s*(.+?)\s*→\s*(.+?)\s*$/);
+                                      if (subtitleMatch) {
+                                        currentKey = 'has_subtitle';
+                                      } else if (!currentKey) {
+                                        generalContent.push(line);
+                                      }
+                                    });
+                                    
+                                    return generalContent.join('\n').trim();
+                                  };
+
+                                  const cbhpmGeneral = parseGeneralNotes(cbhpmAdditionalNotes);
+                                  const opmeGeneral = parseGeneralNotes(opmeAdditionalNotes);
+                                  const supplierGeneral = parseGeneralNotes(supplierAdditionalNotes);
+
+                                  return (
+                                    <>
+                                      {cbhpmGeneral && (
+                                        <div className="mb-2">
+                                          <p className="font-bold text-xs text-foreground">Observações Gerais sobre Procedimentos:</p>
+                                          <div className="text-xs text-muted-foreground pl-4">
+                                            <MarkdownViewer content={cbhpmGeneral} className="prose-xs" />
+                                          </div>
+                                        </div>
+                                      )}
+                                      {opmeGeneral && (
+                                        <div className="mb-2">
+                                          <p className="font-bold text-xs text-foreground">Observações Gerais sobre Materiais:</p>
+                                          <div className="text-xs text-muted-foreground pl-4">
+                                            <MarkdownViewer content={opmeGeneral} className="prose-xs" />
+                                          </div>
+                                        </div>
+                                      )}
+                                      {supplierGeneral && (
+                                        <div className="mb-2">
+                                          <p className="font-bold text-xs text-foreground">Observações Gerais sobre Fornecedores:</p>
+                                          <div className="text-xs text-muted-foreground pl-4">
+                                            <MarkdownViewer content={supplierGeneral} className="prose-xs" />
+                                          </div>
+                                        </div>
+                                      )}
+                                    </>
+                                  );
+                                })()}
 
                                 {/* Seção de assinatura - agora com posicionamento relativo */}
                                 <div className="mt-8 mb-4">
@@ -3808,6 +4527,7 @@ export default function CreateOrder() {
                   <button
                     onClick={goToPreviousStep}
                     className="btn-medsync-dark h-10 flex items-center"
+                    disabled={isPreparingPreview || isCreatingPDF}
                   >
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Voltar
@@ -3820,6 +4540,7 @@ export default function CreateOrder() {
                 <button
                   onClick={saveAndExit}
                   className="btn-medsync-dark h-10 flex items-center"
+                  disabled={isPreparingPreview || isCreatingPDF}
                 >
                   <Save className="mr-2 h-4 w-4" />
                   Salvar e Sair
@@ -3832,6 +4553,7 @@ export default function CreateOrder() {
                   onClick={goToNextStep}
                   className="btn-medsync-dark h-10 flex items-center"
                   disabled={
+                    isPreparingPreview || isCreatingPDF ||
                     (currentStep === 1 &&
                       (!selectedPatient || !selectedHospital)) ||
                     (currentStep === 2 && !clinicalIndication) // Apenas indicação clínica é obrigatória no passo 2
@@ -3855,6 +4577,26 @@ export default function CreateOrder() {
           )}
         </div>
       </main>
+
+      {/* Overlay de loading para transição do passo 3 para visualização */}
+      {isPreparingPreview && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150]">
+          <LoadingLogo 
+            message="Preparando a visualização do pedido..." 
+            size="lg"
+          />
+        </div>
+      )}
+
+      {/* Overlay de loading para criação do PDF (botão Finalizar) */}
+      {isCreatingPDF && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150]">
+          <LoadingLogo 
+            message="Aguarde, estamos criando o PDF do seu pedido." 
+            size="lg"
+          />
+        </div>
+      )}
 
       {/* ✅ RESTAURADO: Diálogo de pedido existente com escolha do usuário */}
       <Dialog
