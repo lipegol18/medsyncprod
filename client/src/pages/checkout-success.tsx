@@ -58,7 +58,7 @@ export default function CheckoutSuccess() {
     queryKey: [`/api/payments/checkout-success?session_id=${sessionId}`, sessionId],
     enabled: !!sessionId,
     refetchInterval: (data) => {
-      // Se já processou com sucesso ou erro, parar polling
+      // Se já processou com sucesso ou erro, parar polling fff
       if (data?.success === true || data?.success === false) {
         return false;
       }
