@@ -1007,7 +1007,7 @@ export class StripeProvider implements PaymentProvider {
   }
 
   /**
-   * Buscar código promocional pelo código digitável (não pelo ID)2222
+   * Buscar código promocional pelo código digitável (não pelo ID)333333
    */
   async findPromotionCodeByCode(code: string): Promise<Stripe.PromotionCode | null> {
     try {
