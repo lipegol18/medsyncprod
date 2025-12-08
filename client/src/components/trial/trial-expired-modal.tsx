@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, CreditCard, Clock } from 'lucide-react';
+import { CheckCircle, CreditCard, Clock, Loader2 } from 'lucide-react';
 import { type SubscriptionPlan } from '@/types/subscription';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { apiRequest } from '@/lib/queryClient';
 import medSyncLogo from '@/assets/medsync-logo-new.svg';
 
 interface TrialExpiredModalProps {
   isOpen: boolean;
   trialEndDate?: string;
+  modalType?: 'trial_expired' | 'pending_payment';
 }
 
-export function TrialExpiredModal({ isOpen, trialEndDate }: TrialExpiredModalProps) {
+export function TrialExpiredModal({ isOpen, trialEndDate, modalType = 'trial_expired' }: TrialExpiredModalProps) {
   const [, setLocation] = useLocation();
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
 
@@ -23,7 +25,7 @@ export function TrialExpiredModal({ isOpen, trialEndDate }: TrialExpiredModalPro
     queryKey: ["/api/subscriptions/plans"],
   });
 
-  // Buscar desconto automático ativo saddsadwqewqewq
+  // Buscar desconto automático ativo
   const { data: automaticDiscountResponse } = useQuery({
     queryKey: ['/api/discount-codes/automatic'],
   });
@@ -62,9 +64,38 @@ export function TrialExpiredModal({ isOpen, trialEndDate }: TrialExpiredModalPro
   // Filtrar apenas plano PRO
   const proPlan = plans?.find(plan => plan.name === 'PRO');
 
+  // Mutation para criar checkout de pagamento pendente
+  const checkoutMutation = useMutation({
+    mutationFn: async (data: { planId: number; billingInterval: string }) => {
+      const response = await apiRequest<{ checkoutUrl: string; sessionId: string }>(
+        '/api/subscriptions/pending-payment/checkout',
+        'POST',
+        data
+      );
+      return response;
+    },
+    onSuccess: (data) => {
+      if (data?.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      }
+    },
+    onError: (error: any) => {
+      console.error('Erro ao criar checkout:', error);
+    }
+  });
+
   const handleUpgrade = () => {
     if (proPlan) {
-      setLocation(`/upgrade?plan=${proPlan.id}&billing=${billingInterval}`);
+      if (modalType === 'pending_payment') {
+        // Para pagamento pendente, criar nova sessão de checkout
+        checkoutMutation.mutate({
+          planId: proPlan.id,
+          billingInterval,
+        });
+      } else {
+        // Para trial expirado, redirecionar para página de upgrade
+        setLocation(`/upgrade?plan=${proPlan.id}&billing=${billingInterval}`);
+      }
     }
   };
 
@@ -85,14 +116,28 @@ export function TrialExpiredModal({ isOpen, trialEndDate }: TrialExpiredModalPro
             <div className="flex justify-center mb-3">
               <img src={medSyncLogo} alt="MedSync" className="h-16 object-contain" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1" style={{ fontFamily: 'Nunito, sans-serif' }}>
-              Seu período gratuito expirou
-            </h2>
-            {trialEndDate && (
-              <p className="text-xs text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
-                <Clock className="w-3 h-3" />
-                Trial de 15 dias encerrado em {formatTrialEndDate(trialEndDate)}
-              </p>
+            {modalType === 'pending_payment' ? (
+              <>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1" style={{ fontFamily: 'Nunito, sans-serif' }}>
+                  Complete seu pagamento
+                </h2>
+                <p className="text-xs text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
+                  <CreditCard className="w-3 h-3" />
+                  Seu cadastro está quase pronto! Finalize o pagamento para acessar o sistema.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1" style={{ fontFamily: 'Nunito, sans-serif' }}>
+                  Seu período gratuito expirou
+                </h2>
+                {trialEndDate && (
+                  <p className="text-xs text-gray-600 dark:text-gray-300 flex items-center justify-center gap-2">
+                    <Clock className="w-3 h-3" />
+                    Trial de 15 dias encerrado em {formatTrialEndDate(trialEndDate)}
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -142,7 +187,7 @@ export function TrialExpiredModal({ isOpen, trialEndDate }: TrialExpiredModalPro
                 </div>
               </div>
 
-              {/* Card de preço centralizado */}
+              {/* Card de preço centralizadoffff */}
               <div className="bg-gradient-to-br from-white to-sky-50 dark:from-gray-800 dark:to-gray-900 rounded-2xl border-2 border-sky-200 dark:border-sky-800 shadow-xl p-6 mb-4">
                 {/* Título do plano */}
                 <div className="text-center mb-4">
@@ -246,6 +291,7 @@ export function TrialExpiredModal({ isOpen, trialEndDate }: TrialExpiredModalPro
               <Button 
                 onClick={handleUpgrade}
                 size="lg"
+                disabled={checkoutMutation.isPending}
                 className="w-full text-base font-bold py-5 shadow-lg hover:shadow-xl transition-all duration-200 text-white"
                 style={{ 
                   background: 'linear-gradient(135deg, #2ca8e0 0%, #36a9e1 100%)',
@@ -253,11 +299,20 @@ export function TrialExpiredModal({ isOpen, trialEndDate }: TrialExpiredModalPro
                 }}
                 data-testid="button-upgrade-now"
               >
-                <CreditCard className="w-5 h-5 mr-2" />
-                Continuar com Plano PRO
+                {checkoutMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Redirecionando...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-5 h-5 mr-2" />
+                    Continuar com Plano PRO
+                  </>
+                )}
               </Button>
 
-              {/* Informações de segurança */}
+              {/* Informações de segurança fff */}
               <div className="text-center mt-3 space-y-0.5">
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   🔒 Pagamento seguro processado via Stripe
