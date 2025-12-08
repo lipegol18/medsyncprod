@@ -11,7 +11,7 @@ import { getBaseUrl, isReplit, isDevelopment } from "./utils/environment";
 const app = express();
 
 // IMPORTANTE: Aplicar express.raw() APENAS para a rota do webhook Stripe
-// O Stripe precisa do corpo bruto (raw body) para verificar a assinatura dsds
+// O Stripe precisa do corpo bruto (raw body) para verificar a assinatura
 // Esta condição DEVE vir ANTES do express.json()
 app.use((req, res, next) => {
   if (req.path === '/api/webhooks/stripe') {
