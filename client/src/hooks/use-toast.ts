@@ -8,11 +8,32 @@ import type {
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 2000
 
+// Sistema de filtros para toasts
+export type ToastLevel = "info" | "error" | "success" | "warning"
+export type ToastFilterConfig = {
+  showInfo: boolean
+  showError: boolean
+  showSuccess: boolean
+  showWarning: boolean
+}
+
+// Configuração padrão - mostra todos os tipos
+const DEFAULT_FILTER_CONFIG: ToastFilterConfig = {
+  showInfo: true,
+  showError: true,
+  showSuccess: true,
+  showWarning: true,
+}
+
+// Estado global para configuração de filtros
+let globalFilterConfig: ToastFilterConfig = { ...DEFAULT_FILTER_CONFIG }
+
 type ToasterToast = ToastProps & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  level?: ToastLevel
 }
 
 const actionTypes = {
@@ -139,7 +160,89 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
+// Função para configurar filtros globalmente
+export function setToastFilterConfig(config: Partial<ToastFilterConfig>) {
+  globalFilterConfig = { ...globalFilterConfig, ...config }
+}
+
+// Função para obter configuração atual
+export function getToastFilterConfig(): ToastFilterConfig {
+  return { ...globalFilterConfig }
+}
+
+// Funções de conveniência para configurações comuns
+export const ToastPresets = {
+  // Mostrar apenas erros
+  errorsOnly: () => setToastFilterConfig({ 
+    showInfo: false, 
+    showError: true, 
+    showSuccess: false, 
+    showWarning: false 
+  }),
+  
+  // Mostrar erros e avisos importantes
+  errorsAndWarnings: () => setToastFilterConfig({ 
+    showInfo: false, 
+    showError: true, 
+    showSuccess: false, 
+    showWarning: true 
+  }),
+  
+  // Mostrar tudo (padrão)
+  showAll: () => setToastFilterConfig(DEFAULT_FILTER_CONFIG),
+  
+  // Ocultar informativos (apenas feedback importante)
+  hideInfos: () => setToastFilterConfig({ 
+    showInfo: false, 
+    showError: true, 
+    showSuccess: true, 
+    showWarning: true 
+  })
+}
+
+// Função para determinar nível baseado na variant
+function getToastLevel(variant?: string | null): ToastLevel {
+  switch (variant) {
+    case "destructive":
+      return "error"
+    case "success":
+      return "success"
+    case "warning":
+      return "warning"
+    default:
+      return "info"
+  }
+}
+
+// Função para verificar se o toast deve ser exibido
+function shouldShowToast(level: ToastLevel): boolean {
+  switch (level) {
+    case "info":
+      return globalFilterConfig.showInfo
+    case "error":
+      return globalFilterConfig.showError
+    case "success":
+      return globalFilterConfig.showSuccess
+    case "warning":
+      return globalFilterConfig.showWarning
+    default:
+      return true
+  }
+}
+
 function toast({ ...props }: Toast) {
+  const level = getToastLevel(props.variant)
+  
+  // Verificar se o toast deve ser exibido baseado na configuração
+  if (!shouldShowToast(level)) {
+    console.log(`Toast filtrado: ${level} - "${props.title}"`)
+    return {
+      id: "",
+      dismiss: () => {},
+      update: () => {},
+    }
+  }
+
   const id = genId()
 
   const update = (props: ToasterToast) =>
@@ -154,6 +257,7 @@ function toast({ ...props }: Toast) {
     toast: {
       ...props,
       id,
+      level,
       open: true,
       onOpenChange: (open) => {
         if (!open) dismiss()
@@ -173,6 +277,7 @@ function toast({ ...props }: Toast) {
 
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState)
+  const [filterConfig, setFilterConfigState] = React.useState<ToastFilterConfig>(globalFilterConfig)
 
   React.useEffect(() => {
     listeners.push(setState)
@@ -184,10 +289,22 @@ function useToast() {
     }
   }, [state])
 
+  // Atualizar estado local quando configuração global muda
+  React.useEffect(() => {
+    setFilterConfigState(globalFilterConfig)
+  }, [])
+
   return {
     ...state,
     toast,
     dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
+    // Funções para controlar filtros
+    setFilterConfig: (config: Partial<ToastFilterConfig>) => {
+      setToastFilterConfig(config)
+      setFilterConfigState(globalFilterConfig)
+    },
+    getFilterConfig: () => globalFilterConfig,
+    presets: ToastPresets,
   }
 }
 
