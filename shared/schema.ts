@@ -515,6 +515,7 @@ export const medicalOrderSurgicalApproaches = pgTable("medical_order_surgical_ap
   id: serial("id").primaryKey(),
   medicalOrderId: integer("medical_order_id").notNull().references(() => medicalOrders.id, { onDelete: 'cascade' }),
   surgicalApproachId: integer("surgical_approach_id").notNull().references(() => surgicalApproaches.id, { onDelete: 'cascade' }),
+  surgicalProcedureId: integer("surgical_procedure_id").references(() => surgicalProcedures.id, { onDelete: 'cascade' }), // Associação com o procedimento cirúrgico específico
   isPrimary: boolean("is_primary").default(false), // Indica se é a conduta cirúrgica principal do pedido
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -532,11 +533,17 @@ export const medicalOrderSurgicalApproachesRelations = relations(medicalOrderSur
     references: [surgicalApproaches.id],
     relationName: "orderApproachSurgical",
   }),
+  surgicalProcedure: one(surgicalProcedures, {
+    fields: [medicalOrderSurgicalApproaches.surgicalProcedureId],
+    references: [surgicalProcedures.id],
+    relationName: "orderApproachProcedure",
+  }),
 }));
 
 export const insertMedicalOrderSurgicalApproachSchema = createInsertSchema(medicalOrderSurgicalApproaches).pick({
   medicalOrderId: true,
   surgicalApproachId: true,
+  surgicalProcedureId: true,
   isPrimary: true,
 });
 
@@ -583,6 +590,9 @@ export const medicalOrders = pgTable("medical_orders", {
   // Campo unificado de anexos (substitui exam_images_url, medical_report_url e order_pdf_url)
   attachments: jsonb("attachments").default('[]'), // Array de objetos JSON com todos os anexos
   additionalNotes: text("additional_notes"),
+  cbhpmAdditionalNotes: text("cbhpm_additional_notes"), // Observações adicionais após procedimentos CBHPM
+  opmeAdditionalNotes: text("opme_additional_notes"), // Observações adicionais após itens OPME
+  supplierAdditionalNotes: text("supplier_additional_notes"), // Observações adicionais após fornecedores
   statusId: integer("status_id").notNull().default(1).references(() => orderStatuses.id), // Status do pedido (FK para order_statuses)
   previousStatusId: integer("previous_status_id").references(() => orderStatuses.id), // Status anterior para função desfazer
   complexity: text("complexity"), // Complexidade/porte cirúrgico
@@ -602,6 +612,9 @@ export const insertMedicalOrderSchema = createInsertSchema(medicalOrders).pick({
   procedureType: true,
   anatomicalRegionId: true,
   additionalNotes: true,
+  cbhpmAdditionalNotes: true, // Observações adicionais após procedimentos CBHPM
+  opmeAdditionalNotes: true, // Observações adicionais após itens OPME
+  supplierAdditionalNotes: true, // Observações adicionais após fornecedores
   statusId: true, // Status do pedido (FK para order_statuses)
   complexity: true,
   receivedValue: true,
@@ -906,6 +919,7 @@ export const insertUserSubscriptionSchema = createInsertSchema(userSubscriptions
   userId: true,
   planId: true,
   status: true,
+  startedAt: true,
   expiresAt: true,
   trialEndsAt: true,
   originalPrice: true,
@@ -920,6 +934,8 @@ export const insertUserSubscriptionSchema = createInsertSchema(userSubscriptions
   paymentProviderCustomerId: true,
   paymentProviderSubscriptionId: true,
   paymentProvider: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 // Enum para status do lead
@@ -1383,6 +1399,8 @@ export const medicalOrderProcedures = pgTable("medical_order_procedures", {
   receivedValue: numeric("received_value", { precision: 10, scale: 2 }), // Valor recebido pelo médico por este procedimento específico
   status: text("status").notNull().default("em_analise"), // 'em_analise', 'aprovado', 'negado', 'parcial'
   isMain: boolean("is_main").notNull().default(false),
+  surgicalApproachId: integer("surgical_approach_id").references(() => surgicalApproaches.id, { onDelete: 'set null' }), // Conduta cirúrgica associada
+  surgicalProcedureId: integer("surgical_procedure_id").references(() => surgicalProcedures.id, { onDelete: 'set null' }), // Procedimento cirúrgico associado
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1397,6 +1415,16 @@ export const medicalOrderProceduresRelations = relations(medicalOrderProcedures,
     fields: [medicalOrderProcedures.procedureId],
     references: [procedures.id],
     relationName: "procedureDetails",
+  }),
+  surgicalApproach: one(surgicalApproaches, {
+    fields: [medicalOrderProcedures.surgicalApproachId],
+    references: [surgicalApproaches.id],
+    relationName: "orderProcedureSurgicalApproach",
+  }),
+  surgicalProcedure: one(surgicalProcedures, {
+    fields: [medicalOrderProcedures.surgicalProcedureId],
+    references: [surgicalProcedures.id],
+    relationName: "orderProcedureSurgicalProcedure",
   }),
 }));
 
@@ -1414,13 +1442,38 @@ export const medicalOrderCids = pgTable("medical_order_cids", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").notNull().references(() => medicalOrders.id, { onDelete: 'cascade' }),
   cidCodeId: integer("cid_code_id").notNull().references(() => cidCodes.id),
+  surgicalApproachId: integer("surgical_approach_id").references(() => surgicalApproaches.id, { onDelete: 'set null' }), // Conduta cirúrgica associada
+  surgicalProcedureId: integer("surgical_procedure_id").references(() => surgicalProcedures.id, { onDelete: 'set null' }), // Procedimento cirúrgico associado
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const medicalOrderCidsRelations = relations(medicalOrderCids, ({ one }) => ({
+  medicalOrder: one(medicalOrders, {
+    fields: [medicalOrderCids.orderId],
+    references: [medicalOrders.id],
+  }),
+  cidCode: one(cidCodes, {
+    fields: [medicalOrderCids.cidCodeId],
+    references: [cidCodes.id],
+  }),
+  surgicalApproach: one(surgicalApproaches, {
+    fields: [medicalOrderCids.surgicalApproachId],
+    references: [surgicalApproaches.id],
+    relationName: "orderCidSurgicalApproach",
+  }),
+  surgicalProcedure: one(surgicalProcedures, {
+    fields: [medicalOrderCids.surgicalProcedureId],
+    references: [surgicalProcedures.id],
+    relationName: "orderCidSurgicalProcedure",
+  }),
+}));
 
 export const insertMedicalOrderCidSchema = createInsertSchema(medicalOrderCids).pick({
   orderId: true,
   cidCodeId: true,
-});
+  surgicalApproachId: true,
+  surgicalProcedureId: true,
+}).partial({ surgicalApproachId: true, surgicalProcedureId: true });
 
 export type MedicalOrderCid = typeof medicalOrderCids.$inferSelect;
 export type InsertMedicalOrderCid = z.infer<typeof insertMedicalOrderCidSchema>;
@@ -1432,6 +1485,8 @@ export const medicalOrderOpmeItems = pgTable("medical_order_opme_items", {
   procedureId: integer("procedure_id").references(() => procedures.id), // Tornar procedureId opcional
   opmeItemId: integer("opme_item_id").notNull().references(() => opmeItems.id),
   quantity: integer("quantity").notNull().default(1),
+  surgicalApproachId: integer("surgical_approach_id").references(() => surgicalApproaches.id, { onDelete: 'set null' }), // Conduta cirúrgica associada
+  surgicalProcedureId: integer("surgical_procedure_id").references(() => surgicalProcedures.id, { onDelete: 'set null' }), // Procedimento cirúrgico associado
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -1449,6 +1504,16 @@ export const medicalOrderOpmeItemsRelations = relations(medicalOrderOpmeItems, (
     fields: [medicalOrderOpmeItems.opmeItemId],
     references: [opmeItems.id],
   }),
+  surgicalApproach: one(surgicalApproaches, {
+    fields: [medicalOrderOpmeItems.surgicalApproachId],
+    references: [surgicalApproaches.id],
+    relationName: "orderOpmeSurgicalApproach",
+  }),
+  surgicalProcedure: one(surgicalProcedures, {
+    fields: [medicalOrderOpmeItems.surgicalProcedureId],
+    references: [surgicalProcedures.id],
+    relationName: "orderOpmeSurgicalProcedure",
+  }),
 }));
 
 export const insertMedicalOrderOpmeItemSchema = createInsertSchema(medicalOrderOpmeItems).pick({
@@ -1456,7 +1521,9 @@ export const insertMedicalOrderOpmeItemSchema = createInsertSchema(medicalOrderO
   procedureId: true,
   opmeItemId: true,
   quantity: true,
-}).partial({ procedureId: true }); // Tornar procedureId opcional no schema de inserção
+  surgicalApproachId: true,
+  surgicalProcedureId: true,
+}).partial({ procedureId: true, surgicalApproachId: true, surgicalProcedureId: true }); // Tornar campos opcionais
 
 export type MedicalOrderOpmeItem = typeof medicalOrderOpmeItems.$inferSelect;
 export type InsertMedicalOrderOpmeItem = z.infer<typeof insertMedicalOrderOpmeItemSchema>;
@@ -1466,6 +1533,8 @@ export const medicalOrderSuppliers = pgTable("medical_order_suppliers", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").notNull().references(() => medicalOrders.id, { onDelete: 'cascade' }),
   supplierId: integer("supplier_id").notNull().references(() => suppliers.id),
+  surgicalApproachId: integer("surgical_approach_id").references(() => surgicalApproaches.id, { onDelete: 'set null' }),
+  surgicalProcedureId: integer("surgical_procedure_id").references(() => surgicalProcedures.id, { onDelete: 'set null' }),
   isApproved: boolean("is_approved").default(false), // Indica se este fornecedor foi aprovado pela seguradora
   approvedBy: integer("approved_by").references(() => users.id), // Usuário que aprovou o fornecedor
   approvedAt: timestamp("approved_at"), // Data e hora da aprovação
@@ -1475,10 +1544,12 @@ export const medicalOrderSuppliers = pgTable("medical_order_suppliers", {
 export const insertMedicalOrderSupplierSchema = createInsertSchema(medicalOrderSuppliers).pick({
   orderId: true,
   supplierId: true,
+  surgicalApproachId: true,
+  surgicalProcedureId: true,
   isApproved: true,
   approvedBy: true,
   approvedAt: true,
-});
+}).partial({ surgicalApproachId: true, surgicalProcedureId: true });
 
 // Relações para a tabela medical_order_suppliers
 export const medicalOrderSuppliersRelations = relations(medicalOrderSuppliers, ({ one }) => ({
@@ -1491,6 +1562,16 @@ export const medicalOrderSuppliersRelations = relations(medicalOrderSuppliers, (
     fields: [medicalOrderSuppliers.supplierId],
     references: [suppliers.id],
     relationName: "orderSupplierSupplier",
+  }),
+  surgicalApproach: one(surgicalApproaches, {
+    fields: [medicalOrderSuppliers.surgicalApproachId],
+    references: [surgicalApproaches.id],
+    relationName: "orderSupplierSurgicalApproach",
+  }),
+  surgicalProcedure: one(surgicalProcedures, {
+    fields: [medicalOrderSuppliers.surgicalProcedureId],
+    references: [surgicalProcedures.id],
+    relationName: "orderSupplierSurgicalProcedure",
   }),
   approvedByUser: one(users, {
     fields: [medicalOrderSuppliers.approvedBy],
@@ -2147,13 +2228,15 @@ export const medicalOrderSupplierManufacturers = pgTable("medical_order_supplier
   id: serial("id").primaryKey(),
   orderId: integer("order_id").notNull().references(() => medicalOrders.id, { onDelete: 'cascade' }),
   supplierId: integer("supplier_id").references(() => suppliers.id, { onDelete: 'cascade' }),
+  surgicalApproachId: integer("surgical_approach_id").references(() => surgicalApproaches.id, { onDelete: 'set null' }),
+  surgicalProcedureId: integer("surgical_procedure_id").references(() => surgicalProcedures.id, { onDelete: 'set null' }),
   priority: integer("priority").notNull(), // 1, 2, ou 3 para posição na interface
   manufacturerName: text("manufacturer_name").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
-  // Previne duplicatas da mesma posição no mesmo pedido (1 fabricante por posição por pedido)
-  uniquePriorityPerOrder: unique().on(table.orderId, table.priority),
+  // Previne duplicatas da mesma posição no mesmo pedido POR CONDUTA (1 fabricante por posição por pedido por conduta)
+  uniquePriorityPerOrderPerConduta: unique().on(table.orderId, table.priority, table.surgicalApproachId, table.surgicalProcedureId),
 }));
 
 // Relações da tabela de fabricantes por pedido médico
@@ -2167,6 +2250,16 @@ export const medicalOrderSupplierManufacturersRelations = relations(medicalOrder
     fields: [medicalOrderSupplierManufacturers.supplierId],
     references: [suppliers.id],
     relationName: "supplierManufacturer",
+  }),
+  surgicalApproach: one(surgicalApproaches, {
+    fields: [medicalOrderSupplierManufacturers.surgicalApproachId],
+    references: [surgicalApproaches.id],
+    relationName: "manufacturerSurgicalApproach",
+  }),
+  surgicalProcedure: one(surgicalProcedures, {
+    fields: [medicalOrderSupplierManufacturers.surgicalProcedureId],
+    references: [surgicalProcedures.id],
+    relationName: "manufacturerSurgicalProcedure",
   }),
 }));
 
@@ -2212,3 +2305,106 @@ export const subscriptionPaymentsRelations = relations(subscriptionPayments, ({ 
   }),
 }));
 
+// ============================================================================
+// INTERFACES PADRONIZADAS PARA ITENS COM ASSOCIAÇÃO CIRÚRGICA
+// ============================================================================
+// Usadas para garantir consistência na leitura/gravação de CIDs, CBHPM e OPME
+// que possuem associação com condutas cirúrgicas (surgical_approach) e 
+// procedimentos cirúrgicos (surgical_procedure)
+// ============================================================================
+
+// Interface base para referência de conduta cirúrgica
+export interface SurgicalApproachRef {
+  id: number;
+  name: string;
+}
+
+// Interface base para referência de procedimento cirúrgico
+export interface SurgicalProcedureRef {
+  id: number;
+  name: string;
+}
+
+// Interface base para associação cirúrgica (usada em CIDs, CBHPM e OPME)
+export interface SurgicalAssociation {
+  surgicalApproach: SurgicalApproachRef | null;
+  surgicalProcedure: SurgicalProcedureRef | null;
+}
+
+// Interface para referência de CID
+export interface CidRef {
+  id: number;
+  code: string;
+  description: string;
+  category?: string;
+}
+
+// Interface para referência de Procedimento CBHPM
+export interface CbhpmProcedureRef {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  porte?: string;
+  porteAnestesista?: string;
+  numeroAuxiliares?: number;
+}
+
+// Interface para referência de Item OPME
+export interface OpmeItemRef {
+  id: number;
+  technicalName: string;
+  commercialName?: string;
+  anvisaCode?: string;
+}
+
+// ============================================================================
+// INTERFACES PADRONIZADAS PARA USO NO FRONTEND
+// ============================================================================
+
+// CID com associação cirúrgica (formato padronizado)
+export interface OrderCidItem extends SurgicalAssociation {
+  cid: CidRef;
+}
+
+// Procedimento CBHPM com associação cirúrgica (formato padronizado)
+export interface OrderCbhpmItem extends SurgicalAssociation {
+  procedure: CbhpmProcedureRef;
+  quantity: number;
+}
+
+// Item OPME com associação cirúrgica (formato padronizado)
+export interface OrderOpmeItem extends SurgicalAssociation {
+  item: OpmeItemRef;
+  quantity: number;
+}
+
+// ============================================================================
+// SCHEMAS ZOD PARA VALIDAÇÃO DE ENTRADA (PUT/POST)
+// ============================================================================
+
+// Schema para salvar CID com associação cirúrgica fffff
+export const orderCidInputSchema = z.object({
+  cidId: z.number(),
+  surgicalApproachId: z.number().nullable().optional(),
+  surgicalProcedureId: z.number().nullable().optional(),
+});
+export type OrderCidInput = z.infer<typeof orderCidInputSchema>;
+
+// Schema para salvar Procedimento CBHPM com associação cirúrgica
+export const orderCbhpmInputSchema = z.object({
+  procedureId: z.number(),
+  quantity: z.number().default(1),
+  surgicalApproachId: z.number().nullable().optional(),
+  surgicalProcedureId: z.number().nullable().optional(),
+});
+export type OrderCbhpmInput = z.infer<typeof orderCbhpmInputSchema>;
+
+// Schema para salvar Item OPME com associação cirúrgica
+export const orderOpmeInputSchema = z.object({
+  opmeItemId: z.number(),
+  quantity: z.number().default(1),
+  surgicalApproachId: z.number().nullable().optional(),
+  surgicalProcedureId: z.number().nullable().optional(),
+});
+export type OrderOpmeInput = z.infer<typeof orderOpmeInputSchema>;
