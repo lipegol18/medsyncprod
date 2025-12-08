@@ -112,7 +112,7 @@ export default function Patients() {
       filtered = patients.filter(patient => associatedIds.includes(patient.id));
     }
     
-    // Aplicar filtro de nome
+    // Aplicar filtro de nome dd
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter((patient) => 
@@ -496,7 +496,7 @@ export default function Patients() {
             </Card>
           )}
 
-          {/* Card principal com toda a listagem */}
+          {/* Card principal com toda a listagem dfd */}
           <Card className="border-gray-200 bg-card shadow-lg">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
