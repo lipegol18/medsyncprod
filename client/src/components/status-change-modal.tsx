@@ -22,6 +22,8 @@ interface StatusOption {
   icon: any;
   color: string;
   requiresModal?: boolean; // Para casos que precisam de modal adicional (aprovação parcial, valores recebidos)
+  disabled?: boolean; // Opção desabilitada por validação
+  disabledReason?: string; // Razão pela qual está desabilitada
 }
 
 interface StatusChangeModalProps {
@@ -34,7 +36,7 @@ interface StatusChangeModalProps {
   onPartialApproval?: (orderId: number) => void;
   onReceivedValues?: (orderId: number) => void;
   onEditOrder?: (order: any) => void;
-  order?: any; // Adicionar objeto order completo
+  order?: any; // Objeto order completo (inclui surgeryAppointment)
 }
 
 // Definição do workflow de estados com próximas etapas lógicas
@@ -178,11 +180,71 @@ export function StatusChangeModal({
   onEditOrder,
   order
 }: StatusChangeModalProps) {
-  const availableOptions = workflowSteps[currentStatus] || [];
+  // Verificar se a transição para 'cirurgia_realizada' é permitida
+  const canTransitionToSurgeryCompleted = (): { allowed: boolean; reason?: string } => {
+    // Priorizar surgeryAppointment (tabela surgery_appointments) sobre order.procedureDate (legado)
+    const appointment = order?.surgeryAppointment;
+    const appointmentDate = appointment?.scheduledDate;
+    const legacyDate = order?.procedureDate;
+    const surgeryDate = appointmentDate || legacyDate;
+    
+    if (!surgeryDate) {
+      return { allowed: false, reason: 'É necessário agendar a cirurgia antes de marcá-la como realizada' };
+    }
+    
+    // Comparar a data de agendamento com a data atual
+    const scheduledDate = new Date(surgeryDate);
+    
+    // Validar se a data é válida
+    if (isNaN(scheduledDate.getTime())) {
+      return { allowed: false, reason: 'Data de agendamento inválida. Atualize o agendamento da cirurgia.' };
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Resetar para início do dia
+    scheduledDate.setHours(0, 0, 0, 0);
+    
+    // A data de agendamento deve ser MENOR que a data atual (não igual)
+    // Ou seja, a cirurgia deve ter sido agendada para um dia que já passou
+    if (scheduledDate >= today) {
+      const formattedDate = scheduledDate.toLocaleDateString('pt-BR');
+      const scheduledTime = appointment?.scheduledTime ? ` às ${appointment.scheduledTime}` : '';
+      if (scheduledDate.getTime() === today.getTime()) {
+        return { 
+          allowed: false, 
+          reason: `A cirurgia está agendada para hoje (${formattedDate}${scheduledTime}). Só será possível marcá-la como realizada a partir de amanhã.` 
+        };
+      }
+      return { 
+        allowed: false, 
+        reason: `A cirurgia está agendada para ${formattedDate}${scheduledTime}. Só é possível marcá-la como realizada após essa data.` 
+      };
+    }
+    
+    return { allowed: true };
+  };
 
-  const handleOptionClick = (option: StatusOption) => {
+  const surgeryTransitionCheck = canTransitionToSurgeryCompleted();
+  
+  // Filtrar e modificar opções baseado nas validações
+  const rawOptions = workflowSteps[currentStatus] || [];
+  const availableOptions = rawOptions.map(option => {
+    if (option.key === 'cirurgia_realizada' && !surgeryTransitionCheck.allowed) {
+      return {
+        ...option,
+        disabled: true,
+        disabledReason: surgeryTransitionCheck.reason
+      };
+    }
+    return option;
+  });
+
+  const handleOptionClick = (option: StatusOption & { disabled?: boolean }) => {
+    if (option.disabled) {
+      return; // Não fazer nada se a opção estiver desabilitada
+    }
     if (option.requiresModal) {
-      // Casos especiais que requerem modais adicionais
+      // Casos especiais que requerem modais adicionais fff
       if (option.key === 'autorizado_parcial' && onPartialApproval) {
         onPartialApproval(orderId);
       } else if (option.key === 'recebido' && onReceivedValues) {
@@ -290,20 +352,36 @@ export function StatusChangeModal({
         <div className="space-y-3 py-4">
           {availableOptions.map((option) => {
             const IconComponent = option.icon;
+            const isDisabled = option.disabled;
+            
             return (
               <Card 
                 key={option.key}
-                className="cursor-pointer border-border bg-muted/50 hover:bg-muted/80 transition-colors"
+                className={`transition-colors ${
+                  isDisabled 
+                    ? 'cursor-not-allowed border-border/50 bg-muted/30 opacity-60' 
+                    : 'cursor-pointer border-border bg-muted/50 hover:bg-muted/80'
+                }`}
                 onClick={() => handleOptionClick(option)}
               >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    <IconComponent className={`h-5 w-5 ${option.color} mt-1 flex-shrink-0`} />
+                    <IconComponent className={`h-5 w-5 ${isDisabled ? 'text-muted-foreground' : option.color} mt-1 flex-shrink-0`} />
                     <div className="flex-1">
-                      <h4 className="font-medium text-foreground mb-1">{option.label}</h4>
+                      <h4 className={`font-medium mb-1 ${isDisabled ? 'text-muted-foreground' : 'text-foreground'}`}>
+                        {option.label}
+                      </h4>
                       <p className="text-sm text-muted-foreground leading-relaxed">{option.description}</p>
+                      {isDisabled && option.disabledReason && (
+                        <div className="mt-2 flex items-start gap-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs">
+                          <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <span className="text-amber-700 dark:text-amber-400">{option.disabledReason}</span>
+                        </div>
+                      )}
                     </div>
-                    <ArrowRight className="h-4 w-4 text-gray-500 mt-1 flex-shrink-0" />
+                    {!isDisabled && (
+                      <ArrowRight className="h-4 w-4 text-gray-500 mt-1 flex-shrink-0" />
+                    )}
                   </div>
                 </CardContent>
               </Card>
