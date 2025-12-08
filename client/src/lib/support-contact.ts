@@ -143,7 +143,7 @@ export const useSupportContact = () => {
   };
 };
 
-// Função standalone para uso em casos onde hooks não podem ser usados
+// Função standalone para uso em casos onde hooks não podem ser usados hhjjj
 export const openSupportWhatsAppStandalone = async (
   message?: string,
   context?: string
