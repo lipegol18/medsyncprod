@@ -1,6 +1,163 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
+interface MarkdownSegment {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+}
+
+interface MarkdownLine {
+  type: 'paragraph' | 'heading' | 'listItem' | 'numberedListItem' | 'horizontalRule';
+  segments: MarkdownSegment[];
+  level?: number;
+  number?: number;
+}
+
+function parseMarkdownToPdf(markdown: string): MarkdownLine[] {
+  if (!markdown) return [];
+  
+  const lines = markdown.split('\n');
+  const result: MarkdownLine[] = [];
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    
+    if (!trimmedLine) continue;
+    
+    if (trimmedLine === '---' || trimmedLine === '***' || trimmedLine === '___') {
+      result.push({ type: 'horizontalRule', segments: [] });
+      continue;
+    }
+    
+    const headingMatch = trimmedLine.match(/^(#{1,3})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const content = headingMatch[2];
+      result.push({ 
+        type: 'heading', 
+        level, 
+        segments: parseInlineFormatting(content) 
+      });
+      continue;
+    }
+    
+    const bulletListMatch = trimmedLine.match(/^[-*]\s+(.+)$/);
+    if (bulletListMatch) {
+      const content = bulletListMatch[1];
+      result.push({ 
+        type: 'listItem', 
+        segments: parseInlineFormatting(content) 
+      });
+      continue;
+    }
+    
+    const numberedListMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
+    if (numberedListMatch) {
+      const num = parseInt(numberedListMatch[1], 10);
+      const content = numberedListMatch[2];
+      result.push({ 
+        type: 'numberedListItem', 
+        number: num,
+        segments: parseInlineFormatting(content) 
+      });
+      continue;
+    }
+    
+    result.push({ 
+      type: 'paragraph', 
+      segments: parseInlineFormatting(trimmedLine) 
+    });
+  }
+  
+  return result;
+}
+
+function parseInlineFormatting(text: string): MarkdownSegment[] {
+  const segments: MarkdownSegment[] = [];
+  
+  let remaining = text;
+  
+  while (remaining.length > 0) {
+    const boldItalic3Match = remaining.match(/^\*\*\*(.+?)\*\*\*/);
+    if (boldItalic3Match) {
+      segments.push({ text: boldItalic3Match[1], bold: true, italic: true });
+      remaining = remaining.slice(boldItalic3Match[0].length);
+      continue;
+    }
+    
+    const boldItalic3UnderMatch = remaining.match(/^___(.+?)___/);
+    if (boldItalic3UnderMatch) {
+      segments.push({ text: boldItalic3UnderMatch[1], bold: true, italic: true });
+      remaining = remaining.slice(boldItalic3UnderMatch[0].length);
+      continue;
+    }
+    
+    const boldWithNestedItalicMatch = remaining.match(/^\*\*([^*]*?)_([^_]+?)_([^*]*?)\*\*/);
+    if (boldWithNestedItalicMatch) {
+      const before = boldWithNestedItalicMatch[1];
+      const italicContent = boldWithNestedItalicMatch[2];
+      const after = boldWithNestedItalicMatch[3];
+      
+      if (before) {
+        segments.push({ text: before, bold: true });
+      }
+      segments.push({ text: italicContent, bold: true, italic: true });
+      if (after) {
+        segments.push({ text: after, bold: true });
+      }
+      remaining = remaining.slice(boldWithNestedItalicMatch[0].length);
+      continue;
+    }
+    
+    const boldMatch = remaining.match(/^\*\*(.+?)\*\*/);
+    if (boldMatch) {
+      segments.push({ text: boldMatch[1], bold: true });
+      remaining = remaining.slice(boldMatch[0].length);
+      continue;
+    }
+    
+    const boldUnderMatch = remaining.match(/^__(.+?)__/);
+    if (boldUnderMatch) {
+      segments.push({ text: boldUnderMatch[1], bold: true });
+      remaining = remaining.slice(boldUnderMatch[0].length);
+      continue;
+    }
+    
+    const italicMatch = remaining.match(/^_([^_]+?)_/);
+    if (italicMatch) {
+      segments.push({ text: italicMatch[1], italic: true });
+      remaining = remaining.slice(italicMatch[0].length);
+      continue;
+    }
+    
+    const italicAsteriskMatch = remaining.match(/^\*([^*]+?)\*/);
+    if (italicAsteriskMatch) {
+      segments.push({ text: italicAsteriskMatch[1], italic: true });
+      remaining = remaining.slice(italicAsteriskMatch[0].length);
+      continue;
+    }
+    
+    const nextSpecial = remaining.search(/\*\*\*|___|\*\*|__|\*|_/);
+    if (nextSpecial === -1) {
+      segments.push({ text: remaining });
+      break;
+    } else if (nextSpecial === 0) {
+      segments.push({ text: remaining[0] });
+      remaining = remaining.slice(1);
+    } else {
+      segments.push({ text: remaining.slice(0, nextSpecial) });
+      remaining = remaining.slice(nextSpecial);
+    }
+  }
+  
+  if (segments.length === 0) {
+    segments.push({ text });
+  }
+  
+  return segments;
+}
+
 // Estilos para o PDF com suporte a múltiplas páginas
 const styles = StyleSheet.create({
   page: {
@@ -162,6 +319,47 @@ const styles = StyleSheet.create({
   bold: {
     fontWeight: 'bold',
   },
+  italic: {
+    fontStyle: 'italic',
+  },
+  boldItalic: {
+    fontWeight: 'bold',
+    fontStyle: 'italic',
+  },
+  mdParagraph: {
+    fontSize: 9,
+    color: '#000000',
+    textAlign: 'justify',
+    lineHeight: 1.4,
+    marginBottom: 4,
+  },
+  mdHeading: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1e3a8a',
+    marginBottom: 4,
+    marginTop: 6,
+  },
+  mdListItem: {
+    fontSize: 9,
+    color: '#000000',
+    lineHeight: 1.4,
+    marginBottom: 2,
+    flexDirection: 'row',
+  },
+  mdBullet: {
+    width: 12,
+    fontSize: 9,
+    color: '#000000',
+  },
+  mdListContent: {
+    flex: 1,
+  },
+  mdHorizontalRule: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#d1d5db',
+    marginVertical: 6,
+  },
   // Título do documento (igual à prévia)
   documentTitle: {
     fontSize: 13,
@@ -171,15 +369,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textTransform: 'uppercase',
   },
-  // Caixa de justificativa (igual à prévia)
+  // Caixa de justificativa - SEM borda para permitir quebra de página natural
   justificationBox: {
-    backgroundColor: '#ffffff',
-    padding: 8,
-    borderRadius: 3,
     marginBottom: 15,
-    minHeight: 60,
-    borderWidth: 0.5,
-    borderColor: '#d1d5db',
+    paddingHorizontal: 8,
   },
   justificationText: {
     fontSize: 9,
@@ -523,111 +716,101 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
           SOLICITAÇÃO DE PROCEDIMENTO CIRÚRGICO
         </Text>
 
-        {/* Justificativa clínica */}
-        <View style={styles.justificationBox}>
-          <Text style={styles.justificationText}>
-            {orderData?.clinicalJustification || 'Justificativa clínica será exibida aqui'}
-          </Text>
-        </View>
-
-        {/* Códigos CID-10 - NUNCA QUEBRAR */}
-        <View style={styles.clinicalSection} wrap={false}>
-          <Text style={styles.sectionHeader}>Códigos CID-10:</Text>
-          <View style={styles.clinicalContent}>
-            {cidData && Array.isArray(cidData) && cidData.length > 0 ? (
-              cidData.map((cidItem, index) => {
-                const code = cidItem.cid?.code || cidItem.code;
-                const description = cidItem.cid?.description || cidItem.description;
+        {/* Justificativa clínica com suporte a Markdown - permite quebra de página */}
+        <View style={styles.justificationBox} wrap={true}>
+          {orderData?.clinicalJustification ? (
+            parseMarkdownToPdf(orderData.clinicalJustification).map((line, lineIndex) => {
+              if (line.type === 'horizontalRule') {
+                return <View key={lineIndex} style={styles.mdHorizontalRule} />;
+              }
+              
+              if (line.type === 'heading') {
                 return (
-                  <Text key={index} style={styles.clinicalText}>
-                    {code} - {description}
+                  <Text key={lineIndex} style={styles.mdHeading}>
+                    {line.segments.map((seg, segIndex) => {
+                      if (seg.bold && seg.italic) {
+                        return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                      }
+                      if (seg.bold) {
+                        return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                      }
+                      if (seg.italic) {
+                        return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                      }
+                      return <Text key={segIndex}>{seg.text}</Text>;
+                    })}
                   </Text>
                 );
-              })
-            ) : (
-              <Text style={styles.clinicalText}>Nenhum código CID selecionado</Text>
-            )}
-          </View>
+              }
+              
+              if (line.type === 'listItem') {
+                return (
+                  <View key={lineIndex} style={styles.mdListItem}>
+                    <Text style={styles.mdBullet}>•</Text>
+                    <Text style={styles.mdListContent}>
+                      {line.segments.map((seg, segIndex) => {
+                        if (seg.bold && seg.italic) {
+                          return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                        }
+                        if (seg.bold) {
+                          return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                        }
+                        if (seg.italic) {
+                          return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                        }
+                        return <Text key={segIndex}>{seg.text}</Text>;
+                      })}
+                    </Text>
+                  </View>
+                );
+              }
+              
+              if (line.type === 'numberedListItem') {
+                return (
+                  <View key={lineIndex} style={styles.mdListItem}>
+                    <Text style={styles.mdBullet}>{line.number}.</Text>
+                    <Text style={styles.mdListContent}>
+                      {line.segments.map((seg, segIndex) => {
+                        if (seg.bold && seg.italic) {
+                          return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                        }
+                        if (seg.bold) {
+                          return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                        }
+                        if (seg.italic) {
+                          return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                        }
+                        return <Text key={segIndex}>{seg.text}</Text>;
+                      })}
+                    </Text>
+                  </View>
+                );
+              }
+              
+              return (
+                <Text key={lineIndex} style={styles.mdParagraph}>
+                  {line.segments.map((seg, segIndex) => {
+                    if (seg.bold && seg.italic) {
+                      return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                    }
+                    if (seg.bold) {
+                      return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                    }
+                    if (seg.italic) {
+                      return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                    }
+                    return <Text key={segIndex}>{seg.text}</Text>;
+                  })}
+                </Text>
+              );
+            })
+          ) : (
+            <Text style={styles.justificationText}>Justificativa clínica será exibida aqui</Text>
+          )}
         </View>
 
-        {/* Condutas Cirúrgicas - NUNCA QUEBRAR */}
-        {cidData && Array.isArray(cidData) && cidData.some(cidItem => cidItem.surgicalApproach) && (
-          <View style={styles.clinicalSection} wrap={false}>
-            <Text style={styles.sectionHeader}>Condutas Cirúrgicas:</Text>
-            <View style={styles.clinicalContent}>
-              {(() => {
-                // Extrair condutas únicas para evitar repetição
-                const uniqueApproaches = new Map();
-                cidData.forEach(cidItem => {
-                  if (cidItem.surgicalApproach) {
-                    const approachId = cidItem.surgicalApproach.id;
-                    if (!uniqueApproaches.has(approachId)) {
-                      uniqueApproaches.set(approachId, cidItem.surgicalApproach);
-                    }
-                  }
-                });
-                
-                return Array.from(uniqueApproaches.values()).map((approach, index) => (
-                  <Text key={index} style={styles.clinicalText}>
-                    {approach.name}
-                  </Text>
-                ));
-              })()}
-            </View>
-          </View>
-        )}
-
-        {/* Procedimentos Cirúrgicos Necessários - NUNCA QUEBRAR */}
-        {secondaryProcedures?.length > 0 && (
-          <View style={styles.clinicalSection} wrap={false}>
-            <Text style={styles.sectionHeader}>Procedimentos Cirúrgicos Necessários:</Text>
-            <View style={styles.clinicalContent}>
-              {(() => {
-                const parsePorteValue = (porte) => {
-                  if (!porte || typeof porte !== 'string') return 0;
-                  const match = porte.match(/^(\d+)([A-Za-z]?)$/);
-                  if (!match) return 0;
-                  const numero = parseInt(match[1], 10);
-                  const letra = match[2]?.toUpperCase() || 'A';
-                  const valorLetra = letra.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
-                  return (numero * 100) + valorLetra;
-                };
-
-                const sortedProcedures = [...secondaryProcedures].sort(
-                  (a, b) => parsePorteValue(b.procedure?.porte) - parsePorteValue(a.procedure?.porte)
-                );
-
-                if (sortedProcedures.length === 1) {
-                  const mainProc = sortedProcedures[0];
-                  return (
-                    <Text style={styles.clinicalText}>
-                      {mainProc.quantity} x {mainProc.procedure?.code} - {mainProc.procedure?.name} (Procedimento Principal)
-                    </Text>
-                  );
-                } else if (sortedProcedures.length > 1) {
-                  const mainProc = sortedProcedures[0];
-                  const secondaryProcs = sortedProcedures.slice(1);
-                  return (
-                    <>
-                      <Text style={styles.clinicalText}>
-                        {mainProc.quantity} x {mainProc.procedure?.code} - {mainProc.procedure?.name} (Procedimento Principal)
-                      </Text>
-                      {secondaryProcs.map((proc, index) => (
-                        <Text key={index} style={styles.clinicalText}>
-                          {proc.quantity} x {proc.procedure?.code} - {proc.procedure?.name}
-                        </Text>
-                      ))}
-                    </>
-                  );
-                }
-                return null;
-              })()}
-            </View>
-          </View>
-        )}
-
-        {/* Informações do procedimento (igual à prévia) */}
-        <View style={styles.procedureInfoRow}>
+        {/* Informações do procedimento - NÃO pode quebrar entre páginas */}
+        <View style={styles.procedureInfoRow} wrap={false}>
           <View style={styles.procedureInfoColumn}>
             <Text style={styles.sectionHeader}>Caráter do Procedimento:</Text>
             <Text style={styles.procedureInfoText}>
@@ -646,51 +829,626 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
           </View>
         </View>
 
-        {/* BLOCO UNIFICADO: Materiais + Fornecedores + Assinatura - SEMPRE JUNTOS NA MESMA PÁGINA */}
-        <View wrap={false}>
-          {/* Materiais OPME */}
-          {opmeItems?.length > 0 && (
-            <View style={styles.clinicalSection}>
-              <Text style={styles.sectionHeader}>Lista de Materiais Necessários:</Text>
-              <View style={styles.clinicalContent}>
-                {opmeItems.map((opmeItem, index) => {
-                  // Detectar se o item tem estrutura {item: any, quantity: number} ou é direto
-                  const item = opmeItem.item || opmeItem;
-                  const quantity = opmeItem.quantity || orderData?.opmeItemQuantities?.[index] || 1;
-                  
-                  return (
-                    <Text key={index} style={styles.clinicalText}>
-                      {quantity} x {item.technicalName || item.commercialName || item.name || 'Material não especificado'}
-                      {item.anvisaRegistrationNumber && ` (ANVISA: ${item.anvisaRegistrationNumber})`}
+        {/* Agrupamento por Procedimento/Conduta */}
+        {(() => {
+          const parsePorteValue = (porte: any) => {
+            if (!porte || typeof porte !== 'string') return 0;
+            const match = porte.match(/^(\d+)([A-Za-z]?)$/);
+            if (!match) return 0;
+            const numero = parseInt(match[1], 10);
+            const letra = match[2]?.toUpperCase() || 'A';
+            const valorLetra = letra.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
+            return (numero * 100) + valorLetra;
+          };
+
+          // 📝 Função para parsear notas por subtítulos de conduta
+          // Formato atual: ### [Procedimento] → [Conduta]
+          // Formato legado (compatibilidade): ### [Procedimento] → [Conduta] [PID:x][AID:y]
+          // IMPORTANTE: Ambos os formatos são normalizados para chave baseada em nomes
+          // Se houver múltiplas seções com a mesma chave, o conteúdo é mesclado
+          const parseNotesBySubtitle = (notes: string | undefined | null) => {
+            if (!notes) return { general: '', sections: new Map<string, string>() };
+            
+            const sections = new Map<string, string>();
+            const lines = notes.split('\n');
+            let currentKey: string | null = null;
+            let currentContent: string[] = [];
+            let generalContent: string[] = [];
+            
+            // Função auxiliar para salvar conteúdo (com merge se chave já existe)
+            const saveContent = (key: string, content: string) => {
+              if (!content) return;
+              const existing = sections.get(key);
+              if (existing) {
+                // Merge: concatenar conteúdo existente com novo
+                sections.set(key, `${existing}\n\n${content}`);
+              } else {
+                sections.set(key, content);
+              }
+            };
+            
+            lines.forEach(line => {
+              // Detectar subtítulo - suporta formato atual e legado
+              // Atual: ### [Procedimento] → [Conduta]
+              // Legado: ### [Procedimento] → [Conduta] [PID:x][AID:y]
+              const subtitleWithIdsMatch = line.match(/^###\s*(.+?)\s*→\s*(.+?)\s*\[PID:(\d+)\]\[AID:(\d+)\]\s*$/);
+              const subtitleMatch = line.match(/^###\s*(.+?)\s*→\s*(.+?)\s*$/);
+              
+              if (subtitleWithIdsMatch || subtitleMatch) {
+                // Salvar conteúdo anterior
+                if (currentKey) {
+                  const content = currentContent.join('\n').trim();
+                  saveContent(currentKey, content);
+                } else if (currentContent.length > 0) {
+                  generalContent = [...generalContent, ...currentContent];
+                }
+                
+                // Extrair nomes do procedimento e conduta (ambos os formatos)
+                const procedureName = (subtitleWithIdsMatch || subtitleMatch)![1].trim();
+                const approachName = (subtitleWithIdsMatch || subtitleMatch)![2].trim();
+                
+                // Sempre usar chave baseada em nomes (canônica)
+                currentKey = `name:${procedureName}-${approachName}`;
+                currentContent = [];
+              } else {
+                currentContent.push(line);
+              }
+            });
+            
+            // Salvar última seção
+            if (currentKey) {
+              const content = currentContent.join('\n').trim();
+              saveContent(currentKey, content);
+            } else if (currentContent.length > 0) {
+              generalContent = [...generalContent, ...currentContent];
+            }
+            
+            return { general: generalContent.join('\n').trim(), sections };
+          };
+
+          // Parsear as 3 caixas de notas
+          const cbhpmNotes = parseNotesBySubtitle(orderData?.cbhpmAdditionalNotes);
+          const opmeNotes = parseNotesBySubtitle(orderData?.opmeAdditionalNotes);
+          const supplierNotes = parseNotesBySubtitle(orderData?.supplierAdditionalNotes);
+
+          // Função helper para buscar nota por nome (chave única)
+          // Todas as seções são normalizadas para chave baseada em nomes
+          const findNote = (
+            sections: Map<string, string>,
+            procedureId: number | null,
+            approachId: number | null,
+            procedureName: string,
+            approachName: string
+          ): string | undefined => {
+            // Busca por nome (chave canônica)
+            const nameKey = `name:${procedureName}-${approachName}`;
+            return sections.get(nameKey);
+          };
+
+          const groupItemsByApproach = () => {
+            const groups: Map<string, {
+              procedureId: number | null;
+              procedureName: string;
+              approachId: number | null;
+              approachName: string;
+              cids: any[];
+              cbhpmProcedures: any[];
+              opmeItemsList: any[];
+              suppliers: any[];
+            }> = new Map();
+
+            if (cidData && Array.isArray(cidData) && cidData.length > 0) {
+              cidData.forEach((cidItem: any) => {
+                const cid = cidItem.cid || cidItem;
+                // Priorizar surgicalApproach (objeto), depois sourceApproachId (ID direto na raiz ou em cid)
+                const approach = cidItem.surgicalApproach || cid?.surgicalApproach;
+                const approachId = approach?.id || cidItem.sourceApproachId || cid?.sourceApproachId || null;
+                const approachName = approach?.name || cidItem.sourceApproachName || cid?.sourceApproachName || 'Itens Gerais';
+                // Buscar procedimento cirúrgico (objeto ou ID direto)
+                const procedure = cidItem.surgicalProcedure || cid?.surgicalProcedure;
+                const procedureId = procedure?.id || cidItem.sourceProcedureId || cid?.sourceProcedureId || null;
+                const procedureName = procedure?.name || cidItem.sourceProcedureName || cid?.sourceProcedureName || '';
+                // Chave baseada em IDs para unicidade
+                const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
+                
+                if (!groups.has(key)) {
+                  groups.set(key, {
+                    procedureId,
+                    procedureName,
+                    approachId,
+                    approachName,
+                    cids: [],
+                    cbhpmProcedures: [],
+                    opmeItemsList: [],
+                    suppliers: []
+                  });
+                }
+                groups.get(key)!.cids.push(cidItem);
+              });
+            }
+
+            if (secondaryProcedures && secondaryProcedures.length > 0) {
+              secondaryProcedures.forEach((proc: any) => {
+                // Priorizar surgicalApproach (dados do backend), depois sourceApproachId (dados manuais)
+                const approach = proc.surgicalApproach || proc.procedure?.surgicalApproach;
+                const approachId = approach?.id || proc.procedure?.sourceApproachId || null;
+                const approachName = approach?.name || proc.procedure?.sourceApproachName || 'Itens Gerais';
+                // Buscar procedimento cirúrgico
+                const procedure = proc.surgicalProcedure || proc.procedure?.surgicalProcedure;
+                const procedureId = procedure?.id || proc.procedure?.sourceProcedureId || null;
+                const procedureName = procedure?.name || proc.procedure?.sourceProcedureName || '';
+                // Chave baseada em IDs para unicidade
+                const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
+                
+                if (!groups.has(key)) {
+                  groups.set(key, {
+                    procedureId,
+                    procedureName,
+                    approachId,
+                    approachName,
+                    cids: [],
+                    cbhpmProcedures: [],
+                    opmeItemsList: [],
+                    suppliers: []
+                  });
+                }
+                groups.get(key)!.cbhpmProcedures.push(proc);
+              });
+            }
+
+            if (opmeItems && opmeItems.length > 0) {
+              opmeItems.forEach((opmeItem: any) => {
+                const item = opmeItem.item || opmeItem;
+                // Priorizar surgicalApproach (dados do backend), depois sourceApproachId (dados manuais)
+                const approach = opmeItem.surgicalApproach || item?.surgicalApproach;
+                const approachId = approach?.id || item?.sourceApproachId || null;
+                const approachName = approach?.name || item?.sourceApproachName || 'Itens Gerais';
+                // Buscar procedimento cirúrgico
+                const procedure = opmeItem.surgicalProcedure || item?.surgicalProcedure;
+                const procedureId = procedure?.id || item?.sourceProcedureId || null;
+                const procedureName = procedure?.name || item?.sourceProcedureName || '';
+                // Chave baseada em IDs para unicidade
+                const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
+                
+                if (!groups.has(key)) {
+                  groups.set(key, {
+                    procedureId,
+                    procedureName,
+                    approachId,
+                    approachName,
+                    cids: [],
+                    cbhpmProcedures: [],
+                    opmeItemsList: [],
+                    suppliers: []
+                  });
+                }
+                groups.get(key)!.opmeItemsList.push(opmeItem);
+              });
+            }
+
+            // Agrupar fornecedores por conduta (usar mesma lógica do preview)
+            if (suppliers && suppliers.length > 0) {
+              suppliers.forEach((supplier: any) => {
+                const approachId = supplier.sourceApproachId || null;
+                const approachName = supplier.sourceApproachName || 'Itens Gerais';
+                const procedureId = supplier.sourceProcedureId || null;
+                const procedureName = supplier.sourceProcedureName || '';
+                // Chave baseada em IDs para unicidade
+                const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
+                
+                if (!groups.has(key)) {
+                  groups.set(key, {
+                    procedureId,
+                    procedureName,
+                    approachId,
+                    approachName,
+                    cids: [],
+                    cbhpmProcedures: [],
+                    opmeItemsList: [],
+                    suppliers: []
+                  });
+                }
+                groups.get(key)!.suppliers.push(supplier);
+              });
+            }
+
+            // Converter para array - PRESERVAR ORDEM DE ADIÇÃO DOS BLOCOS
+            // Apenas colocar 'general' (itens sem conduta) no final
+            const entries = Array.from(groups.entries());
+            const generalEntry = entries.find(([key]) => key === 'general');
+            const otherEntries = entries.filter(([key]) => key !== 'general');
+            
+            // Retorna outros na ordem original de adição, com 'general' no final
+            return generalEntry ? [...otherEntries, generalEntry] : otherEntries;
+          };
+
+          const groupedItems = groupItemsByApproach();
+          const hasMultipleGroups = groupedItems.length > 1 || (groupedItems.length === 1 && groupedItems[0][0] !== 'general');
+
+          return groupedItems.map(([key, group], groupIndex) => {
+            const hasCids = group.cids.length > 0;
+            const hasProcedures = group.cbhpmProcedures.length > 0;
+            const hasOpme = group.opmeItemsList.length > 0;
+            const hasSuppliers = group.suppliers.length > 0;
+            const showHeader = hasMultipleGroups && group.approachId;
+
+            const renderCidsSection = () => (
+              <View style={styles.clinicalSection}>
+                <Text style={styles.sectionHeader}>Códigos CID-10:</Text>
+                <View style={styles.clinicalContent}>
+                  {group.cids.map((cidItem, index) => {
+                    const cid = cidItem.cid || cidItem;
+                    const code = cid?.code;
+                    const description = cid?.description;
+                    return (
+                      <Text key={index} style={styles.clinicalText}>
+                        {code} - {description}
+                      </Text>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+
+            const renderProceduresSection = (isFirst: boolean) => {
+              const cbhpmNote = findNote(cbhpmNotes.sections, group.procedureId, group.approachId, group.procedureName, group.approachName);
+              
+              return (
+                <View style={styles.clinicalSection} wrap={false} minPresenceAhead={isFirst ? undefined : 180}>
+                  <Text style={styles.sectionHeader}>Procedimentos Cirúrgicos Necessários:</Text>
+                  <View style={styles.clinicalContent}>
+                    {(() => {
+                      const sortedProcs = [...group.cbhpmProcedures].sort(
+                        (a, b) => parsePorteValue(b.procedure?.porte) - parsePorteValue(a.procedure?.porte)
+                      );
+                      return sortedProcs.map((proc, index) => (
+                        <Text key={index} style={styles.clinicalText}>
+                          {proc.quantity} x {proc.procedure?.code} - {proc.procedure?.name}
+                          {index === 0 && sortedProcs.length > 1 ? ' (Principal)' : ''}
+                        </Text>
+                      ));
+                    })()}
+                  </View>
+                  {cbhpmNote && (
+                    <View style={{ marginTop: 2 }}>
+                      <Text style={styles.sectionHeader}>Observações:</Text>
+                      <View style={styles.clinicalContent}>
+                        {parseMarkdownToPdf(cbhpmNote).map((line, lineIndex) => {
+                          if (line.type === 'listItem') {
+                            return (
+                              <View key={lineIndex} style={styles.mdListItem}>
+                                <Text style={styles.mdBullet}>•</Text>
+                                <Text style={styles.clinicalText}>
+                                  {line.segments.map((seg, segIndex) => {
+                                    if (seg.bold && seg.italic) return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                                    if (seg.bold) return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                                    if (seg.italic) return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                                    return <Text key={segIndex}>{seg.text}</Text>;
+                                  })}
+                                </Text>
+                              </View>
+                            );
+                          }
+                          return (
+                            <Text key={lineIndex} style={styles.clinicalText}>
+                              {line.segments.map((seg, segIndex) => {
+                                if (seg.bold && seg.italic) return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                                if (seg.bold) return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                                if (seg.italic) return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                                return <Text key={segIndex}>{seg.text}</Text>;
+                              })}
+                            </Text>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            };
+
+            const renderOpmeSection = (isFirst: boolean) => {
+              const opmeNote = findNote(opmeNotes.sections, group.procedureId, group.approachId, group.procedureName, group.approachName);
+              
+              return (
+                <View style={styles.clinicalSection} wrap={false} minPresenceAhead={isFirst ? undefined : 180}>
+                  <Text style={styles.sectionHeader}>Lista de Materiais Necessários:</Text>
+                  <View style={styles.clinicalContent}>
+                    {group.opmeItemsList.map((opmeItem, index) => {
+                      const item = opmeItem.item || opmeItem;
+                      const quantity = opmeItem.quantity || orderData?.opmeItemQuantities?.[index] || 1;
+                      return (
+                        <Text key={index} style={styles.clinicalText}>
+                          {quantity} x {item.technicalName || item.commercialName || item.name || 'Material não especificado'}
+                          {item.anvisaRegistrationNumber && ` (ANVISA: ${item.anvisaRegistrationNumber})`}
+                        </Text>
+                      );
+                    })}
+                  </View>
+                  {opmeNote && (
+                    <View style={{ marginTop: 2 }}>
+                      <Text style={styles.sectionHeader}>Observações:</Text>
+                      <View style={styles.clinicalContent}>
+                        {parseMarkdownToPdf(opmeNote).map((line, lineIndex) => {
+                          if (line.type === 'listItem') {
+                            return (
+                              <View key={lineIndex} style={styles.mdListItem}>
+                                <Text style={styles.mdBullet}>•</Text>
+                                <Text style={styles.clinicalText}>
+                                  {line.segments.map((seg, segIndex) => {
+                                    if (seg.bold && seg.italic) return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                                    if (seg.bold) return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                                    if (seg.italic) return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                                    return <Text key={segIndex}>{seg.text}</Text>;
+                                  })}
+                                </Text>
+                              </View>
+                            );
+                          }
+                          return (
+                            <Text key={lineIndex} style={styles.clinicalText}>
+                              {line.segments.map((seg, segIndex) => {
+                                if (seg.bold && seg.italic) return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                                if (seg.bold) return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                                if (seg.italic) return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                                return <Text key={segIndex}>{seg.text}</Text>;
+                              })}
+                            </Text>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            };
+
+            const renderSuppliersSection = (isFirst: boolean) => {
+              const supplierNote = findNote(supplierNotes.sections, group.procedureId, group.approachId, group.procedureName, group.approachName);
+              
+              return (
+                <View style={styles.clinicalSection} wrap={false} minPresenceAhead={isFirst ? undefined : 180}>
+                  <Text style={styles.sectionHeader}>Fornecedores:</Text>
+                  <View style={styles.clinicalContent}>
+                    {group.suppliers.map((supplier, index) => {
+                      const supplierName = supplier.tradeName || supplier.companyName || supplier.supplierName || supplier.name || 'Fornecedor não especificado';
+                      const manufacturerName = supplier.manufacturerName;
+                      return (
+                        <Text key={index} style={styles.clinicalText}>
+                          {index + 1}. {supplierName}
+                          {manufacturerName && ` (${manufacturerName})`}
+                        </Text>
+                      );
+                    })}
+                  </View>
+                  {supplierNote && (
+                    <View style={{ marginTop: 2 }}>
+                      <Text style={styles.sectionHeader}>Observações:</Text>
+                      <View style={styles.clinicalContent}>
+                        {parseMarkdownToPdf(supplierNote).map((line, lineIndex) => {
+                          if (line.type === 'listItem') {
+                            return (
+                              <View key={lineIndex} style={styles.mdListItem}>
+                                <Text style={styles.mdBullet}>•</Text>
+                                <Text style={styles.clinicalText}>
+                                  {line.segments.map((seg, segIndex) => {
+                                    if (seg.bold && seg.italic) return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                                    if (seg.bold) return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                                    if (seg.italic) return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                                    return <Text key={segIndex}>{seg.text}</Text>;
+                                  })}
+                                </Text>
+                              </View>
+                            );
+                          }
+                          return (
+                            <Text key={lineIndex} style={styles.clinicalText}>
+                              {line.segments.map((seg, segIndex) => {
+                                if (seg.bold && seg.italic) return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                                if (seg.bold) return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                                if (seg.italic) return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                                return <Text key={segIndex}>{seg.text}</Text>;
+                              })}
+                            </Text>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            };
+
+            return (
+              <View key={key} style={groupIndex > 0 ? { marginTop: 10, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: '#e5e7eb' } : {}}>
+                {/* Agrupa título + primeira seção para não ficarem separados em páginas diferentes */}
+                {showHeader && hasCids && (
+                  <View wrap={false} minPresenceAhead={180}>
+                    <View style={{ marginBottom: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2ca8e0' }}>
+                        {group.procedureName} → {group.approachName}
+                      </Text>
+                    </View>
+                    {renderCidsSection()}
+                  </View>
+                )}
+
+                {/* Título sem CIDs - agrupa com próxima seção disponível */}
+                {showHeader && !hasCids && hasProcedures && (
+                  <View wrap={false} minPresenceAhead={180}>
+                    <View style={{ marginBottom: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2ca8e0' }}>
+                        {group.procedureName} → {group.approachName}
+                      </Text>
+                    </View>
+                    {renderProceduresSection(true)}
+                  </View>
+                )}
+
+                {showHeader && !hasCids && !hasProcedures && hasOpme && (
+                  <View wrap={false} minPresenceAhead={180}>
+                    <View style={{ marginBottom: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2ca8e0' }}>
+                        {group.procedureName} → {group.approachName}
+                      </Text>
+                    </View>
+                    {renderOpmeSection(true)}
+                  </View>
+                )}
+
+                {showHeader && !hasCids && !hasProcedures && !hasOpme && hasSuppliers && (
+                  <View wrap={false} minPresenceAhead={180}>
+                    <View style={{ marginBottom: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2ca8e0' }}>
+                        {group.procedureName} → {group.approachName}
+                      </Text>
+                    </View>
+                    {renderSuppliersSection(true)}
+                  </View>
+                )}
+
+                {/* Título sozinho (sem seções) */}
+                {showHeader && !hasCids && !hasProcedures && !hasOpme && !hasSuppliers && (
+                  <View style={{ marginBottom: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2ca8e0' }}>
+                      {group.procedureName} → {group.approachName}
                     </Text>
-                  );
-                })}
-              </View>
-            </View>
-          )}
+                  </View>
+                )}
 
-          {/* Fornecedores */}
-          {suppliers?.length > 0 && (
-            <View style={styles.clinicalSection}>
-              <Text style={styles.sectionHeader}>Fornecedores Indicados:</Text>
-              <View style={styles.clinicalContent}>
-                <Text style={styles.clinicalText}>
-                  {suppliers
-                    .map(supplier => {
-                      // Novo formato com fabricantes: "Trade Name (Manufacturer Name)"
-                      if (supplier.supplierName && supplier.manufacturerName) {
-                        return `${supplier.supplierName} (${supplier.manufacturerName})`;
-                      }
-                      // Fallback para sistema antigo
-                      return supplier.tradeName || supplier.companyName || supplier.name || supplier.supplierName || 'Fornecedor não especificado';
-                    })
-                    .join('   •   ')
-                  }
+                {/* CIDs sem título (já renderizado acima se showHeader + hasCids) */}
+                {!showHeader && hasCids && (
+                  <View wrap={false} minPresenceAhead={180}>
+                    {renderCidsSection()}
+                  </View>
+                )}
+
+                {/* Procedimentos (já renderizado acima se showHeader + !hasCids + hasProcedures) */}
+                {hasProcedures && (showHeader ? hasCids : true) && !(showHeader && !hasCids && hasProcedures) && (
+                  <View wrap={false} minPresenceAhead={180}>
+                    {renderProceduresSection(false)}
+                  </View>
+                )}
+
+                {/* OPME (já renderizado acima se showHeader + !hasCids + !hasProcedures + hasOpme) */}
+                {hasOpme && !(showHeader && !hasCids && !hasProcedures && hasOpme) && (
+                  <View wrap={false} minPresenceAhead={180}>
+                    {renderOpmeSection(false)}
+                  </View>
+                )}
+
+                {/* Fornecedores (já renderizado acima se showHeader + !hasCids + !hasProcedures + !hasOpme + hasSuppliers) */}
+                {hasSuppliers && !(showHeader && !hasCids && !hasProcedures && !hasOpme && hasSuppliers) && (
+                  <View wrap={false} minPresenceAhead={180}>
+                    {renderSuppliersSection(false)}
+                  </View>
+                )}
+              </View>
+            );
+          });
+        })()}
+
+        {/* Observações gerais (não associadas a nenhuma conduta específica) */}
+        {(() => {
+          // Função para parsear notas por subtítulos
+          const parseGeneralNotes = (notes: string | undefined | null) => {
+            if (!notes) return '';
+            const lines = notes.split('\n');
+            let currentKey: string | null = null;
+            let generalContent: string[] = [];
+            
+            lines.forEach(line => {
+              const subtitleMatch = line.match(/^###\s*(.+?)\s*→\s*(.+?)\s*$/);
+              if (subtitleMatch) {
+                currentKey = 'has_subtitle';
+              } else if (!currentKey) {
+                generalContent.push(line);
+              }
+            });
+            
+            return generalContent.join('\n').trim();
+          };
+
+          const cbhpmGeneral = parseGeneralNotes(orderData?.cbhpmAdditionalNotes);
+          const opmeGeneral = parseGeneralNotes(orderData?.opmeAdditionalNotes);
+          const supplierGeneral = parseGeneralNotes(orderData?.supplierAdditionalNotes);
+
+          const renderMarkdownContent = (content: string) => 
+            parseMarkdownToPdf(content).map((line, lineIndex) => {
+              if (line.type === 'horizontalRule') {
+                return <View key={lineIndex} style={styles.mdHorizontalRule} />;
+              }
+              if (line.type === 'heading') {
+                return (
+                  <Text key={lineIndex} style={styles.mdHeading}>
+                    {line.segments.map((seg, segIndex) => {
+                      if (seg.bold && seg.italic) return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                      if (seg.bold) return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                      if (seg.italic) return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                      return <Text key={segIndex}>{seg.text}</Text>;
+                    })}
+                  </Text>
+                );
+              }
+              if (line.type === 'listItem') {
+                return (
+                  <View key={lineIndex} style={styles.mdListItem}>
+                    <Text style={styles.mdBullet}>•</Text>
+                    <Text style={styles.clinicalText}>
+                      {line.segments.map((seg, segIndex) => {
+                        if (seg.bold && seg.italic) return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                        if (seg.bold) return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                        if (seg.italic) return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                        return <Text key={segIndex}>{seg.text}</Text>;
+                      })}
+                    </Text>
+                  </View>
+                );
+              }
+              return (
+                <Text key={lineIndex} style={styles.clinicalText}>
+                  {line.segments.map((seg, segIndex) => {
+                    if (seg.bold && seg.italic) return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                    if (seg.bold) return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                    if (seg.italic) return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                    return <Text key={segIndex}>{seg.text}</Text>;
+                  })}
                 </Text>
-              </View>
-            </View>
-          )}
+              );
+            });
 
+          return (
+            <>
+              {cbhpmGeneral && (
+                <View style={styles.clinicalSection} wrap={false} minPresenceAhead={180}>
+                  <Text style={styles.sectionHeader}>Observações Gerais sobre Procedimentos:</Text>
+                  <View style={styles.clinicalContent}>
+                    {renderMarkdownContent(cbhpmGeneral)}
+                  </View>
+                </View>
+              )}
+              {opmeGeneral && (
+                <View style={styles.clinicalSection} wrap={false} minPresenceAhead={180}>
+                  <Text style={styles.sectionHeader}>Observações Gerais sobre Materiais:</Text>
+                  <View style={styles.clinicalContent}>
+                    {renderMarkdownContent(opmeGeneral)}
+                  </View>
+                </View>
+              )}
+              {supplierGeneral && (
+                <View style={styles.clinicalSection} wrap={false} minPresenceAhead={180}>
+                  <Text style={styles.sectionHeader}>Observações Gerais sobre Fornecedores:</Text>
+                  <View style={styles.clinicalContent}>
+                    {renderMarkdownContent(supplierGeneral)}
+                  </View>
+                </View>
+              )}
+            </>
+          );
+        })()}
+
+        {/* BLOCO DE ASSINATURA - mfffinPresenceAhead nas seções anteriores garante conteúdo junto */}
+        <View wrap={false}>
           {/* Seção de assinatura */}
           <View style={styles.signatureSection}>
             {/* Data */}
@@ -761,7 +1519,7 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
                   />
                 </View>
                 
-                {/* Legenda na parte inferior */}
+                {/* Legenda na parte inferior ffff */}
                 <View style={{ 
                   marginTop: 10, 
                   marginBottom: 20,
