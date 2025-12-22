@@ -12,6 +12,7 @@ import {
   FileText,
   BarChart3,
   Edit,
+  ExternalLink,
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { useSupportContact } from "@/lib/support-contact";
@@ -656,7 +657,24 @@ export default function AuthPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Botão flutuante do WhatsApp ff */}
+      {/* Footer LGPD */}
+      <footer className="border-t bg-gray-50 py-4 px-6">
+        <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-500">
+          <span>&copy; {new Date().getFullYear()} MedSync. Todos os direitos reservados.</span>
+          <a
+            href="https://lgpd.somaxi.com.br/formulario/cliente-1765997299970-mo7tsrwb9"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 hover:text-primary transition-colors"
+            data-testid="link-lgpd-rights-auth"
+          >
+            Direitos do Titular LGPD
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      </footer>
+
+      {/* Botão flutuante do WhatsApp */}
       <div
         className="fixed bottom-6 right-6 z-50 transform transition-all duration-300 hover:scale-110"
         onClick={() => {
