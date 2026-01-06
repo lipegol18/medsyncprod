@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Controle_Financeiro-2" data-name="Controle Financeiro" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <defs>
+    <style>
+      .cls-1 {
+        stroke: #00a4e8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: .65px;
+      }
+
+      .cls-1, .cls-2 {
+        fill: none;
+      }
+
+      .cls-2 {
+        stroke: #26a9e0;
+        stroke-miterlimit: 10;
+        stroke-width: .74px;
+      }
+    </style>
+  </defs>
+  <rect class="cls-2" x=".39" y=".39" width="19.22" height="19.22" rx="1.41" ry="1.41"/>
+  <g>
+    <ellipse class="cls-1" cx="8.75" cy="9.84" rx="2.5" ry="2.5"/>
+    <polyline class="cls-1" points="8.75 7.34 8.75 9.77 10.52 11.54"/>
+    <line class="cls-1" x1="12.74" y1="7.77" x2="13.64" y2="7.77"/>
+    <line class="cls-1" x1="12.74" y1="9.16" x2="13.64" y2="9.16"/>
+    <line class="cls-1" x1="12.74" y1="10.55" x2="13.64" y2="10.55"/>
+    <line class="cls-1" x1="12.74" y1="11.94" x2="13.64" y2="11.94"/>
+    <rect class="cls-1" x="4.68" y="5.9" width="10.58" height="7.74" rx=".95" ry=".95"/>
+  </g>
+</svg>

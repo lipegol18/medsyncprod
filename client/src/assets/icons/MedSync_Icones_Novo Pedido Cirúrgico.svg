@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Novo_Pedido_Cirúrgicos" data-name="Novo Pedido Cirúrgicos" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <defs>
+    <style>
+      .cls-1, .cls-2 {
+        stroke: #00a4e8;
+        stroke-width: .65px;
+      }
+
+      .cls-1, .cls-2, .cls-3 {
+        fill: none;
+        stroke-miterlimit: 10;
+      }
+
+      .cls-2 {
+        stroke-linecap: round;
+      }
+
+      .cls-3 {
+        stroke: #26a9e0;
+        stroke-width: .74px;
+      }
+    </style>
+  </defs>
+  <path class="cls-1" d="M12.36,5.79h1.01c.79,0,1.43.64,1.43,1.43v6.81c0,.79-.64,1.43-1.43,1.43h-6.85c-.79,0-1.43-.64-1.43-1.43v-6.81c0-.79.64-1.43,1.43-1.43h1.09"/>
+  <rect class="cls-1" x="7.57" y="4.57" width="4.89" height="2.74" rx="1.11" ry="1.11"/>
+  <line class="cls-2" x1="7.34" y1="9.99" x2="12.52" y2="9.99"/>
+  <line class="cls-2" x1="7.34" y1="12.52" x2="12.52" y2="12.52"/>
+  <rect class="cls-3" x=".39" y=".39" width="19.22" height="19.22" rx="1.41" ry="1.41"/>
+</svg>

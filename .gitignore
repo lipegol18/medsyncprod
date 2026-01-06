@@ -1,0 +1,14 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+*.zip
+*.csv
+/uploads
+/docs
+/migrations
+*.replit
+*.dump
+/attached_assets

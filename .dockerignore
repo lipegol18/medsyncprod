@@ -1,0 +1,77 @@
+# Arquivos e pastas a serem ignorados pelo Docker
+
+# Node modules
+node_modules
+npm-debug.log*
+
+# Arquivos de desenvolvimento
+.env.local
+.env.development
+
+# Logs
+logs
+*.log
+
+# Coverage directory usado por ferramentas como istanbul
+coverage
+
+# Dependências de runtime opcionais
+.pnp
+.pnp.js
+
+# Arquivos de cache e temporários
+.cache
+*.tmp
+*.temp
+
+# Arquivos de IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Arquivos de build local (serão reconstruídos no container)
+dist
+
+# Arquivos de upload (devem ser montados como volume em produção)
+uploads
+
+# Arquivos de backup
+backups
+*.sql.gz
+*.backup
+*.tar.gz
+
+# Documentação
+*.md
+README.md
+
+# Arquivos de teste e mockup
+test
+tests
+__tests__
+mockups
+
+# Arquivos de configuração específicos do ambiente local
+.replit
+replit.nix
+
+# Arquivos de debug e análise
+debug-*.js
+debug-*.cjs
+analise-*.md
+diagrama-*.js
+
+# Cookies e dados de sessão
+cookies*.txt
+
+# Scripts SQL específicos do desenvolvimento
+*.sql

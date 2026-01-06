@@ -1,0 +1,86 @@
+import { Tour } from '../types';
+
+export const dashboardTour: Tour = {
+  id: 'dashboard-tour',
+  name: 'Tour do Dashboard',
+  steps: [
+    {
+      id: 'dashboard-welcome',
+      target: '[data-testid="button-tours-menu"]',
+      content: 'Bem-vindo ao seu painel de controle! Vamos conhecer as principais funcionalidades do dashboard.',
+      title: 'Seu Dashboard',
+      placement: 'bottom',
+      disableBeacon: true,
+    },
+    {
+      id: 'dashboard-pedidos-cadastrados',
+      target: '[data-testid="card-pedidos-cadastrados"]',
+      content: 'Este card mostra o total de pedidos cadastrados no sistema. Clique nele para ver a lista completa de todos os seus pedidos.',
+      title: 'Total de Pedidos',
+      placement: 'bottom',
+    },
+    {
+      id: 'dashboard-aguardando-envio',
+      target: '[data-testid="card-pedidos-aguardando-envio"]',
+      content: 'Aqui você vê quantos pedidos estão aguardando envio para o convênio. Números em destaque indicam que há pedidos que precisam da sua atenção.',
+      title: 'Aguardando Envio',
+      placement: 'bottom',
+    },
+    {
+      id: 'dashboard-aguardando-agendamento',
+      target: '[data-testid="card-pedidos-aguardando-agendamento"]',
+      content: 'Este card mostra pedidos aprovados que ainda precisam ter a cirurgia agendada. Clique para filtrar esses pedidos.',
+      title: 'Aguardando Agendamento',
+      placement: 'bottom',
+    },
+    {
+      id: 'dashboard-autorizados',
+      target: '[data-testid="card-pedidos-autorizados"]',
+      content: 'Veja quantos pedidos já foram autorizados pelo convênio. Estes estão prontos para agendamento ou já agendados.',
+      title: 'Pedidos Autorizados',
+      placement: 'bottom',
+    },
+    {
+      id: 'dashboard-pendencias',
+      target: '[data-testid="card-pedidos-pendencias"]',
+      content: 'Pedidos com pendências precisam de documentação adicional ou correções. Clique para ver quais precisam da sua atenção.',
+      title: 'Pedidos com Pendências',
+      placement: 'bottom',
+    },
+    {
+      id: 'dashboard-aguardando-recurso',
+      target: '[data-testid="card-pedidos-aguardando-recurso"]',
+      content: 'Este card mostra pedidos que foram negados e estão aguardando análise de recurso.',
+      title: 'Aguardando Recurso',
+      placement: 'bottom',
+    },
+    {
+      id: 'dashboard-novo-pedido',
+      target: '[data-testid="button-novo-pedido"]',
+      content: 'Clique aqui para criar um novo pedido cirúrgico. Você será guiado por um processo passo a passo.',
+      title: 'Criar Novo Pedido',
+      placement: 'top',
+    },
+    {
+      id: 'dashboard-novo-paciente',
+      target: '[data-testid="button-novo-paciente"]',
+      content: 'Use este botão para cadastrar um novo paciente no sistema antes de criar um pedido.',
+      title: 'Cadastrar Paciente',
+      placement: 'top',
+    },
+    {
+      id: 'dashboard-grafico',
+      target: '[data-testid="card-distribuicao-status"]',
+      content: 'O gráfico mostra a distribuição dos seus pedidos por status. Clique em "Ver Relatórios" para análises mais detalhadas.',
+      title: 'Distribuição por Status',
+      placement: 'right',
+    },
+    {
+      id: 'dashboard-agenda',
+      target: '[data-testid="card-agenda-cirurgica"]',
+      content: 'Aqui você vê suas próximas cirurgias agendadas. Cirurgias de hoje aparecem destacadas em verde. Clique em uma cirurgia para ver os detalhes do pedido.',
+      title: 'Agenda Cirúrgica',
+      placement: 'left',
+    },
+  ],
+};
