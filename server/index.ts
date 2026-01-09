@@ -15,8 +15,8 @@ const app = express();
 // O Stripe precisa do corpo bruto (raw body) para verificar a assinatura
 // Esta condição DEVE vir ANTES do express.json()
 app.use((req, res, next) => {
-  if (req.path === '/api/webhooks/stripe') {
-    express.raw({ type: 'application/json' })(req, res, next);
+  if (req.path === "/api/webhooks/stripe") {
+    express.raw({ type: "application/json" })(req, res, next);
   } else {
     next();
   }
@@ -34,7 +34,7 @@ const getCorsOrigins = () => {
 
   // Only allow localhost in development environment for security
   if (isDevelopment()) {
-    origins.push("http://localhost:5001");
+    origins.push("http://localhost:5000");
     origins.push("http://localhost:3000");
   }
 
@@ -150,9 +150,14 @@ app.use((req, res, next) => {
 
   // Add discount admin routes (new 3-table architecture)
   const { getPaymentProvider } = await import("./payments");
-  const createDiscountAdminRouter = await import("./routes/discounts-admin-routes");
+  const createDiscountAdminRouter = await import(
+    "./routes/discounts-admin-routes"
+  );
   const stripeProvider = getPaymentProvider();
-  app.use("/api/admin/discounts", createDiscountAdminRouter.default(stripeProvider as any));
+  app.use(
+    "/api/admin/discounts",
+    createDiscountAdminRouter.default(stripeProvider as any),
+  );
 
   // Adicionar rotas para arquivos estáticos (mockups, etc)
   addStaticRoutes(app);

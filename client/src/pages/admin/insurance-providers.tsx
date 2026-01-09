@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { InsuranceProviderFormDialog } from "@/components/insurance-providers/insurance-provider-form-dialog";
+import { InsuranceProviderFormDialog } from "@/components/admin/insurance-providers/insurance-provider-form-dialog";
 
 export default function InsuranceProvidersPage() {
   const { t } = useTranslation();

@@ -20,7 +20,7 @@
  * - REPLIT_DEV_DOMAIN: Auto-set by Replit (e.g., your-repl.replit.dev)
  */
 
-const DEFAULT_APP_PORT = 3000; // <-- escolhe um valor padrão fixo
+const DEFAULT_APP_PORT = 5000; // <-- escolhe um valor padrão fixo
 
 interface EnvironmentConfig {
   protocol: "http" | "https";

@@ -419,6 +419,19 @@ export function RegisterForm({
               {...registerForm.register('username')}
               id="reg-username"
               placeholder="usuario"
+              maxLength={30}
+              onChange={(e) => {
+                // Remove acentos, espaços e converte para minúsculas
+                const sanitized = e.target.value
+                  .toLowerCase()
+                  .normalize('NFD')
+                  .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+                  .replace(/ç/g, 'c') // Converte ç para c
+                  .replace(/\s/g, '') // Remove espaços
+                  .replace(/[^a-z0-9_.]/g, ''); // Remove caracteres não permitidos
+                registerForm.setValue('username', sanitized);
+                registerForm.trigger('username');
+              }}
               onBlur={(e) => {
                 setTimeout(() => {
                   onFieldValidation('username', e.target.value);

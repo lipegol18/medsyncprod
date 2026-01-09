@@ -1005,6 +1005,64 @@ export function setupAuth(app: Express) {
     }
   });
 
+  // Endpoint para alterar senha (usuário autenticado)
+  app.post("/api/change-password", async (req, res, next) => {
+    try {
+      // Verificar se usuário está autenticado
+      if (!req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ message: "Usuário não autenticado" });
+      }
+
+      const { currentPassword, newPassword } = req.body;
+
+      // Validar campos obrigatórios
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ 
+          message: "Senha atual e nova senha são obrigatórias" 
+        });
+      }
+
+      // Validar tamanho mínimo da nova senha
+      if (newPassword.length < 6) {
+        return res.status(400).json({ 
+          message: "A nova senha deve ter pelo menos 6 caracteres" 
+        });
+      }
+
+      // Buscar usuário completo com senha
+      const user = await storage.getUser(req.user.id);
+      if (!user) {
+        return res.status(404).json({ message: "Usuário não encontrado" });
+      }
+
+      // Verificar senha atual
+      const isCurrentPasswordValid = await comparePasswords(currentPassword, user.password);
+      if (!isCurrentPasswordValid) {
+        return res.status(400).json({ message: "Senha atual incorreta" });
+      }
+
+      // Verificar se a nova senha é diferente da atual
+      const isSamePassword = await comparePasswords(newPassword, user.password);
+      if (isSamePassword) {
+        return res.status(400).json({ 
+          message: "A nova senha deve ser diferente da senha atual" 
+        });
+      }
+
+      // Atualizar senha
+      await storage.updateUser(user.id, {
+        password: await hashPassword(newPassword),
+      });
+
+      console.log(`✅ [CHANGE-PASSWORD] Senha alterada com sucesso para usuário ID: ${user.id}`);
+
+      res.status(200).json({ message: "Senha alterada com sucesso" });
+    } catch (error) {
+      console.error("❌ [CHANGE-PASSWORD] Erro ao alterar senha:", error);
+      next(error);
+    }
+  });
+
   // === ROTAS DE LEAD TRACKING (migradas de routes.ts) ===
 
   // API para tracking de leads incompletos

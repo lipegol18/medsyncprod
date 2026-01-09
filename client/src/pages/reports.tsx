@@ -26,6 +26,7 @@ import {
   Line,
   LineChart,
   LabelList,
+  Text,
 } from "recharts";
 import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
@@ -172,32 +173,72 @@ function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
     0,
   );
 
+  const chartData = hospitalSurgeries.map((hospital: any) => ({
+    name: hospital.hospitalName,
+    value: hospital.surgeryCount,
+  }));
+
   return (
     <div className="space-y-3">
-      {hospitalSurgeries.map((hospital: any, index: number) => (
-        <div
-          key={index}
-          className="flex justify-between items-center p-3 bg-card rounded-lg border border-border"
-        >
-          <div className="flex items-center gap-3">
-            <Building2 className="w-4 h-4 text-muted-foreground" />
-            <div>
-              <span className="text-foreground font-medium">
-                {hospital.hospitalName}
-              </span>
-              <p className="text-muted-foreground text-sm">
-                {hospital.surgeryCount} cirurgia
-                {hospital.surgeryCount !== 1 ? "s" : ""}
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <span className="text-foreground font-bold text-lg">
-              {hospital.surgeryCount}
-            </span>
-          </div>
-        </div>
-      ))}
+      <div className="h-[550px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart margin={{ top: 60, right: 120, bottom: 60, left: 120 }}>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              innerRadius={90}
+              outerRadius={150}
+              paddingAngle={2}
+              dataKey="value"
+              label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
+                const RADIAN = Math.PI / 180;
+                const radius = Number(outerRadius) + 30;
+                const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                return (
+                  <Text
+                    x={x}
+                    y={y}
+                    fill="#000000"
+                    fillOpacity={1}
+                    stroke="none"
+                    textAnchor={x > Number(cx) ? "start" : "end"}
+                    dominantBaseline="central"
+                    fontSize={12}
+                    fontWeight="bold"
+                  >
+                    {`${truncatedName} (${(percent * 100).toFixed(0)}%)`}
+                  </Text>
+                );
+              }}
+              labelLine={{ stroke: "#64748b", strokeWidth: 1 }}
+            >
+              {chartData.map((_: any, index: number) => (
+                <Cell
+                  key={`cell-hospital-${index}`}
+                  fill={DONUT_COLORS[index % DONUT_COLORS.length]}
+                />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#1e3a8a",
+                border: "1px solid #3b82f6",
+                color: "#fff",
+              }}
+              labelStyle={{ color: "#fff" }}
+              itemStyle={{ color: "#fff" }}
+              formatter={(value) => [
+                `${value} cirurgias`,
+                "Quantidade",
+              ]}
+            />
+
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
 
       <div className="mt-4 p-4 rounded-lg shadow-sm" style={{ background: 'linear-gradient(to right, hsl(var(--accent-light)), hsl(var(--medsync-light-blue)))' }} data-testid="hospital-summary-card">
         <div className="space-y-2">
@@ -369,50 +410,72 @@ function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
     );
   }
 
+  const chartData = supplierDistribution.map((item: any) => ({
+    name: item.supplierName,
+    value: item.surgeryCount,
+  }));
+
   return (
     <div className="space-y-3">
-      {/* Legenda de status */}
-      <div className="flex flex-wrap gap-2 mb-2">
-        <div className="flex items-center gap-1.5">
-          <div 
-            className="w-3 h-3 rounded-full" 
-            style={{ backgroundColor: STATUS_CONFIG.cirurgia_realizada.color }}
-          />
-          <span className="text-xs text-muted-foreground">Cirurgia Realizada</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div 
-            className="w-3 h-3 rounded-full" 
-            style={{ backgroundColor: STATUS_CONFIG.recebido.color }}
-          />
-          <span className="text-xs text-muted-foreground">Recebido</span>
-        </div>
-      </div>
+      <div className="h-[550px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart margin={{ top: 60, right: 120, bottom: 60, left: 120 }}>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              innerRadius={90}
+              outerRadius={150}
+              paddingAngle={2}
+              dataKey="value"
+              label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
+                const RADIAN = Math.PI / 180;
+                const radius = Number(outerRadius) + 30;
+                const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                return (
+                  <Text
+                    x={x}
+                    y={y}
+                    fill="#000000"
+                    fillOpacity={1}
+                    stroke="none"
+                    textAnchor={x > Number(cx) ? "start" : "end"}
+                    dominantBaseline="central"
+                    fontSize={12}
+                    fontWeight="bold"
+                  >
+                    {`${truncatedName} (${(percent * 100).toFixed(0)}%)`}
+                  </Text>
+                );
+              }}
+              labelLine={{ stroke: "#64748b", strokeWidth: 1 }}
+            >
+              {chartData.map((_: any, index: number) => (
+                <Cell
+                  key={`cell-supplier-${index}`}
+                  fill={DONUT_COLORS[index % DONUT_COLORS.length]}
+                />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#1e3a8a",
+                border: "1px solid #3b82f6",
+                color: "#fff",
+              }}
+              labelStyle={{ color: "#fff" }}
+              itemStyle={{ color: "#fff" }}
+              formatter={(value) => [
+                `${value} cirurgias`,
+                "Quantidade",
+              ]}
+            />
 
-      {supplierDistribution.map((item: any, index: number) => (
-        <div
-          key={index}
-          className="flex justify-between items-center p-3 bg-card rounded-lg border border-border"
-        >
-          <div className="flex items-center gap-3">
-            <Building2 className="w-4 h-4 text-muted-foreground" />
-            <div>
-              <span className="text-foreground font-medium">
-                {item.supplierName}
-              </span>
-              <p className="text-muted-foreground text-sm">
-                Selecionado em {item.surgeryCount} cirurgia
-                {item.surgeryCount !== 1 ? "s" : ""}
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <span className="text-foreground font-bold text-lg">
-              {item.surgeryCount}
-            </span>
-          </div>
-        </div>
-      ))}
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
 
       <div className="mt-4 p-4 rounded-lg shadow-sm" style={{ background: 'linear-gradient(to right, hsl(var(--accent-light)), hsl(var(--medsync-light-blue)))' }} data-testid="supplier-summary-card">
         <h4 className="font-semibold mb-3" style={{ color: 'hsl(var(--medsync-dark-blue))' }}>Resumo Detalhado</h4>
@@ -560,6 +623,47 @@ const medicalFeesData = [
 
 // Cores para os gráficos
 const COLORS = ["#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe", "#dbeafe"];
+
+// Cores variadas para gráficos de rosca (procedimentos)
+const DONUT_COLORS = [
+  "#3b82f6", // Azul
+  "#10b981", // Verde
+  "#f59e0b", // Laranja
+  "#ef4444", // Vermelho
+  "#8b5cf6", // Roxo
+  "#ec4899", // Rosa
+  "#14b8a6", // Teal
+  "#f97316", // Laranja escuro
+  "#6366f1", // Indigo
+  "#84cc16", // Lima
+];
+
+// Cores específicas para convênios/operadoras de saúde
+const getInsuranceColor = (name: string, fallbackIndex: number): string => {
+  const upperName = name.toUpperCase();
+  if (upperName.includes("BRADESCO")) return "#C8102E";
+  if (upperName.includes("PROASA")) return "#5EC6E8";
+  if (upperName.includes("UNIMED")) return "#00995D";
+  if (upperName.includes("SULAMÉRICA") || upperName.includes("SULAMERICA")) return "#F36C21";
+  if (upperName.includes("HAPVIDA") || upperName.includes("NOTRE DAME")) return "#F7A23B";
+  if (upperName.includes("AMIL")) return "#5B2D8B";
+  if (upperName.includes("PORTO SEGURO")) return "#0077C8";
+  if (upperName.includes("ALLIANZ")) return "#003781";
+  if (upperName.includes("PREVENT SENIOR")) return "#1B4F9C";
+  if (upperName.includes("ASSIM SAÚDE") || upperName.includes("ASSIM SAUDE")) return "#0066B3";
+  if (upperName.includes("GOLDEN CROSS")) return "#004B87";
+  if (upperName.includes("MEDSENIOR")) return "#1F6B3A";
+  if (upperName.includes("PETROBRAS")) return "#00A19A";
+  if (upperName.includes("GEAP")) return "#C8102E";
+  if (upperName.includes("CASSI")) return "#F2C300";
+  if (upperName.includes("FUSEX")) return "#4F6B3A";
+  if (upperName.includes("MAPFRE")) return "#E30613";
+  if (upperName.includes("ITAÚ") || upperName.includes("ITAU")) return "#002663";
+  if (upperName.includes("CAIXA SAÚDE") || upperName.includes("CAIXA SAUDE")) return "#005CA9";
+  if (upperName.includes("SILVESTRE")) return "#0B2D4A";
+  if (upperName.includes("PASA") || upperName.includes("VALE")) return "#007E7A";
+  return DONUT_COLORS[fallbackIndex % DONUT_COLORS.length];
+};
 
 // Componente para a aba de Valores Recebidos
 function ReceivedValuesTab({ appliedFilters }: { appliedFilters: any }) {
@@ -914,15 +1018,22 @@ export default function Reports() {
   // Estado para controlar a aba ativa
   const [activeTab, setActiveTab] = useState("volume");
 
+  // Definir valores padrão para ano corrente
+  const currentYear = new Date().getFullYear();
+  const defaultDateRange = {
+    startDate: `${currentYear}-01-01`,
+    endDate: `${currentYear}-12-31`,
+  };
+
   // Estados para filtros
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [yearFilter, setYearFilter] = useState<string | null>(null);
+  const [yearFilter, setYearFilter] = useState<string | null>(String(currentYear));
   const [dateRange, setDateRange] = useState<{
     startDate: string | null;
     endDate: string | null;
   }>({
-    startDate: null,
-    endDate: null,
+    startDate: defaultDateRange.startDate,
+    endDate: defaultDateRange.endDate,
   });
   const [hospitalFilter, setHospitalFilter] = useState<string | null>(null);
   const [doctorFilter, setDoctorFilter] = useState<string | null>(null);
@@ -1413,9 +1524,10 @@ export default function Reports() {
   }>({ orderCount: 0, patientCount: 0 });
 
   // Estado para controlar filtros aplicados (diferentes dos filtros na interface)
+  // Inicializa com o ano corrente por padrão
   const [appliedFilters, setAppliedFilters] = useState({
     statusFilter: "",
-    dateRange: { startDate: "", endDate: "" },
+    dateRange: { startDate: defaultDateRange.startDate, endDate: defaultDateRange.endDate },
     hospitalFilter: "all",
     complexityFilter: "",
     doctorFilter: "all",
@@ -1485,17 +1597,17 @@ export default function Reports() {
   // Aplicar filtros apenas quando clicar no botão "Filtrar"
   // (removido useEffect automático para evitar filtragem indevida)
 
-  // Função para limpar filtros
+  // Função para limpar filtros (restaura para o ano corrente)
   const handleClearFilters = () => {
     setStatusFilter("");
-    setYearFilter(null);
-    setDateRange({ startDate: "", endDate: "" });
+    setYearFilter(String(currentYear));
+    setDateRange({ startDate: defaultDateRange.startDate, endDate: defaultDateRange.endDate });
     setHospitalFilter("all");
     setComplexityFilter("");
     setDoctorFilter("all");
     setAppliedFilters({
       statusFilter: "",
-      dateRange: { startDate: "", endDate: "" },
+      dateRange: { startDate: defaultDateRange.startDate, endDate: defaultDateRange.endDate },
       hospitalFilter: "all",
       complexityFilter: "",
       doctorFilter: "all",
@@ -2268,13 +2380,12 @@ export default function Reports() {
                   {/* Filtro de Data Inicial */}
                   <div className="flex-1 min-w-[150px]">
                     <label
-                      className={`block text-sm font-medium mb-1 ${yearFilter ? "text-muted-foreground" : "text-[hsl(var(--medsync-dark-blue))]"}`}
+                      className="block text-sm font-medium mb-1 text-[hsl(var(--medsync-dark-blue))]"
                     >
                       Data Inicial
                     </label>
                     <input
                       type="date"
-                      disabled={!!yearFilter}
                       className="input-date-medsync w-full"
                       value={dateRange.startDate || ""}
                       onChange={(e) => {
@@ -2291,13 +2402,12 @@ export default function Reports() {
                   {/* Filtro de Data Final */}
                   <div className="flex-1 min-w-[150px]">
                     <label
-                      className={`block text-sm font-medium mb-1 ${yearFilter ? "text-muted-foreground" : "text-[hsl(var(--medsync-dark-blue))]"}`}
+                      className="block text-sm font-medium mb-1 text-[hsl(var(--medsync-dark-blue))]"
                     >
                       Data Final
                     </label>
                     <input
                       type="date"
-                      disabled={!!yearFilter}
                       className="input-date-medsync w-full"
                       value={dateRange.endDate || ""}
                       onChange={(e) => {
@@ -2592,11 +2702,11 @@ export default function Reports() {
                 </Popover>
               </div>
 
-              {/* Card: Pedidos Cirúrgicos Solicitados - Primeiro gráfico */}
+              {/* Card: Pedidos cirúrgicos solicitados - Primeiro gráfico */}
               <Card className="border-border bg-card shadow-lg">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-card-foreground">
-                    Pedidos Cirúrgicos Solicitados
+                    Pedidos cirúrgicos solicitados
                   </CardTitle>
                   <CardDescription className="text-muted-foreground">
                     {(() => {
@@ -2700,16 +2810,34 @@ export default function Reports() {
                               allowDecimals={false}
                             />
                             <Tooltip
-                              contentStyle={{
-                                backgroundColor: "#1e3a8a",
-                                border: "1px solid #3b82f6",
-                                color: "#fff",
-                                borderRadius: "8px",
-                              }}
-                              formatter={(value: number, name: string) => {
-                                const statusKey = name as keyof typeof STATUS_CONFIG;
-                                const label = STATUS_CONFIG[statusKey]?.label || name;
-                                return [`${value} pedidos`, label];
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload) return null;
+                                const filteredPayload = payload.filter((item: any) => item.value > 0);
+                                if (filteredPayload.length === 0) return null;
+                                const total = filteredPayload.reduce((sum: number, item: any) => sum + item.value, 0);
+                                return (
+                                  <div style={{
+                                    backgroundColor: "#1e3a8a",
+                                    border: "1px solid #3b82f6",
+                                    color: "#fff",
+                                    borderRadius: "8px",
+                                    padding: "10px",
+                                  }}>
+                                    <p style={{ fontWeight: "bold", marginBottom: "8px" }}>{label}</p>
+                                    {filteredPayload.map((item: any, index: number) => {
+                                      const statusKey = item.dataKey as keyof typeof STATUS_CONFIG;
+                                      const statusLabel = STATUS_CONFIG[statusKey]?.label || item.dataKey;
+                                      return (
+                                        <p key={index} style={{ color: item.fill, margin: "4px 0" }}>
+                                          {statusLabel} : {item.value} pedidos
+                                        </p>
+                                      );
+                                    })}
+                                    <p style={{ fontWeight: "bold", marginTop: "8px", borderTop: "1px solid #3b82f6", paddingTop: "8px" }}>
+                                      Total : {total} pedidos
+                                    </p>
+                                  </div>
+                                );
                               }}
                             />
                             <Bar dataKey="aguardando_envio" stackId="a" fill={STATUS_CONFIG.aguardando_envio.color} name="aguardando_envio" />
@@ -2784,11 +2912,11 @@ export default function Reports() {
                   })()}
               </Card>
 
-              {/* Card: Cirurgias Autorizadas/Realizadas */}
+              {/* Card: Cirurgias autorizadas ou realizadas */}
               <Card className="border-border bg-card shadow-lg mt-6">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-card-foreground">
-                    Cirurgias Autorizadas/Realizadas
+                    Cirurgias autorizadas ou realizadas
                   </CardTitle>
                   <CardDescription className="text-muted-foreground">
                     Volume de cirurgias autorizadas e realizadas
@@ -2871,16 +2999,34 @@ export default function Reports() {
                               allowDecimals={false}
                             />
                             <Tooltip
-                              contentStyle={{
-                                backgroundColor: "hsl(var(--card))",
-                                border: "1px solid hsl(var(--border))",
-                                borderRadius: "8px",
-                                boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                              }}
-                              formatter={(value: number, name: string) => {
-                                const statusKey = name as keyof typeof STATUS_CONFIG;
-                                const label = STATUS_CONFIG[statusKey]?.label || name;
-                                return [`${value} pedidos`, label];
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload) return null;
+                                const filteredPayload = payload.filter((item: any) => item.value > 0);
+                                if (filteredPayload.length === 0) return null;
+                                const total = filteredPayload.reduce((sum: number, item: any) => sum + item.value, 0);
+                                return (
+                                  <div style={{
+                                    backgroundColor: "#1e3a8a",
+                                    border: "1px solid #3b82f6",
+                                    color: "#fff",
+                                    borderRadius: "8px",
+                                    padding: "10px",
+                                  }}>
+                                    <p style={{ fontWeight: "bold", marginBottom: "8px" }}>{label}</p>
+                                    {filteredPayload.map((item: any, index: number) => {
+                                      const statusKey = item.dataKey as keyof typeof STATUS_CONFIG;
+                                      const statusLabel = STATUS_CONFIG[statusKey]?.label || item.dataKey;
+                                      return (
+                                        <p key={index} style={{ color: item.fill, margin: "4px 0" }}>
+                                          {statusLabel} : {item.value} pedidos
+                                        </p>
+                                      );
+                                    })}
+                                    <p style={{ fontWeight: "bold", marginTop: "8px", borderTop: "1px solid #3b82f6", paddingTop: "8px" }}>
+                                      Total : {total} pedidos
+                                    </p>
+                                  </div>
+                                );
                               }}
                             />
                             <Bar dataKey="autorizado" stackId="a" fill={STATUS_CONFIG.autorizado.color} name="autorizado" />
@@ -2943,11 +3089,11 @@ export default function Reports() {
                   })()}
               </Card>
 
-              {/* Card: Cirurgias Eletivas vs Urgência */}
+              {/* Card: Cirurgias eletivas x urgência */}
               <Card className="border-border bg-card shadow-lg mt-6">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-card-foreground">
-                    Cirurgias Eletivas vs Urgência
+                    Cirurgias eletivas x urgência
                     </CardTitle>
                     <CardDescription className="text-muted-foreground">
                       Distribuição percentual por tipo
@@ -3067,7 +3213,7 @@ export default function Reports() {
                 <Card className="border-border bg-card shadow-lg">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-card-foreground">
-                      Tipos de Procedimentos Solicitados
+                      Tipos de procedimentos solicitados
                     </CardTitle>
                     <CardDescription className="text-muted-foreground">
                       Distribuição por categoria de procedimento
@@ -3082,39 +3228,53 @@ export default function Reports() {
                             : "";
                         })()}
                     </CardDescription>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#BBDEFB', color: '#1565C0' }}>Aguardando Envio</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF9C4', color: '#F9A825' }}>Em Análise</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#A5D6A7', color: '#2E7D32' }}>Autorizado</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#C8E6C9', color: '#388E3C' }}>Autorizado Parcial</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFCDD2', color: '#C62828' }}>Pendência</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFAB91', color: '#D84315' }}>Aguardando Recurso</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#F5F5F5', color: '#616161' }}>Incompleta</span>
-                    </div>
                   </CardHeader>
-                  <CardContent className="h-80 bg-card rounded-b-lg">
+                  <CardContent className="h-[550px] bg-card rounded-b-lg">
                     <ResponsiveContainer width="100%" height="100%">
                       {topProceduresSolicitados.length > 0 ? (
-                        <BarChart
-                          data={topProceduresSolicitados.map((proc) => ({
-                            name: proc.name,
-                            value: proc.count,
-                          }))}
-                          layout="vertical"
-                          margin={{ top: 20, right: 30, left: 100, bottom: 20 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="rgba(59, 130, 246, 0.2)"
-                          />
-                          <XAxis type="number" stroke="#93c5fd" />
-                          <YAxis
-                            type="category"
-                            dataKey="name"
-                            tick={{ fontSize: 12, fill: "#93c5fd" }}
-                            width={100}
-                            stroke="#93c5fd"
-                          />
+                        <PieChart margin={{ top: 60, right: 120, bottom: 60, left: 120 }}>
+                          <Pie
+                            data={topProceduresSolicitados.map((proc) => ({
+                              name: proc.name,
+                              value: proc.count,
+                            }))}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={90}
+                            outerRadius={150}
+                            paddingAngle={2}
+                            dataKey="value"
+                            label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
+                              const RADIAN = Math.PI / 180;
+                              const radius = Number(outerRadius) + 30;
+                              const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                              const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                              const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                              return (
+                                <Text
+                                  x={x}
+                                  y={y}
+                                  fill="#1e293b"
+                                  stroke="#1e293b"
+                                  strokeWidth={0.3}
+                                  textAnchor={x > Number(cx) ? "start" : "end"}
+                                  dominantBaseline="central"
+                                  fontSize={12}
+                                  fontWeight="bold"
+                                >
+                                  {`${truncatedName} (${(percent * 100).toFixed(0)}%)`}
+                                </Text>
+                              );
+                            }}
+                            labelLine={{ stroke: "#64748b", strokeWidth: 1 }}
+                          >
+                            {topProceduresSolicitados.map((_, index) => (
+                              <Cell
+                                key={`cell-${index}`}
+                                fill={DONUT_COLORS[index % DONUT_COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
                           <Tooltip
                             contentStyle={{
                               backgroundColor: "#1e3a8a",
@@ -3128,12 +3288,8 @@ export default function Reports() {
                               "Quantidade",
                             ]}
                           />
-                          <Bar
-                            dataKey="value"
-                            fill="#3b82f6"
-                            radius={[0, 4, 4, 0]}
-                          />
-                        </BarChart>
+
+                        </PieChart>
                       ) : (
                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                           <AlertCircle className="w-16 h-16 mb-4 text-muted-foreground/50" />
@@ -3171,11 +3327,11 @@ export default function Reports() {
                     })()}
                 </Card>
 
-                {/* Tipos de Procedimentos Realizados */}
+                {/* Tipos de procedimentos realizados */}
                 <Card className="border-border bg-card shadow-lg">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-card-foreground">
-                      Tipos de Procedimentos Realizados
+                      Tipos de procedimentos realizados
                     </CardTitle>
                     <CardDescription className="text-muted-foreground">
                       Distribuição por categoria de procedimento
@@ -3190,34 +3346,53 @@ export default function Reports() {
                             : "";
                         })()}
                     </CardDescription>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#81C784', color: '#1B5E20' }}>Cirurgia Realizada</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#B39DDB', color: '#4527A0' }}>Recebido</span>
-                    </div>
                   </CardHeader>
-                  <CardContent className="h-80 bg-card rounded-b-lg">
+                  <CardContent className="h-[550px] bg-card rounded-b-lg">
                     <ResponsiveContainer width="100%" height="100%">
                       {topProcedures.length > 0 ? (
-                        <BarChart
-                          data={topProcedures.map((proc) => ({
-                            name: proc.name,
-                            value: proc.count,
-                          }))}
-                          layout="vertical"
-                          margin={{ top: 20, right: 30, left: 100, bottom: 20 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="rgba(59, 130, 246, 0.2)"
-                          />
-                          <XAxis type="number" stroke="#93c5fd" />
-                          <YAxis
-                            type="category"
-                            dataKey="name"
-                            tick={{ fontSize: 12, fill: "#93c5fd" }}
-                            width={100}
-                            stroke="#93c5fd"
-                          />
+                        <PieChart margin={{ top: 60, right: 120, bottom: 60, left: 120 }}>
+                          <Pie
+                            data={topProcedures.map((proc) => ({
+                              name: proc.name,
+                              value: proc.count,
+                            }))}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={90}
+                            outerRadius={150}
+                            paddingAngle={2}
+                            dataKey="value"
+                            label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
+                              const RADIAN = Math.PI / 180;
+                              const radius = Number(outerRadius) + 30;
+                              const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                              const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                              const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                              return (
+                                <Text
+                                  x={x}
+                                  y={y}
+                                  fill="#1e293b"
+                                  stroke="#1e293b"
+                                  strokeWidth={0.3}
+                                  textAnchor={x > Number(cx) ? "start" : "end"}
+                                  dominantBaseline="central"
+                                  fontSize={12}
+                                  fontWeight="bold"
+                                >
+                                  {`${truncatedName} (${(percent * 100).toFixed(0)}%)`}
+                                </Text>
+                              );
+                            }}
+                            labelLine={{ stroke: "#64748b", strokeWidth: 1 }}
+                          >
+                            {topProcedures.map((_, index) => (
+                              <Cell
+                                key={`cell-realizados-${index}`}
+                                fill={DONUT_COLORS[index % DONUT_COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
                           <Tooltip
                             contentStyle={{
                               backgroundColor: "#1e3a8a",
@@ -3231,12 +3406,8 @@ export default function Reports() {
                               "Quantidade",
                             ]}
                           />
-                          <Bar
-                            dataKey="value"
-                            fill="#3b82f6"
-                            radius={[0, 4, 4, 0]}
-                          />
-                        </BarChart>
+
+                        </PieChart>
                       ) : (
                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                           <AlertCircle className="w-16 h-16 mb-4 text-muted-foreground/50" />
@@ -3277,11 +3448,11 @@ export default function Reports() {
 
               {/* Cirurgias por Convênio - Grid com 2 colunas */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Cirurgias Solicitadas por Convênio */}
+                {/* Cirurgias solicitadas por convênio */}
                 <Card className="border-border bg-card shadow-lg">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-card-foreground">
-                      Cirurgias Solicitadas por Convênio
+                      Cirurgias solicitadas por convênio
                     </CardTitle>
                     <CardDescription className="text-muted-foreground">
                       Distribuição por operadora de saúde
@@ -3296,39 +3467,53 @@ export default function Reports() {
                             : "";
                         })()}
                     </CardDescription>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#BBDEFB', color: '#1565C0' }}>Aguardando Envio</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF9C4', color: '#F9A825' }}>Em Análise</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#A5D6A7', color: '#2E7D32' }}>Autorizado</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#C8E6C9', color: '#388E3C' }}>Autorizado Parcial</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFCDD2', color: '#C62828' }}>Pendência</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFAB91', color: '#D84315' }}>Aguardando Recurso</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#F5F5F5', color: '#616161' }}>Incompleta</span>
-                    </div>
                   </CardHeader>
-                  <CardContent className="h-80 bg-card rounded-b-lg">
+                  <CardContent className="h-[550px] bg-card rounded-b-lg">
                     <ResponsiveContainer width="100%" height="100%">
                       {insuranceDistribution.length > 0 ? (
-                        <BarChart
-                          data={insuranceDistribution.map((ins) => ({
-                            name: ins.name,
-                            value: ins.value,
-                          }))}
-                          layout="vertical"
-                          margin={{ top: 20, right: 30, left: 120, bottom: 20 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="rgba(59, 130, 246, 0.2)"
-                          />
-                          <XAxis type="number" stroke="#93c5fd" />
-                          <YAxis
-                            type="category"
-                            dataKey="name"
-                            tick={{ fontSize: 12, fill: "#93c5fd" }}
-                            width={120}
-                            stroke="#93c5fd"
-                          />
+                        <PieChart margin={{ top: 60, right: 120, bottom: 60, left: 120 }}>
+                          <Pie
+                            data={insuranceDistribution.map((ins) => ({
+                              name: ins.name,
+                              value: ins.value,
+                            }))}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={90}
+                            outerRadius={150}
+                            paddingAngle={2}
+                            dataKey="value"
+                            label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
+                              const RADIAN = Math.PI / 180;
+                              const radius = Number(outerRadius) + 30;
+                              const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                              const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                              const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                              return (
+                                <Text
+                                  x={x}
+                                  y={y}
+                                  fill="#1e293b"
+                                  stroke="#1e293b"
+                                  strokeWidth={0.3}
+                                  textAnchor={x > Number(cx) ? "start" : "end"}
+                                  dominantBaseline="central"
+                                  fontSize={12}
+                                  fontWeight="bold"
+                                >
+                                  {`${truncatedName} (${(percent * 100).toFixed(0)}%)`}
+                                </Text>
+                              );
+                            }}
+                            labelLine={{ stroke: "#64748b", strokeWidth: 1 }}
+                          >
+                            {insuranceDistribution.map((ins, index) => (
+                              <Cell
+                                key={`cell-ins-sol-${index}`}
+                                fill={getInsuranceColor(ins.name, index)}
+                              />
+                            ))}
+                          </Pie>
                           <Tooltip
                             contentStyle={{
                               backgroundColor: "#1e3a8a",
@@ -3342,12 +3527,8 @@ export default function Reports() {
                               "Quantidade",
                             ]}
                           />
-                          <Bar
-                            dataKey="value"
-                            fill="#3b82f6"
-                            radius={[0, 4, 4, 0]}
-                          />
-                        </BarChart>
+
+                        </PieChart>
                       ) : (
                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                           <AlertCircle className="w-16 h-16 mb-4 text-muted-foreground/50" />
@@ -3391,11 +3572,11 @@ export default function Reports() {
                     })()}
                 </Card>
 
-                {/* Cirurgias Realizadas por Convênio */}
+                {/* Cirurgias realizadas por convênio */}
                 <Card className="border-border bg-card shadow-lg">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-card-foreground">
-                      Cirurgias Realizadas por Convênio
+                      Cirurgias realizadas por convênio
                     </CardTitle>
                     <CardDescription className="text-muted-foreground">
                       Distribuição por operadora de saúde
@@ -3410,34 +3591,53 @@ export default function Reports() {
                             : "";
                         })()}
                     </CardDescription>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#81C784', color: '#1B5E20' }}>Cirurgia Realizada</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#B39DDB', color: '#4527A0' }}>Recebido</span>
-                    </div>
                   </CardHeader>
-                  <CardContent className="h-80 bg-card rounded-b-lg">
+                  <CardContent className="h-[550px] bg-card rounded-b-lg">
                     <ResponsiveContainer width="100%" height="100%">
                       {insuranceDistributionRealizadas.length > 0 ? (
-                        <BarChart
-                          data={insuranceDistributionRealizadas.map((ins) => ({
-                            name: ins.name,
-                            value: ins.value,
-                          }))}
-                          layout="vertical"
-                          margin={{ top: 20, right: 30, left: 120, bottom: 20 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="rgba(59, 130, 246, 0.2)"
-                          />
-                          <XAxis type="number" stroke="#93c5fd" />
-                          <YAxis
-                            type="category"
-                            dataKey="name"
-                            tick={{ fontSize: 12, fill: "#93c5fd" }}
-                            width={120}
-                            stroke="#93c5fd"
-                          />
+                        <PieChart margin={{ top: 60, right: 120, bottom: 60, left: 120 }}>
+                          <Pie
+                            data={insuranceDistributionRealizadas.map((ins) => ({
+                              name: ins.name,
+                              value: ins.value,
+                            }))}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={90}
+                            outerRadius={150}
+                            paddingAngle={2}
+                            dataKey="value"
+                            label={({ name, percent, cx, cy, midAngle, outerRadius }) => {
+                              const RADIAN = Math.PI / 180;
+                              const radius = Number(outerRadius) + 30;
+                              const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                              const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                              const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                              return (
+                                <Text
+                                  x={x}
+                                  y={y}
+                                  fill="#1e293b"
+                                  stroke="#1e293b"
+                                  strokeWidth={0.3}
+                                  textAnchor={x > Number(cx) ? "start" : "end"}
+                                  dominantBaseline="central"
+                                  fontSize={12}
+                                  fontWeight="bold"
+                                >
+                                  {`${truncatedName} (${(percent * 100).toFixed(0)}%)`}
+                                </Text>
+                              );
+                            }}
+                            labelLine={{ stroke: "#64748b", strokeWidth: 1 }}
+                          >
+                            {insuranceDistributionRealizadas.map((ins, index) => (
+                              <Cell
+                                key={`cell-ins-real-${index}`}
+                                fill={getInsuranceColor(ins.name, index)}
+                              />
+                            ))}
+                          </Pie>
                           <Tooltip
                             contentStyle={{
                               backgroundColor: "#1e3a8a",
@@ -3451,12 +3651,8 @@ export default function Reports() {
                               "Quantidade",
                             ]}
                           />
-                          <Bar
-                            dataKey="value"
-                            fill="#22c55e"
-                            radius={[0, 4, 4, 0]}
-                          />
-                        </BarChart>
+
+                        </PieChart>
                       ) : (
                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                           <AlertCircle className="w-16 h-16 mb-4 text-muted-foreground/50" />
@@ -3501,30 +3697,26 @@ export default function Reports() {
                 </Card>
               </div>
 
-              {/* Cirurgias por Hospital - Linha separada */}
+              {/* Cirurgias por hospital - Linha separada */}
               <Card className="border-border bg-card shadow-lg mt-6">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-card-foreground">
-                    Cirurgias por Hospital
+                    Cirurgias por hospital
                   </CardTitle>
                   <CardDescription className="text-muted-foreground">
                     Quantidade de cirurgias realizadas por hospital
                   </CardDescription>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#81C784', color: '#1B5E20' }}>Cirurgia Realizada</span>
-                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: '#B39DDB', color: '#4527A0' }}>Recebido</span>
-                  </div>
                 </CardHeader>
                 <CardContent className="bg-card rounded-b-lg">
                   <HospitalSurgeryList appliedFilters={appliedFilters} />
                 </CardContent>
               </Card>
 
-              {/* Fornecedores por Cirurgias - Linha separada */}
+              {/* Fornecedores por cirurgia - Linha separada */}
               <Card className="border-border bg-card shadow-lg mt-6">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-card-foreground">
-                    Fornecedores por Cirurgias
+                    Fornecedores por cirurgia
                   </CardTitle>
                   <CardDescription className="text-muted-foreground">
                     Fornecedores mais utilizados nos procedimentos OPME

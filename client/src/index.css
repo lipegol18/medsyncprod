@@ -1475,21 +1475,24 @@
   margin-right: 10px;
 }
 
-/* Labels de gráficos - usa variável do tema para melhor contraste */
+/* Labels de gráficos de rosca - preto sólido e legível */
 .recharts-pie-label-text {
-  fill: hsl(var(--chart-label-text)) !important;
+  fill: #000000 !important;
   font-size: 12px !important;
-  font-weight: 500 !important;
+  font-weight: 700 !important;
+  opacity: 1 !important;
 }
 
-/* Garantir que todos os textos dos labels usem a variável do tema */
+/* Garantir que todos os textos dos labels usem cor preta */
 .recharts-label text {
-  fill: hsl(var(--chart-label-text)) !important;
+  fill: #000000 !important;
+  opacity: 1 !important;
 }
 
-/* Backup para todos os textos de labels em gráficos de pizza */
+/* Labels em gráficos de pizza - preto sólido */
 .recharts-pie text {
-  fill: hsl(var(--chart-label-text)) !important;
+  fill: #000000 !important;
+  opacity: 1 !important;
 }
 
 /* Estilização das setas de incrementar/decrementar dos inputs number */

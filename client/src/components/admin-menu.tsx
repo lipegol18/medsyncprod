@@ -28,7 +28,7 @@ export function AdminMenu() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <span className={`py-1 px-3 inline-block whitespace-nowrap cursor-pointer text-primary-foreground border-b-2 text-sm flex items-center header-text ${
-            location.startsWith('/admin') || location.startsWith('/users') || location.startsWith('/roles') || location.startsWith('/hospitals') || location.startsWith('/suppliers') || location.startsWith('/procedures') || location.startsWith('/insurance-providers')
+            location.startsWith('/admin') || location.startsWith('/users') || location.startsWith('/roles') || location.startsWith('/hospitals') || location.startsWith('/suppliers') || location.startsWith('/procedures')
               ? "border-primary-foreground"
               : "border-transparent hover:border-primary-foreground/60"
           }`}>
@@ -69,10 +69,19 @@ export function AdminMenu() {
           </DropdownMenuItem>
           
           <DropdownMenuItem asChild>
-            <Link href="/insurance-providers">
+            <Link href="/admin/insurance-providers">
               <div className="flex items-center w-full">
                 <Heart className="mr-2 h-4 w-4" />
                 <span className="header-text">{t('nav.insurance_providers')}</span>
+              </div>
+            </Link>
+          </DropdownMenuItem>
+          
+          <DropdownMenuItem asChild>
+            <Link href="/admin/insurance-plans">
+              <div className="flex items-center w-full">
+                <FileText className="mr-2 h-4 w-4" />
+                <span className="header-text">Planos de Saúde</span>
               </div>
             </Link>
           </DropdownMenuItem>

@@ -15,7 +15,10 @@ export const registerSchema = z.object({
   cpf: z.string().refine(validateCPF, 'CPF inválido'),
   email: z.string().email('Email inválido'),
   phone: z.string().refine(validateBrazilianPhone, 'Telefone brasileiro inválido. Use formato: (XX) XXXXX-XXXX'),
-  username: z.string().min(3, 'Username deve ter pelo menos 3 caracteres'),
+  username: z.string()
+    .min(3, 'Username deve ter pelo menos 3 caracteres')
+    .max(30, 'Username deve ter no máximo 30 caracteres')
+    .regex(/^[a-z0-9_.]+$/, 'Username deve conter apenas letras minúsculas, números, underscore (_) ou ponto (.)'),
   password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
   confirmPassword: z.string().min(1, 'Confirmação de senha é obrigatória'),
   address: z.string().min(5, 'Endereço deve ter pelo menos 5 caracteres'),

@@ -16,7 +16,8 @@ import Users from "@/pages/users";
 import Roles from "@/pages/roles";
 import Suppliers from "@/pages/suppliers";
 import Procedures from "@/pages/procedures";
-import InsuranceProviders from "@/pages/insurance-providers";
+import InsuranceProviders from "@/pages/admin/insurance-providers";
+import InsurancePlans from "@/pages/admin/insurance-plans";
 import Profile from "@/pages/profile";
 import AuthPage from "@/pages/auth-page";
 import Notifications from "@/pages/notifications";
@@ -65,7 +66,8 @@ function Router() {
       <ProtectedRoute path="/hospitals" component={Hospitals} />
       <ProtectedRoute path="/suppliers" component={Suppliers} />
       <ProtectedRoute path="/procedures" component={Procedures} />
-      <ProtectedRoute path="/insurance-providers" component={InsuranceProviders} />
+      <ProtectedRoute path="/admin/insurance-providers" component={InsuranceProviders} />
+      <ProtectedRoute path="/admin/insurance-plans" component={InsurancePlans} />
       <ProtectedRoute path="/users" component={Users} />
       <ProtectedRoute path="/roles" component={Roles} />
       <ProtectedRoute path="/profile" component={Profile} />

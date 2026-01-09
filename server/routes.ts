@@ -48,7 +48,7 @@ import { relationalOrderService } from "./relational-services";
 import { randomUUID } from "crypto";
 import { getPaymentProvider } from "./payments";
 import { db, pool } from "./db";
-import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans, medicalSpecialties, userSubscriptions, discountCodes, insertDiscountCodeSchema, webhookEvents, surgeryAppointments } from "../shared/schema";
+import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans, medicalSpecialties, userSubscriptions, discountCodes, insertDiscountCodeSchema, webhookEvents, surgeryAppointments, insertHealthInsurancePlanSchema } from "../shared/schema";
 import { eq, and, or, isNull, sql, desc, asc, not, ne, count, isNotNull } from "drizzle-orm";
 import { normalizeText } from "./utils/normalize";
 import { documentExtractionService } from "./services/document-extraction";
@@ -4264,6 +4264,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Filtro hospital aplicado: ${hospitalIdFilter}`);
       }
       
+      // Adicionar filtro para apenas fornecedores aprovados
+      whereConditions.push(`mos.is_approved = true`);
+      
       // Query para buscar fornecedores e quantidade de cirurgias
       const query = `
         SELECT 
@@ -5827,6 +5830,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Erro ao buscar planos por similaridade:", error);
         res.status(500).json({ error: "Erro ao buscar planos por similaridade" });
+      }
+    }
+  );
+
+  // CRUD routes for health insurance plans (admin module)
+  app.post(
+    "/api/health-insurance-plans",
+    async (req: Request, res: Response) => {
+      try {
+        const planData = insertHealthInsurancePlanSchema.parse(req.body);
+        const newPlan = await storage.createHealthInsurancePlan(planData);
+        res.status(201).json(newPlan);
+      } catch (error) {
+        console.error("Erro ao criar plano de saúde:", error);
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ error: "Dados inválidos", details: error.errors });
+        }
+        res.status(500).json({ error: "Erro ao criar plano de saúde" });
+      }
+    }
+  );
+
+  app.put(
+    "/api/health-insurance-plans/:id",
+    async (req: Request, res: Response) => {
+      try {
+        const planId = parseInt(req.params.id);
+        if (isNaN(planId)) {
+          return res.status(400).json({ error: "ID de plano inválido" });
+        }
+
+        const existingPlan = await storage.getHealthInsurancePlan(planId);
+        if (!existingPlan) {
+          return res.status(404).json({ error: "Plano de saúde não encontrado" });
+        }
+
+        const planData = insertHealthInsurancePlanSchema.partial().parse(req.body);
+        const updatedPlan = await storage.updateHealthInsurancePlan(planId, planData);
+        
+        if (!updatedPlan) {
+          return res.status(500).json({ error: "Erro ao atualizar plano de saúde" });
+        }
+
+        res.json(updatedPlan);
+      } catch (error) {
+        console.error("Erro ao atualizar plano de saúde:", error);
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ error: "Dados inválidos", details: error.errors });
+        }
+        res.status(500).json({ error: "Erro ao atualizar plano de saúde" });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/health-insurance-plans/:id",
+    async (req: Request, res: Response) => {
+      try {
+        const planId = parseInt(req.params.id);
+        if (isNaN(planId)) {
+          return res.status(400).json({ error: "ID de plano inválido" });
+        }
+
+        const existingPlan = await storage.getHealthInsurancePlan(planId);
+        if (!existingPlan) {
+          return res.status(404).json({ error: "Plano de saúde não encontrado" });
+        }
+
+        const deleted = await storage.deleteHealthInsurancePlan(planId);
+        if (!deleted) {
+          return res.status(500).json({ error: "Erro ao excluir plano de saúde" });
+        }
+
+        res.json({ success: true, message: "Plano de saúde excluído com sucesso" });
+      } catch (error) {
+        console.error("Erro ao excluir plano de saúde:", error);
+        res.status(500).json({ error: "Erro ao excluir plano de saúde" });
       }
     }
   );

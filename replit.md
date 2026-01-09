@@ -106,6 +106,25 @@ Preferred communication style: Simple, everyday language.
 - **Visibility**: Tour menu visible only for doctors (roleId === 2)
 - **Navigation**: Selecting a tour navigates to the corresponding page and starts the tour automatically
 
+### Admin Modules Structure
+- **Location**: Admin modules are organized in `client/src/pages/admin/` and `client/src/components/admin/`
+- **Pattern**: Each admin module follows a consistent CRUD pattern with:
+  - Main page with table listing, search, and filters
+  - Form dialog component for create/edit operations
+  - Delete confirmation dialog
+- **Health Insurance Providers Module** (`/admin/insurance-providers`):
+  - Manages health insurance providers (operadoras de saúde)
+  - Table: `health_insurance_providers`
+  - Components: `client/src/pages/admin/insurance-providers.tsx`, `client/src/components/admin/insurance-providers/`
+- **Health Insurance Plans Module** (`/admin/insurance-plans`):
+  - Manages health insurance plans associated with providers
+  - Table: `health_insurance_plans` (linked via `registroAns` to provider's `ansCode`)
+  - Filter by provider (operadora) support
+  - Full CRUD operations: Create, Read, Update, Delete
+  - API endpoints: GET/POST/PUT/DELETE `/api/health-insurance-plans`
+  - Components: `client/src/pages/admin/insurance-plans.tsx`, `client/src/components/admin/insurance-plans/`
+  - Fields: código do plano, nome, modalidade, segmentação, acomodação, tipo de contratação, abrangência geográfica, situação, data início comercialização
+
 ### Observation Notes System (Additional Notes)
 - **Subtitle Format**: `### [Procedimento] → [Conduta]` (human-readable, no IDs visible)
 - **Association Key**: Uses procedure name + approach name for grouping observations with their respective items
