@@ -29,6 +29,7 @@ import CheckoutSuccess from "@/pages/checkout-success";
 import CheckoutCancel from "@/pages/checkout-cancel";
 import StripeTest from "@/pages/stripe-test";
 import LogoTest from "@/pages/logo-test";
+import OcrValidator from "@/pages/admin/ocr-validator";
 
 import OpmeMaterials from "@/pages/admin/opme-materials";
 import CidCodes from "@/pages/admin/cid-codes";
@@ -85,6 +86,7 @@ function Router() {
       <ProtectedRoute path="/manufacturer-demo" component={ManufacturerDemo} />
       <ProtectedRoute path="/font-demo" component={FontDemo} />
       <ProtectedRoute path="/logo-test" component={LogoTest} />
+      <ProtectedRoute path="/admin/ocr-validator" component={OcrValidator} />
       
       {/* Checkout success/cancel pages - não precisam de autenticação */}
       <Route path="/checkout/success" component={CheckoutSuccess} />

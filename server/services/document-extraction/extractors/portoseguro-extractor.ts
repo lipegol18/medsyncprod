@@ -3,11 +3,18 @@
  * Implementa padrões específicos de extração para documentos Porto Seguro
  */
 
-import { IOperatorExtractor } from '../types/extraction-types';
-import type { ExtractedData } from '../types/extraction-types';
 import { CNSValidator } from '../utils/cns-validator';
 
-export class PortoSeguroExtractor implements IOperatorExtractor {
+interface InsuranceExtractedData {
+  operadora?: string;
+  numeroCarteirinha?: string;
+  plano?: string;
+  nomeTitular?: string;
+  dataNascimento?: string;
+  cns?: string;
+}
+
+export class PortoSeguroExtractor {
   
   /**
    * Identifica se o texto pertence à Porto Seguro
@@ -29,10 +36,10 @@ export class PortoSeguroExtractor implements IOperatorExtractor {
   /**
    * Extrai dados específicos da Porto Seguro
    */
-  async extract(text: string): Promise<ExtractedData> {
+  async extract(text: string): Promise<InsuranceExtractedData> {
     console.log('🔍 PortoSeguro: Iniciando extração específica...');
     
-    const data: ExtractedData = {
+    const data: InsuranceExtractedData = {
       operadora: 'PORTO',
       numeroCarteirinha: this.extractCardNumber(text) ?? undefined,
       plano: this.extractPlan(text) ?? undefined,
@@ -241,7 +248,7 @@ export class PortoSeguroExtractor implements IOperatorExtractor {
   /**
    * Calcula confiança específica para Porto Seguro
    */
-  getConfidence(data: ExtractedData): number {
+  getConfidence(data: InsuranceExtractedData): number {
     let confidence = 0;
     let factors = 0;
 

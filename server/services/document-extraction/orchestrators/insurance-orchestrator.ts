@@ -1,8 +1,10 @@
-import { GoogleVisionOCREngine } from './ocr-engine';
-import { TextPreprocessor } from './text-preprocessor';
-import { OperatorDetector } from '../detection/operator-detector';
-import { ANSDetector } from '../detection/ans-detector';
-import { ExtractedData, ExtractionResult, DetectionMethod } from '../types/extraction-types';
+import { GoogleVisionOCREngine } from '../core/ocr-engine';
+import { TextPreprocessor } from '../core/text-preprocessor';
+import { OperatorDetector } from '../detectors/insurance-detector';
+import { ANSDetector } from '../detectors/ans-detector';
+import type { UnifiedExtractionResult } from '../types/extraction-types';
+import { UnifiedResultBuilder } from '../types/unified-result-builder';
+import { DocumentType } from '../types/document-constants';
 import { FlowDebugger } from '../utils/flow-debugger';
 import { SulAmericaExtractor } from '../extractors/sulamerica-extractor';
 import { BradescoExtractor } from '../extractors/bradesco-extractor';
@@ -11,13 +13,61 @@ import { PortoSeguroExtractor } from '../extractors/portoseguro-extractor';
 import { AmilExtractor } from '../extractors/amil-extractor';
 import { findOperadoraByAns } from '../../data-normalizer';
 import { DocumentTypeDetector } from '../detectors/document-type-detector';
-import { IdentityOrchestrator, IdentityExtractionResult } from '../identity-extractors/identity-orchestrator';
+import { IdentityOrchestrator, IdentityExtractionResult } from './identity-orchestrator';
+
+interface ExtractedData {
+  plano?: string;
+  numeroCarteirinha?: string;
+  cns?: string;
+  nomeTitular?: string;
+  dataNascimento?: string;
+  operadora?: string;
+  normalizedOperadora?: string;
+  ansCode?: string;
+  operadoraId?: number;
+  registroAns?: string;
+  nomeCompleto?: string;
+  rg?: string;
+  cpf?: string;
+  nomeMae?: string;
+  nomePai?: string;
+  naturalidade?: string;
+  tipoDocumento?: string;
+  subtipoDocumento?: string;
+  dataExpedicao?: string;
+  orgaoExpedidor?: string;
+  documentoOrigem?: string;
+}
+
+interface ConfidenceScore {
+  overall: number;
+  operadora: number;
+  plano: number;
+  numeroCarteirinha: number;
+  nome?: number;
+  rg?: number;
+  cpf?: number;
+  dataNascimento?: number;
+}
+
+interface DetectionMethod {
+  type: 'ANS_CODE' | 'TEXT_PATTERN' | 'FUZZY_MATCH' | 'FALLBACK' | 'IDENTITY_EXTRACTOR';
+  details: string;
+}
+
+export interface ExtractionResult {
+  success: boolean;
+  data: ExtractedData;
+  confidence: ConfidenceScore;
+  method: DetectionMethod;
+  errors?: string[];
+}
 
 /**
- * Orquestrador principal que coordena todo o fluxo de extração
- * Implementa o fluxo completo: OCR → Limpeza → Detecção → Extração → Mapeamento
+ * Orquestrador para extração de carteirinhas de plano de saúde
+ * Implementa o fluxo completo: OCR → Limpeza → Detecção de Operadora → Extração
  */
-export class ExtractionOrchestrator {
+export class InsuranceOrchestrator {
   private ocrEngine: GoogleVisionOCREngine;
   private sulAmericaExtractor: SulAmericaExtractor;
   private bradescoExtractor: BradescoExtractor;
@@ -850,5 +900,116 @@ export class ExtractionOrchestrator {
       method: { type: 'FALLBACK', details: 'Erro na extração' },
       errors: [message]
     };
+  }
+
+  /**
+   * Extrai dados a partir de texto já extraído (evita OCR duplo)
+   * Use este método quando o OCR já foi feito pelo DocumentExtractionManager
+   */
+  async processFromText(cleanText: string): Promise<UnifiedExtractionResult> {
+    try {
+      const detectedOperator = OperatorDetector.detectOperator(cleanText);
+      
+      if (!detectedOperator) {
+        return UnifiedResultBuilder.error(
+          DocumentType.CARTEIRINHA,
+          'Operadora não identificada',
+          { confidence: 0 }
+        );
+      }
+      
+      const ansCode = ANSDetector.extractANSCode(cleanText);
+      const extractedData = await this.delegateToOperatorExtractor(detectedOperator, cleanText, ansCode);
+      
+      return UnifiedResultBuilder.success(
+        DocumentType.CARTEIRINHA,
+        {
+          fullName: extractedData.nomeTitular,
+          birthDate: extractedData.dataNascimento
+        },
+        {
+          provider: extractedData.normalizedOperadora || detectedOperator,
+          providerRaw: extractedData.operadora || detectedOperator,
+          plan: extractedData.plano,
+          cardNumber: extractedData.numeroCarteirinha,
+          cns: extractedData.cns
+        },
+        {
+          subtype: detectedOperator.toUpperCase(),
+          confidence: this.calculateConfidence(extractedData).overall,
+          method: `${detectedOperator}_EXTRACTOR_FROM_TEXT`
+        }
+      );
+    } catch (error) {
+      return UnifiedResultBuilder.error(
+        DocumentType.CARTEIRINHA,
+        error instanceof Error ? error.message : 'Erro na extração',
+        { confidence: 0 }
+      );
+    }
+  }
+
+  /**
+   * Extrai dados e retorna no formato unificado
+   * Este é o método principal que deve ser usado pelo frontend
+   */
+  async processDocumentUnified(imageBuffer: Buffer): Promise<UnifiedExtractionResult> {
+    const result = await this.processDocument(imageBuffer);
+    
+    if (!result.success) {
+      return UnifiedResultBuilder.error(
+        DocumentType.UNKNOWN,
+        result.errors || ['Falha na extração'],
+        { confidence: result.confidence.overall, method: result.method.details }
+      );
+    }
+
+    // Determinar tipo de documento
+    const isIdentity = result.data.tipoDocumento === 'RG_IDENTITY' || 
+                       result.data.tipoDocumento === 'CNH_LICENSE' ||
+                       result.method.type === 'IDENTITY_EXTRACTOR';
+    
+    if (isIdentity) {
+      const docType = result.data.tipoDocumento === 'CNH_LICENSE' ? DocumentType.CNH : DocumentType.RG;
+      return UnifiedResultBuilder.success(
+        docType,
+        {
+          fullName: result.data.nomeCompleto,
+          cpf: result.data.cpf,
+          rg: result.data.rg,
+          birthDate: result.data.dataNascimento,
+          mothersName: result.data.nomeMae,
+          fathersName: result.data.nomePai,
+          birthPlace: result.data.naturalidade
+        },
+        undefined,
+        {
+          subtype: result.data.subtipoDocumento,
+          confidence: result.confidence.overall,
+          method: result.method.details
+        }
+      );
+    }
+
+    // Carteirinha de plano de saúde
+    return UnifiedResultBuilder.success(
+      DocumentType.CARTEIRINHA,
+      {
+        fullName: result.data.nomeTitular,
+        birthDate: result.data.dataNascimento
+      },
+      {
+        provider: result.data.normalizedOperadora || result.data.operadora,
+        providerRaw: result.data.operadora,
+        plan: result.data.plano,
+        cardNumber: result.data.numeroCarteirinha,
+        cns: result.data.cns
+      },
+      {
+        subtype: result.data.operadora?.toUpperCase(),
+        confidence: result.confidence.overall,
+        method: result.method.details
+      }
+    );
   }
 }

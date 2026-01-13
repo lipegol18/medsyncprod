@@ -1,7 +1,9 @@
-import { ExtractionOrchestrator } from './core/extraction-orchestrator';
+import { InsuranceOrchestrator, ExtractionResult } from './orchestrators/insurance-orchestrator';
 import { GoogleVisionOCREngine } from './core/ocr-engine';
-import { IdentityOrchestrator, IdentityExtractionResult } from './identity-extractors/identity-orchestrator';
-import { ExtractionResult } from './types/extraction-types';
+import { IdentityOrchestrator, IdentityExtractionResult } from './orchestrators/identity-orchestrator';
+import { DocumentExtractionManager, documentExtractionManager } from './manager/document-extraction-manager';
+
+export { DocumentExtractionManager, documentExtractionManager };
 
 /**
  * Interface de compatibilidade com sistema legado
@@ -30,12 +32,12 @@ export interface ExtractedDocumentData {
  * Suporta carteirinhas de plano de saúde e documentos de identidade (RG/CNH)
  */
 export class DocumentExtractionService {
-  private orchestrator: ExtractionOrchestrator;
+  private orchestrator: InsuranceOrchestrator;
   private ocrEngine: GoogleVisionOCREngine;
   private identityOrchestrator: IdentityOrchestrator;
 
   constructor() {
-    this.orchestrator = new ExtractionOrchestrator();
+    this.orchestrator = new InsuranceOrchestrator();
     this.ocrEngine = new GoogleVisionOCREngine();
     this.identityOrchestrator = new IdentityOrchestrator();
   }

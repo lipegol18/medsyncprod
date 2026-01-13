@@ -15,6 +15,12 @@ export interface ExtractedIdentityData {
   issuedDate?: string;
   issuedBy?: string;
   documentOrigin?: string;
+  categoria?: string;
+  validade?: string;
+  primeiraHabilitacao?: string;
+  registroCNH?: string;
+  espelhoCNH?: string;
+  observacoes?: string;
 }
 
 export interface IIdentityExtractor {

@@ -181,6 +181,51 @@ export const insertPatientSchema = createInsertSchema(patients).pick({
   activatedBy: true,
 });
 
+// Patient Addresses table - separating address management from patients
+export const patientAddresses = pgTable("patient_addresses", {
+  id: serial("id").primaryKey(),
+  patientId: integer("patient_id").notNull().references(() => patients.id, { onDelete: 'cascade' }),
+  isPrimary: boolean("is_primary").notNull().default(true),
+  
+  // Address fields
+  cep: varchar("cep", { length: 9 }).notNull(), // 00000-000
+  logradouro: text("logradouro").notNull(), // Street name
+  numero: text("numero"), // House/building number (accepts "S/N", "123A")
+  complemento: text("complemento"), // Apartment, block, etc.
+  bairro: text("bairro"), // Neighborhood
+  cidade: text("cidade").notNull(), // City
+  uf: varchar("uf", { length: 2 }).notNull(), // State code (SP, RJ, etc.)
+  country: varchar("country", { length: 2 }).notNull().default('BR'), // Country code
+  
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Relations for patient addresses
+export const patientAddressesRelations = relations(patientAddresses, ({ one }) => ({
+  patient: one(patients, {
+    fields: [patientAddresses.patientId],
+    references: [patients.id],
+    relationName: "patientAddresses",
+  }),
+}));
+
+// Add relation from patients to addresses
+export const patientsRelations = relations(patients, ({ many }) => ({
+  addresses: many(patientAddresses, {
+    relationName: "patientAddresses",
+  }),
+}));
+
+export const insertPatientAddressSchema = createInsertSchema(patientAddresses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PatientAddress = typeof patientAddresses.$inferSelect;
+export type InsertPatientAddress = z.infer<typeof insertPatientAddressSchema>;
+
 // OPME items schema
 export const opmeItems = pgTable("opme_items", {
   id: serial("id").primaryKey(),

@@ -13,3 +13,4 @@ vite.config.ts.*
 *.dump
 /attached_assets
 *.sql
+/teste_files

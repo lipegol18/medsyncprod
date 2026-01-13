@@ -4,9 +4,12 @@
  */
 
 import { DocumentTypeDetector } from '../detectors/document-type-detector';
-import { RGAntigoUnificadoExtractor } from './rg-antigo-unificado-extractor';
-import { IIdentityExtractor, ExtractedIdentityData } from './identity-extractor-interface';
+import { RGAntigoUnificadoExtractor } from '../extractors/rg-antigo-unificado-extractor';
+import { CNHOrchestrator } from './cnh-orchestrator';
+import { IIdentityExtractor, ExtractedIdentityData } from '../extractors/identity-extractor-interface';
 import { FlowDebugger } from '../utils/flow-debugger';
+import type { UnifiedExtractionResult } from '../types/extraction-types';
+import { UnifiedResultBuilder, DocumentType } from '../types/unified-result-builder';
 
 export interface IdentityExtractionResult {
   success: boolean;
@@ -25,6 +28,9 @@ export interface IdentityExtractionResult {
     issuedDate?: string;
     issuedBy?: string;
     documentOrigin?: string;
+    categoria?: string;
+    validade?: string;
+    primeiraHabilitacao?: string;
   };
   confidence?: {
     overall: number;
@@ -42,13 +48,51 @@ export interface IdentityExtractionResult {
 
 export class IdentityOrchestrator {
   private rgAntigoUnificadoExtractor: RGAntigoUnificadoExtractor;
+  private cnhOrchestrator: CNHOrchestrator;
 
   constructor() {
     this.rgAntigoUnificadoExtractor = new RGAntigoUnificadoExtractor();
+    this.cnhOrchestrator = new CNHOrchestrator();
   }
 
   /**
-   * Processa documento de identidade
+   * Detecta o subtipo específico de RG
+   * Movido do document-type-detector para manter consistência com cnh-orchestrator
+   */
+  private detectRGSubtype(text: string): string {
+    const normalizedText = text.toUpperCase();
+    
+    // CIN Nova (Carteira de Identidade Nacional)
+    if (
+      normalizedText.includes("CARTEIRA DE IDENTIDADE NACIONAL") ||
+      normalizedText.includes("CIN") ||
+      (normalizedText.includes("REPÚBLICA FEDERATIVA DO BRASIL") &&
+        normalizedText.includes("QR")) ||
+      normalizedText.includes("REGISTRO NACIONAL")
+    ) {
+      console.log('🆔 Subtipo detectado: CIN_NOVA');
+      return "CIN_NOVA";
+    }
+
+    // RG Antigo (todos os estados brasileiros)
+    if (
+      normalizedText.includes("CARTEIRA DE IDENTIDADE") ||
+      normalizedText.includes("REGISTRO GERAL") ||
+      normalizedText.includes("SECRETARIA DA SEGURANÇA PÚBLICA") ||
+      normalizedText.includes("INSTITUTO DE IDENTIFICAÇÃO") ||
+      normalizedText.includes("SSP/")
+    ) {
+      console.log('🆔 Subtipo detectado: RG_ANTIGO');
+      return "RG_ANTIGO";
+    }
+
+    // RG Genérico (fallback)
+    console.log('🆔 Subtipo detectado: RG_GENERICO (fallback)');
+    return "RG_GENERICO";
+  }
+
+  /**
+   * Processa documento de identidade (RG ou CNH)
    */
   async processIdentityDocument(text: string): Promise<IdentityExtractionResult> {
     FlowDebugger.enter('identity-orchestrator.ts', 'processIdentityDocument', { textLength: text.length });
@@ -60,62 +104,145 @@ export class IdentityOrchestrator {
       const documentTypeResult = DocumentTypeDetector.detectDocumentType(text);
       FlowDebugger.data('identity-orchestrator.ts', 'processIdentityDocument', 'Tipo detectado', documentTypeResult);
       
-      if (documentTypeResult.type !== 'RG_IDENTITY') {
-        FlowDebugger.error('identity-orchestrator.ts', 'processIdentityDocument', 'Documento não é RG');
-        return this.createErrorResult('Documento não identificado como RG');
-      }
-
       console.log('🆔 Tipo de documento:', documentTypeResult.type);
       console.log('🆔 Subtipo:', documentTypeResult.subtype);
       console.log('🆔 Confiança na detecção:', (documentTypeResult.confidence * 100).toFixed(1) + '%');
 
-      // Passo 2: Usar extração integrada que combina nova arquitetura com lógica legada
-      console.log('🆔 Usando extração integrada RG...');
-      
-      // Passo 3: Extrair dados com método integrado
-      FlowDebugger.transition('identity-orchestrator.ts', 'processIdentityDocument', 'extractRGDataIntegrated', 'extract');
-      const extractedData = await this.extractRGDataIntegrated(text);
-      FlowDebugger.data('identity-orchestrator.ts', 'processIdentityDocument', 'Dados extraídos', extractedData);
-
-      // Passo 4: Calcular confiança
-      const confidence = this.calculateConfidence(extractedData);
-      FlowDebugger.data('identity-orchestrator.ts', 'processIdentityDocument', 'Confiança calculada', confidence);
-
-      // Passo 5: Criar resultado
-      const result: IdentityExtractionResult = {
-        success: true,
-        data: {
-          documentType: 'RG',
-          subtype: documentTypeResult.subtype,
-          fullName: extractedData.fullName,
-          rg: extractedData.rg,
-          cpf: extractedData.cpf,
-          birthDate: extractedData.birthDate,
-          filiation: extractedData.filiation,
-          birthPlace: extractedData.birthPlace,
-          issuedDate: extractedData.issuedDate,
-          issuedBy: extractedData.issuedBy,
-          documentOrigin: extractedData.documentOrigin
-        },
-        confidence,
-        method: {
-          type: 'INTEGRATED_EXTRACTION',
-          details: 'Processado com extração integrada RG'
-        }
-      };
-
-      console.log('✅ Extração de RG concluída com sucesso');
-      console.log('📊 Dados extraídos:', result.data);
-      console.log('📊 Confiança geral:', (confidence.overall * 100).toFixed(1) + '%');
-
-      FlowDebugger.exit('identity-orchestrator.ts', 'processIdentityDocument', result);
-      return result;
+      // Processar conforme tipo detectado
+      if (documentTypeResult.type === 'CNH_LICENSE') {
+        return await this.processCNH(text, documentTypeResult);
+      } else if (documentTypeResult.type === 'RG_IDENTITY') {
+        return await this.processRG(text, documentTypeResult);
+      } else {
+        FlowDebugger.error('identity-orchestrator.ts', 'processIdentityDocument', 'Documento não reconhecido');
+        return this.createErrorResult('Documento não identificado como RG ou CNH');
+      }
 
     } catch (error) {
       FlowDebugger.error('identity-orchestrator.ts', 'processIdentityDocument', error);
-      console.error('❌ Erro no processamento do RG:', error);
+      console.error('❌ Erro no processamento do documento:', error);
       return this.createErrorResult(`Erro no processamento: ${error}`);
     }
+  }
+
+  /**
+   * Processa documento RG
+   */
+  private async processRG(text: string, documentTypeResult: any): Promise<IdentityExtractionResult> {
+    console.log('🆔 Usando extração integrada RG...');
+    
+    // Detectar subtipo do RG (CIN_NOVA, RG_ANTIGO, RG_GENERICO)
+    const rgSubtype = this.detectRGSubtype(text);
+    FlowDebugger.data('identity-orchestrator.ts', 'processRG', 'Subtipo RG detectado', rgSubtype);
+    
+    FlowDebugger.transition('identity-orchestrator.ts', 'processRG', 'extractRGDataIntegrated', 'extract');
+    const extractedData = await this.extractRGDataIntegrated(text);
+    FlowDebugger.data('identity-orchestrator.ts', 'processRG', 'Dados extraídos', extractedData);
+
+    const confidence = this.calculateConfidence(extractedData);
+    FlowDebugger.data('identity-orchestrator.ts', 'processRG', 'Confiança calculada', confidence);
+
+    const result: IdentityExtractionResult = {
+      success: true,
+      data: {
+        documentType: 'RG',
+        subtype: rgSubtype,
+        fullName: extractedData.fullName,
+        rg: extractedData.rg,
+        cpf: extractedData.cpf,
+        birthDate: extractedData.birthDate,
+        filiation: extractedData.filiation,
+        birthPlace: extractedData.birthPlace,
+        issuedDate: extractedData.issuedDate,
+        issuedBy: extractedData.issuedBy,
+        documentOrigin: extractedData.documentOrigin
+      },
+      confidence,
+      method: {
+        type: 'INTEGRATED_EXTRACTION',
+        details: `Processado com extração integrada RG (${rgSubtype})`
+      }
+    };
+
+    console.log('✅ Extração de RG concluída com sucesso');
+    console.log('📊 Dados extraídos:', result.data);
+    console.log('📊 Confiança geral:', (confidence.overall * 100).toFixed(1) + '%');
+
+    FlowDebugger.exit('identity-orchestrator.ts', 'processRG', result);
+    return result;
+  }
+
+  /**
+   * Processa documento CNH
+   */
+  private async processCNH(text: string, documentTypeResult: any): Promise<IdentityExtractionResult> {
+    console.log('🚗 Usando extração dedicada CNH...');
+    
+    FlowDebugger.transition('identity-orchestrator.ts', 'processCNH', 'cnhOrchestrator.extract', 'extract');
+    const extractedData = await this.cnhOrchestrator.extract(text);
+    FlowDebugger.data('identity-orchestrator.ts', 'processCNH', 'Dados extraídos', extractedData);
+
+    const confidence = this.calculateCNHConfidence(extractedData);
+    FlowDebugger.data('identity-orchestrator.ts', 'processCNH', 'Confiança calculada', confidence);
+
+    const result: IdentityExtractionResult = {
+      success: true,
+      data: {
+        documentType: 'CNH',
+        subtype: documentTypeResult.subtype,
+        fullName: extractedData.fullName,
+        rg: extractedData.rg,
+        cpf: extractedData.cpf,
+        birthDate: extractedData.birthDate,
+        filiation: extractedData.filiation,
+        birthPlace: extractedData.birthPlace,
+        issuedDate: extractedData.issuedDate,
+        issuedBy: extractedData.issuedBy || 'DETRAN',
+        categoria: extractedData.categoria,
+        validade: extractedData.validade,
+        primeiraHabilitacao: extractedData.primeiraHabilitacao,
+      },
+      confidence,
+      method: {
+        type: 'CNH_EXTRACTION',
+        details: 'Processado com extração dedicada CNH'
+      }
+    };
+
+    console.log('✅ Extração de CNH concluída com sucesso');
+    console.log('📊 Dados extraídos:', result.data);
+    console.log('📊 Confiança geral:', (confidence.overall * 100).toFixed(1) + '%');
+
+    FlowDebugger.exit('identity-orchestrator.ts', 'processCNH', result);
+    return result;
+  }
+
+  /**
+   * Calcula confiança para CNH
+   */
+  private calculateCNHConfidence(data: ExtractedIdentityData): {
+    overall: number;
+    name: number;
+    rg: number;
+    cpf: number;
+    birthDate: number;
+  } {
+    const nameScore = data.fullName ? 1 : 0;
+    const cpfScore = data.cpf ? 1 : 0;
+    const rgScore = data.rg ? 1 : 0;
+    const birthDateScore = data.birthDate ? 1 : 0;
+    const categoriaScore = data.categoria ? 1 : 0;
+    const validadeScore = data.validade ? 1 : 0;
+
+    const weightedScore = (nameScore * 3 + cpfScore * 3 + rgScore * 2 + birthDateScore * 2 + categoriaScore * 2 + validadeScore * 1) / 13;
+
+    return {
+      overall: weightedScore,
+      name: nameScore,
+      rg: rgScore,
+      cpf: cpfScore,
+      birthDate: birthDateScore
+    };
   }
 
   /**
@@ -711,5 +838,43 @@ export class IdentityOrchestrator {
         birthDate: 0
       }
     };
+  }
+
+  /**
+   * Extrai dados e retorna no formato unificado
+   * Este é o método principal que deve ser usado pelo frontend
+   */
+  async extractUnified(text: string): Promise<UnifiedExtractionResult> {
+    const result = await this.processIdentityDocument(text);
+    
+    if (!result.success || !result.data) {
+      return UnifiedResultBuilder.error(
+        DocumentType.UNKNOWN,
+        result.error || 'Falha na extração do documento de identidade',
+        { method: result.method?.details }
+      );
+    }
+
+    const docType = result.data.documentType === 'CNH' ? DocumentType.CNH : DocumentType.RG;
+    const subtype = result.data.subtype;
+
+    return UnifiedResultBuilder.success(
+      docType,
+      {
+        fullName: result.data.fullName,
+        cpf: result.data.cpf,
+        rg: result.data.rg,
+        birthDate: result.data.birthDate,
+        mothersName: result.data.filiation?.mother,
+        fathersName: result.data.filiation?.father,
+        birthPlace: result.data.birthPlace
+      },
+      undefined,
+      {
+        subtype,
+        confidence: result.confidence?.overall || 0,
+        method: result.method?.details
+      }
+    );
   }
 }

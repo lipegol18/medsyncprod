@@ -12,6 +12,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { validateCPF, checkCPFExists, formatCPF, applyCPFMask, applyPhoneMask } from "@/lib/utils";
+import { fetchAddressByCEP, applyCEPMask } from "@/lib/viacep";
 import { DragDropZone } from "@/components/ui/drag-drop-zone";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -44,7 +45,52 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { FileText, CreditCard, User, Heart, Scan } from "lucide-react";
+import { FileText, User, Heart, Scan, Upload, ImageIcon, Trash2, Loader2, MapPin, ChevronDown, ChevronUp } from "lucide-react";
+import { BrazilianDateInput } from "@/components/ui/brazilian-date-input";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
+// Função para converter data do formato brasileiro (DD/MM/YYYY) para ISO (YYYY-MM-DD)
+function convertBrazilianDateToISO(dateStr: string): string {
+  if (!dateStr) return '';
+  
+  // Se já está no formato ISO (YYYY-MM-DD), retornar como está
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  
+  // Formato DD/MM/YYYY ou DD-MM-YYYY
+  const match = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (match) {
+    const day = match[1].padStart(2, '0');
+    const month = match[2].padStart(2, '0');
+    const year = match[3];
+    return `${year}-${month}-${day}`;
+  }
+  
+  return dateStr;
+}
+
+// Função para converter data ISO (YYYY-MM-DD) para formato brasileiro (DD/MM/YYYY)
+function convertISOToBrazilian(isoDate: string): string {
+  if (!isoDate) return '';
+  
+  // Se já está no formato brasileiro, retornar como está
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(isoDate)) {
+    return isoDate;
+  }
+  
+  // Formato YYYY-MM-DD
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const year = match[1];
+    const month = match[2];
+    const day = match[3];
+    return `${day}/${month}/${year}`;
+  }
+  
+  return isoDate;
+}
 
 // Schema de validação
 const patientFormSchema = z.object({
@@ -59,6 +105,13 @@ const patientFormSchema = z.object({
   insuranceNumber: z.string().optional(),
   plan: z.string().optional(),
   notes: z.string().optional(),
+  cep: z.string().optional(),
+  logradouro: z.string().optional(),
+  numero: z.string().optional(),
+  complemento: z.string().optional(),
+  bairro: z.string().optional(),
+  cidade: z.string().optional(),
+  estado: z.string().optional(),
 });
 
 type PatientFormValues = z.infer<typeof patientFormSchema>;
@@ -80,17 +133,22 @@ export function PatientFormDialog({
 }: PatientFormDialogProps) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [showDocScanner, setShowDocScanner] = useState(false);
-  const [showInsuranceCardScanner, setShowInsuranceCardScanner] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<HealthInsuranceProvider | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<HealthInsurancePlan | null>(null);
   const [extractedInfo, setExtractedInfo] = useState<{
     type: 'identity' | 'insurance';
     data: any;
+    detectedType?: string;
+    detectedSubtype?: string;
+    extractorVersion?: string;
+    typeConfidence?: number;
   } | null>(null);
   
   const docFileInputRef = useRef<HTMLInputElement>(null);
-  const insuranceCardFileInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessingDocument, setIsProcessingDocument] = useState(false);
+  const [selectedDocumentFile, setSelectedDocumentFile] = useState<File | null>(null);
+  const [isLoadingCEP, setIsLoadingCEP] = useState(false);
+  const [isAddressVisible, setIsAddressVisible] = useState(false);
 
   const isEditMode = !!patient;
 
@@ -108,13 +166,58 @@ export function PatientFormDialog({
       insuranceNumber: "",
       plan: "",
       notes: "",
+      cep: "",
+      logradouro: "",
+      numero: "",
+      complemento: "",
+      bairro: "",
+      cidade: "",
+      estado: "",
     },
   });
 
-  const { data: healthInsuranceProviders = [] } = useQuery({
+  const { data: healthInsuranceProviders = [] } = useQuery<HealthInsuranceProvider[]>({
     queryKey: ["/api/health-insurance-providers"],
     enabled: open,
   });
+
+  // Função para buscar endereço pelo CEP
+  const handleCEPChange = async (cep: string) => {
+    const cleanCEP = cep.replace(/\D/g, '');
+    
+    if (cleanCEP.length === 8) {
+      setIsLoadingCEP(true);
+      
+      try {
+        const addressData = await fetchAddressByCEP(cleanCEP);
+        
+        if (addressData) {
+          // Preencher campos automaticamente
+          form.setValue('logradouro', addressData.logradouro);
+          form.setValue('bairro', addressData.bairro);
+          form.setValue('cidade', addressData.localidade);
+          form.setValue('estado', addressData.uf);
+          if (addressData.complemento) {
+            form.setValue('complemento', addressData.complemento);
+          }
+          
+          // Revalidar campos preenchidos para limpar erros
+          form.trigger('logradouro');
+          form.trigger('bairro');
+          form.trigger('cidade');
+          form.trigger('estado');
+          
+          // Focar no campo número após preenchimento
+          const numberField = document.getElementById('patient-numero');
+          if (numberField) numberField.focus();
+        }
+      } catch (error) {
+        console.error('Erro ao buscar CEP:', error);
+      } finally {
+        setIsLoadingCEP(false);
+      }
+    }
+  };
 
   // Função para verificar CPF existente e preencher dados automaticamente
   const checkExistingPatientAndFill = async (cpf: string) => {
@@ -140,6 +243,15 @@ export function PatientFormDialog({
             form.setValue('plan', data.patient.plan || '');
             form.setValue('notes', data.patient.notes || '');
             
+            // Preencher campos de endereço se disponíveis
+            if (data.patient.cep) form.setValue('cep', data.patient.cep);
+            if (data.patient.logradouro) form.setValue('logradouro', data.patient.logradouro);
+            if (data.patient.numero) form.setValue('numero', data.patient.numero);
+            if (data.patient.complemento) form.setValue('complemento', data.patient.complemento);
+            if (data.patient.bairro) form.setValue('bairro', data.patient.bairro);
+            if (data.patient.cidade) form.setValue('cidade', data.patient.cidade);
+            if (data.patient.estado) form.setValue('estado', data.patient.estado);
+            
             toast({
               title: "Paciente encontrado",
               description: "Dados preenchidos automaticamente da base de dados.",
@@ -155,19 +267,68 @@ export function PatientFormDialog({
   // Reset form when dialog opens/closes
   useEffect(() => {
     if (open) {
-      form.reset({
-        fullName: patient?.fullName || "",
-        cpf: patient?.cpf || initialData?.cpf || "",
-        birthDate: patient?.birthDate || "",
-        gender: (patient?.gender as "M" | "F") || undefined,
-        email: patient?.email || "",
-        phone: patient?.phone || "",
-        phone2: patient?.phone2 || "",
-        insurance: patient?.insurance || "",
-        insuranceNumber: patient?.insuranceNumber || "",
-        plan: patient?.plan || "",
-        notes: patient?.notes || "",
-      });
+      // Função para carregar paciente com endereço do servidor
+      const loadPatientWithAddress = async () => {
+        if (isEditMode && patient?.id) {
+          try {
+            const response = await fetch(`/api/patients/${patient.id}`, {
+              credentials: 'include'
+            });
+            if (response.ok) {
+              const patientData = await response.json();
+              const address = patientData.address;
+              
+              form.reset({
+                fullName: patientData.fullName || "",
+                cpf: patientData.cpf || "",
+                birthDate: patientData.birthDate || "",
+                gender: (patientData.gender as "M" | "F") || undefined,
+                email: patientData.email || "",
+                phone: patientData.phone || "",
+                phone2: patientData.phone2 || "",
+                insurance: patientData.insurance || "",
+                insuranceNumber: patientData.insuranceNumber || "",
+                plan: patientData.plan || "",
+                notes: patientData.notes || "",
+                cep: address?.cep || "",
+                logradouro: address?.logradouro || "",
+                numero: address?.numero || "",
+                complemento: address?.complemento || "",
+                bairro: address?.bairro || "",
+                cidade: address?.cidade || "",
+                estado: address?.uf || "",
+              });
+              return;
+            }
+          } catch (error) {
+            console.error('Erro ao carregar paciente com endereço:', error);
+          }
+        }
+        
+        // Fallback: usar dados do patient prop
+        form.reset({
+          fullName: patient?.fullName || "",
+          cpf: patient?.cpf || initialData?.cpf || "",
+          birthDate: patient?.birthDate || "",
+          gender: (patient?.gender as "M" | "F") || undefined,
+          email: patient?.email || "",
+          phone: patient?.phone || "",
+          phone2: patient?.phone2 || "",
+          insurance: patient?.insurance || "",
+          insuranceNumber: patient?.insuranceNumber || "",
+          plan: patient?.plan || "",
+          notes: patient?.notes || "",
+          cep: "",
+          logradouro: "",
+          numero: "",
+          complemento: "",
+          bairro: "",
+          cidade: "",
+          estado: "",
+        });
+      };
+      
+      loadPatientWithAddress();
       
       // Se está em modo de edição e tem uma seguradora, buscar e definir o provider selecionado
       if (isEditMode && patient?.insurance && healthInsuranceProviders.length > 0) {
@@ -190,8 +351,8 @@ export function PatientFormDialog({
                   // Buscar o plano que corresponde ao nome salvo
                   const matchingPlan = plans.find((plan: any) => 
                     plan.nmPlano === patient.plan || 
-                    (plan.nmPlano && plan.nmPlano.toLowerCase().includes(patient.plan.toLowerCase())) ||
-                    (patient.plan.toLowerCase().includes(plan.nmPlano?.toLowerCase()))
+                    (plan.nmPlano && patient.plan && plan.nmPlano.toLowerCase().includes(patient.plan.toLowerCase())) ||
+                    (patient.plan && plan.nmPlano && patient.plan.toLowerCase().includes(plan.nmPlano.toLowerCase()))
                   );
                   
                   if (matchingPlan) {
@@ -224,47 +385,214 @@ export function PatientFormDialog({
     }
   }, [open, patient, initialData, isEditMode, form, healthInsuranceProviders]);
 
-  // Função para processar documento com OCR
-  const processDocumentWithOCR = async (file: File) => {
+
+  // Handler unificado para seleção de arquivo (qualquer tipo de documento)
+  const handleUnifiedDocumentFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedDocumentFile(file);
+      processUnifiedDocumentWithOCR(file);
+    }
+  };
+
+  // Função unificada para processar qualquer documento com detecção automática
+  // Usa o novo endpoint unificado que retorna a mesma estrutura para todos os tipos
+  const processUnifiedDocumentWithOCR = async (file: File) => {
     try {
-      setShowDocScanner(true);
+      setIsProcessingDocument(true);
+      setExtractedInfo(null);
+      
       const formData = new FormData();
       formData.append('document', file);
-      formData.append('documentType', 'identity');
+      formData.append('usePreprocessing', 'true');
 
-      const result = await apiRequest("/api/process-document", "POST", formData);
+      // Usar o novo endpoint unificado
+      const response = await fetch("/api/process-document-unified", {
+        method: "POST",
+        body: formData,
+      });
       
-      if (result.success && result.data) {
-        // Preencher campos automaticamente
-        if (result.data.nomeCompleto || result.data.fullName) {
-          form.setValue('fullName', result.data.nomeCompleto || result.data.fullName);
+      const result = await response.json();
+      
+      if (result.success) {
+        // ESTRUTURA UNIFICADA: Todos os documentos retornam o mesmo formato
+        // patient: { fullName, cpf, rg, birthDate, gender, phone, email, ... }
+        // insurance?: { provider, plan, cardNumber, cns, ... }
+        // metadata: { documentType, subtype, extractorVersion, confidence }
+        
+        const { patient, insurance, metadata } = result;
+        
+        // Preencher dados do paciente (sempre presente)
+        if (patient.fullName) {
+          form.setValue('fullName', patient.fullName);
         }
-        if (result.data.cpf || result.data.idNumber) {
-          const cpfValue = result.data.cpf || result.data.idNumber;
-          form.setValue('cpf', cpfValue);
-          // Verificar se CPF existe e preencher dados automaticamente
-          await checkExistingPatientAndFill(cpfValue);
+        if (patient.cpf) {
+          form.setValue('cpf', patient.cpf);
+          await checkExistingPatientAndFill(patient.cpf);
         }
-        if (result.data.dataNascimento || result.data.birthDate) {
-          form.setValue('birthDate', result.data.dataNascimento || result.data.birthDate);
+        if (patient.birthDate) {
+          const isoDate = convertBrazilianDateToISO(patient.birthDate);
+          form.setValue('birthDate', isoDate);
         }
-        if (result.data.gender) {
-          form.setValue('gender', result.data.gender as "M" | "F");
+        if (patient.gender) {
+          form.setValue('gender', patient.gender as 'M' | 'F');
+        }
+        if (patient.phone) {
+          form.setValue('phone', patient.phone);
+        }
+        if (patient.email) {
+          form.setValue('email', patient.email);
         }
         
+        // Preencher dados de endereço se disponíveis (vindo do OCR)
+        if (patient.address) {
+          const address = patient.address;
+          
+          // Preencher CEP e buscar endereço completo via ViaCEP
+          if (address.cep) {
+            const formattedCep = applyCEPMask(address.cep);
+            form.setValue('cep', formattedCep);
+            
+            // Buscar endereço completo pelo CEP
+            const cleanCEP = address.cep.replace(/\D/g, '');
+            if (cleanCEP.length === 8) {
+              try {
+                const viaCepData = await fetchAddressByCEP(cleanCEP);
+                
+                if (viaCepData) {
+                  // Preencher com dados do ViaCEP (mais confiáveis)
+                  form.setValue('logradouro', viaCepData.logradouro || address.logradouro || '');
+                  form.setValue('bairro', viaCepData.bairro || address.bairro || '');
+                  form.setValue('cidade', viaCepData.localidade || address.cidade || '');
+                  form.setValue('estado', viaCepData.uf || address.estado || '');
+                  
+                  // Complemento: preferir o do OCR pois ViaCEP geralmente não tem
+                  if (address.complemento) {
+                    form.setValue('complemento', address.complemento);
+                  } else if (viaCepData.complemento) {
+                    form.setValue('complemento', viaCepData.complemento);
+                  }
+                } else {
+                  // Se ViaCEP falhar, usar dados do OCR diretamente
+                  if (address.logradouro) form.setValue('logradouro', address.logradouro);
+                  if (address.bairro) form.setValue('bairro', address.bairro);
+                  if (address.cidade) form.setValue('cidade', address.cidade);
+                  if (address.estado) form.setValue('estado', address.estado);
+                  if (address.complemento) form.setValue('complemento', address.complemento);
+                }
+              } catch (error) {
+                console.error('Erro ao buscar CEP:', error);
+                // Em caso de erro, usar dados do OCR
+                if (address.logradouro) form.setValue('logradouro', address.logradouro);
+                if (address.bairro) form.setValue('bairro', address.bairro);
+                if (address.cidade) form.setValue('cidade', address.cidade);
+                if (address.estado) form.setValue('estado', address.estado);
+                if (address.complemento) form.setValue('complemento', address.complemento);
+              }
+            }
+          } else {
+            // Sem CEP, preencher campos diretamente do OCR
+            if (address.logradouro) form.setValue('logradouro', address.logradouro);
+            if (address.numero) form.setValue('numero', address.numero);
+            if (address.complemento) form.setValue('complemento', address.complemento);
+            if (address.bairro) form.setValue('bairro', address.bairro);
+            if (address.cidade) form.setValue('cidade', address.cidade);
+            if (address.estado) form.setValue('estado', address.estado);
+          }
+          
+          // Número sempre vem do OCR (ViaCEP não tem)
+          if (address.numero) {
+            form.setValue('numero', address.numero);
+          }
+        }
+        
+        // Preencher dados do plano de saúde (quando disponível)
+        if (insurance) {
+          if (insurance.provider) {
+            form.setValue('insurance', insurance.provider);
+            
+            // Buscar operadora no banco para obter dados completos
+            try {
+              const searchUrl = `/api/health-insurance-providers/search?q=${encodeURIComponent(insurance.provider)}`;
+              const providerResponse = await fetch(searchUrl, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                credentials: 'include'
+              });
+              
+              if (providerResponse.ok) {
+                const providersResult = await providerResponse.json();
+                if (providersResult && providersResult.length > 0) {
+                  const provider = providersResult[0];
+                  setSelectedProvider(provider);
+                  form.setValue('insurance', provider.name);
+                  
+                  // Buscar plano se disponível
+                  if (insurance.plan) {
+                    const planUrl = `/api/health-insurance-plans/search?q=${encodeURIComponent(insurance.plan)}&registroAns=${encodeURIComponent(provider.ansCode)}`;
+                    const planResponse = await fetch(planUrl, {
+                      method: 'GET',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include'
+                    });
+                    
+                    if (planResponse.ok) {
+                      const plansResult = await planResponse.json();
+                      if (plansResult && plansResult.length > 0) {
+                        setSelectedPlan(plansResult[0]);
+                        form.setValue('plan', plansResult[0].name);
+                      } else {
+                        form.setValue('plan', insurance.plan);
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Erro ao buscar operadora:', error);
+            }
+          }
+          
+          if (insurance.plan && !form.getValues('plan')) {
+            form.setValue('plan', insurance.plan);
+          }
+          if (insurance.cardNumber) {
+            form.setValue('insuranceNumber', insurance.cardNumber);
+          }
+        }
+        
+        // Armazenar informações da extração para exibição
+        const isInsuranceDoc = metadata.documentType === 'CARTEIRINHA';
         setExtractedInfo({
-          type: 'identity',
-          data: result.data
+          type: isInsuranceDoc ? 'insurance' : 'identity',
+          data: { patient, insurance },
+          detectedType: metadata.documentType,
+          detectedSubtype: metadata.subtype,
+          extractorVersion: metadata.extractorVersion,
+          typeConfidence: metadata.confidence,
         });
         
-        console.log('Estado extractedInfo definido:', {
-          type: 'identity',
-          data: result.data
-        });
+        // Mensagem de sucesso baseada no tipo
+        const typeMessages: Record<string, string> = {
+          'RG': 'RG processado com sucesso',
+          'CNH': 'CNH processada com sucesso',
+          'CARTEIRINHA': 'Carteirinha processada com sucesso',
+          'MV_PATIENT_SCREEN': 'Tela MV processada com sucesso',
+        };
         
         toast({
-          title: "Documento processado",
-          description: "Dados extraídos e preenchidos automaticamente.",
+          title: typeMessages[metadata.documentType] || 'Documento processado',
+          description: insurance 
+            ? 'Dados do paciente e plano extraídos automaticamente.' 
+            : 'Dados extraídos e preenchidos automaticamente.',
+        });
+        
+      } else {
+        const errorMessage = result.errors?.join(', ') || 'Envie um RG, CNH, carteirinha ou tela do sistema MV.';
+        toast({
+          title: "Documento não reconhecido",
+          description: errorMessage,
+          variant: "destructive",
         });
       }
     } catch (error) {
@@ -275,253 +603,51 @@ export function PatientFormDialog({
         variant: "destructive",
       });
     } finally {
-      setShowDocScanner(false);
-    }
-  };
-
-  // Função para processar carteirinha de plano de saúde
-  const processInsuranceCardWithOCR = async (file: File) => {
-    try {
-      setShowInsuranceCardScanner(true);
-      
-      // Limpar estados anteriores para evitar interferência
-      setSelectedProvider(null);
-      setSelectedPlan(null);
-      
-      const formData = new FormData();
-      formData.append('document', file);
-      formData.append('documentType', 'insurance');
-
-      const result = await apiRequest("/api/process-document", "POST", formData);
-      
-      if (result.success && result.data) {
-        // Se encontrou uma operadora normalizada, buscar no banco e selecionar
-        if (result.data.normalizedOperadora) {
-          try {
-            console.log('Buscando operadora normalizada:', result.data.normalizedOperadora);
-            
-            // Usar o parâmetro correto da API (q em vez de query)
-            const searchUrl = `/api/health-insurance-providers/search?q=${encodeURIComponent(result.data.normalizedOperadora)}`;
-            console.log('URL de busca:', searchUrl);
-            
-            const response = await fetch(searchUrl, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
-              credentials: 'include'
-            });
-            
-            if (!response.ok) {
-              throw new Error(`Erro na busca: ${response.status}`);
-            }
-            
-            const providersResult = await response.json();
-            console.log('Resultado da busca de operadora:', providersResult);
-            
-            if (providersResult && providersResult.length > 0) {
-              const provider = providersResult[0];
-              console.log('Operadora encontrada:', provider);
-              
-              // Selecionar automaticamente a operadora encontrada
-              setSelectedProvider(provider);
-              form.setValue('insurance', provider.name);
-              
-              console.log('Operadora selecionada automaticamente:', provider.name);
-              
-              toast({
-                title: "Operadora identificada",
-                description: `${provider.name} foi selecionada automaticamente.`,
-              });
-
-              // Buscar e selecionar plano automaticamente se plano foi detectado
-              if (result.data.plano && provider.ansCode) {
-                try {
-                  console.log('Buscando plano detectado:', result.data.plano, 'para operadora:', provider.ansCode);
-                  
-                  // Usar a nova API de busca por similaridade
-                  const searchUrl = `/api/health-insurance-plans/provider/${provider.ansCode}/search?q=${encodeURIComponent(result.data.plano)}`;
-                  
-                  const plansResponse = await fetch(searchUrl, {
-                    method: 'GET',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Accept': 'application/json'
-                    },
-                    credentials: 'include'
-                  });
-                  
-                  if (plansResponse.ok) {
-                    const matchingPlans = await plansResponse.json();
-                    console.log('Planos encontrados por similaridade:', matchingPlans.length);
-                    
-                    // Apenas selecionar se houver match com score alto suficiente (> 0.5)
-                    if (matchingPlans.length > 0) {
-                      const bestMatch = matchingPlans[0];
-                      console.log('Melhor match encontrado:', bestMatch.nmPlano || bestMatch.cdPlano, 'Score:', bestMatch.matchScore, 'Tipo:', bestMatch.matchType);
-                      console.log('Plano OCR:', result.data.plano, 'vs Plano DB:', bestMatch.nmPlano);
-                      
-                      // Critério adaptativo baseado no tipo de match e conteúdo
-                      const isExactMatch = bestMatch.matchType === 'exact_name' || bestMatch.matchType === 'partial_name';
-                      
-                      // Verificar se há correspondência de palavras-chave importantes
-                      const ocrWords = result.data.plano.toUpperCase().split(/\s+/).filter((w: string) => w.length > 2);
-                      const planWords = (bestMatch.nmPlano || '').toUpperCase().split(/\s+/).filter((w: string) => w.length > 2);
-                      
-                      const commonWords = ocrWords.filter((word: string) => 
-                        planWords.some((planWord: string) => planWord.includes(word) || word.includes(planWord))
-                      );
-                      
-                      const hasKeywordMatch = bestMatch.matchType === 'keyword_match' || 
-                                            commonWords.length > 0 ||
-                                            (bestMatch.nmPlano && result.data.plano && 
-                                             bestMatch.nmPlano.toUpperCase().includes(result.data.plano.split(' ')[0].toUpperCase()));
-                      
-                      console.log('Análise de match - isExactMatch:', isExactMatch, 'hasKeywordMatch:', hasKeywordMatch);
-                      console.log('Palavras OCR:', ocrWords, 'Palavras Plano:', planWords, 'Palavras comuns:', commonWords);
-                      
-                      let scoreThreshold = 0.45; // padrão
-                      if (isExactMatch) {
-                        scoreThreshold = 0.25; // mais permissivo para matches exatos
-                      } else if (hasKeywordMatch && commonWords.length > 0) {
-                        scoreThreshold = 0.25; // muito permissivo para matches com palavras importantes
-                      } else if (hasKeywordMatch) {
-                        scoreThreshold = 0.3; // permissivo para matches com palavras-chave
-                      }
-                      
-                      console.log('Threshold calculado:', scoreThreshold, 'Score atual:', bestMatch.matchScore);
-                      
-                      if (bestMatch.matchScore >= scoreThreshold) {
-                        console.log(`✅ PLANO SELECIONADO AUTOMATICAMENTE: ${bestMatch.nmPlano || bestMatch.cdPlano} (Score: ${bestMatch.matchScore}, Threshold: ${scoreThreshold})`);
-                        setSelectedPlan(bestMatch);
-                        form.setValue('plan', bestMatch.nmPlano || `Plano ${bestMatch.cdPlano}`);
-                        
-                        toast({
-                          title: "Plano identificado",
-                          description: `${bestMatch.nmPlano || bestMatch.cdPlano} foi selecionado automaticamente (${Math.round(bestMatch.matchScore * 100)}% de similaridade).`,
-                        });
-                      } else {
-                        console.log(`❌ Score insuficiente para seleção automática: ${bestMatch.matchScore} < ${scoreThreshold}`);
-                        console.log('Plano detectado no OCR preenchido no campo, mas não selecionado automaticamente');
-                        // Apenas preenche o campo de texto, sem selecionar plano específico
-                        form.setValue('plan', result.data.plano);
-                        
-                        toast({
-                          title: "Plano detectado",
-                          description: `"${result.data.plano}" foi detectado mas não foi possível identificar o plano específico automaticamente.`,
-                          variant: "default",
-                        });
-                      }
-                    } else {
-                      console.log('Nenhum plano encontrado com similaridade suficiente para:', result.data.plano);
-                      // Apenas preenche o campo de texto sem selecionar plano específico
-                      form.setValue('plan', result.data.plano);
-                      
-                      toast({
-                        title: "Plano detectado",
-                        description: `"${result.data.plano}" foi detectado mas não foi possível identificar o plano específico automaticamente.`,
-                        variant: "default",
-                      });
-                    }
-                  } else {
-                    console.log('Erro ao buscar planos da operadora, preenchendo apenas o campo de texto');
-                    form.setValue('plan', result.data.plano);
-                  }
-                } catch (error) {
-                  console.error('Erro ao buscar plano automaticamente:', error);
-                  form.setValue('plan', result.data.plano);
-                }
-              }
-            } else {
-              console.log('Nenhuma operadora encontrada na busca');
-              toast({
-                title: "Operadora não encontrada",
-                description: "Não foi possível localizar a operadora no banco de dados.",
-                variant: "destructive",
-              });
-            }
-          } catch (error) {
-            console.error('Erro ao buscar operadora no banco:', error);
-            toast({
-              title: "Erro na busca",
-              description: "Erro ao buscar operadora no banco de dados.",
-              variant: "destructive",
-            });
-          }
-        }
-        
-        // Preencher outros campos automaticamente
-        if (result.data.numeroCarteirinha) {
-          form.setValue('insuranceNumber', result.data.numeroCarteirinha);
-        }
-        
-        // Se plano foi detectado mas operadora não foi identificada, apenas preencher o campo de texto
-        if (result.data.plano && !result.data.normalizedOperadora) {
-          form.setValue('plan', result.data.plano);
-        }
-        
-        setExtractedInfo({
-          type: 'insurance',
-          data: result.data
-        });
-        
-        toast({
-          title: "Carteirinha processada",
-          description: "Dados do plano extraídos automaticamente.",
-        });
-      }
-    } catch (error) {
-      console.error('Erro ao processar carteirinha:', error);
-      toast({
-        title: "Erro no processamento",
-        description: "Não foi possível processar a carteirinha.",
-        variant: "destructive",
-      });
-    } finally {
-      setShowInsuranceCardScanner(false);
-    }
-  };
-
-  const handleDocumentFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      processDocumentWithOCR(file);
-    }
-  };
-
-  const handleInsuranceCardFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      processInsuranceCardWithOCR(file);
+      setIsProcessingDocument(false);
     }
   };
 
   const onSubmit = async (data: PatientFormValues) => {
     try {
-      // Formatar dados para envio
+      // Separar dados do paciente dos dados de endereço
+      const { cep, logradouro, numero, complemento, bairro, cidade, estado, ...patientFields } = data;
+      
+      // Formatar dados do paciente para envio
       const patientData = {
-        ...data,
+        ...patientFields,
         cpf: formatCPF(data.cpf),
       };
+      
+      // Preparar dados de endereço (se houver CEP preenchido)
+      const hasAddress = cep && cep.replace(/\D/g, '').length === 8;
+      const addressData = hasAddress ? {
+        cep: cep,
+        logradouro: logradouro || '',
+        numero: numero || '',
+        complemento: complemento || '',
+        bairro: bairro || '',
+        cidade: cidade || '',
+        uf: estado || '',
+        isPrimary: true,
+      } : null;
 
       let result;
       if (isEditMode && patient) {
-        result = await apiRequest(`/api/patients/${patient.id}`, "PUT", patientData);
+        result = await apiRequest(`/api/patients/${patient.id}`, "PUT", { ...patientData, address: addressData });
       } else {
-        result = await apiRequest("/api/patients", "POST", patientData);
+        result = await apiRequest("/api/patients/register", "POST", { ...patientData, address: addressData });
       }
 
       // Tratar diferentes tipos de resposta do servidor
-      if (result.action === "already_associated") {
+      if (result.alreadyAssociated) {
         toast({
           title: "Paciente já associado",
           description: "Este paciente já está na sua lista.",
         });
-      } else if (result.action === "associated_existing") {
+      } else if (result.wasAssociated) {
         toast({
           title: "Paciente associado",
-          description: `${result.patient.fullName} foi associado à sua lista.`,
+          description: `${result.fullName} foi associado à sua lista.`,
         });
       } else {
         toast({
@@ -564,18 +690,18 @@ export function PatientFormDialog({
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-4">
             {/* Layout em duas colunas principais */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
               
               {/* Coluna Esquerda - Dados Pessoais */}
-              <div className="space-y-4">
-                <Card className="bg-white border-sky-200" data-testid="patient-form-personal-data">
+              <div className="flex flex-col">
+                <Card className="bg-white border-sky-200 flex-1 flex flex-col" data-testid="patient-form-personal-data">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-foreground text-sm font-semibold">
                       <User className="w-4 h-4" />
                       Dados Pessoais
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-4 flex-1">
                     <div className="grid grid-cols-1 gap-4">
                       <FormField
                         control={form.control}
@@ -629,9 +755,9 @@ export function PatientFormDialog({
                             <FormItem>
                               <FormLabel className="text-foreground font-semibold">Data de Nascimento *</FormLabel>
                               <FormControl>
-                                <Input 
-                                  type="date" 
-                                  {...field} 
+                                <BrazilianDateInput 
+                                  value={field.value}
+                                  onChange={field.onChange}
                                   className="input-medsync-combo"
                                 />
                               </FormControl>
@@ -734,122 +860,63 @@ export function PatientFormDialog({
                 </Card>
               </div>
 
-              {/* Coluna Direita - Plano de Saúde e Digitalização */}
+              {/* Coluna Direita - Digitalizador OCR e Plano de Saúde */}
               <div className="flex flex-col space-y-4">
                 <Card className="bg-white border-sky-200">
-                  <CardContent className="p-8">
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Documento de Identidade */}
-                      <div className="space-y-2">
-                        <DragDropZone
-                          onFileDrop={async (file) => {
-                            const event = { target: { files: [file] } } as any;
-                            await handleDocumentFileSelected(event);
-                          }}
-                          accept="image/*"
-                          disabled={showDocScanner}
-                          className="w-full"
+                  <CardContent className="p-6">
+                    {/* Upload Unificado de Documento */}
+                    <div className="space-y-3">
+                      <DragDropZone
+                        onFileDrop={async (file) => {
+                          const event = { target: { files: [file] } } as any;
+                          await handleUnifiedDocumentFileSelected(event);
+                        }}
+                        accept="image/*,application/pdf"
+                        disabled={isProcessingDocument}
+                        className="w-full"
+                      >
+                        <div
+                          className={`
+                            border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer
+                            ${isProcessingDocument 
+                              ? "border-sky-400 bg-sky-50 cursor-wait" 
+                              : "border-sky-300 hover:border-sky-400 hover:bg-sky-50"
+                            }
+                          `}
+                          onClick={() => !isProcessingDocument && docFileInputRef.current?.click()}
                         >
-                          <button
-                            type="button"
-                            className="w-full h-20 border-2 border-dashed border-sky-300 text-sky-700 hover:bg-sky-50 hover:border-sky-400 text-xs flex flex-col justify-center items-center px-2 py-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => docFileInputRef.current?.click()}
-                            disabled={showDocScanner}
-                          >
-                            <FileText className="w-5 h-5 mb-2" />
-                            <span className="font-semibold text-center leading-tight">
-                              {showDocScanner ? "Processando..." : "RG/CNH"}
-                            </span>
-                            <span className="text-xs text-sky-600 mt-1 text-center leading-tight">
-                              Clique ou arraste aqui
-                            </span>
-                          </button>
-                        </DragDropZone>
-                        
-                        <input
-                          ref={docFileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleDocumentFileSelected}
-                          className="hidden"
-                        />
-                      </div>
-
-                      {/* Carteirinha do Plano */}
-                      <div className="space-y-2">
-                        <DragDropZone
-                          onFileDrop={async (file) => {
-                            const event = { target: { files: [file] } } as any;
-                            await handleInsuranceCardFileSelected(event);
-                          }}
-                          accept="image/*"
-                          disabled={showInsuranceCardScanner}
-                          className="w-full"
-                        >
-                          <button
-                            type="button"
-                            className="w-full h-20 border-2 border-dashed border-sky-300 text-sky-700 hover:bg-sky-50 hover:border-sky-400 text-xs flex flex-col justify-center items-center px-2 py-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => insuranceCardFileInputRef.current?.click()}
-                            disabled={showInsuranceCardScanner}
-                          >
-                            <CreditCard className="w-5 h-5 mb-2" />
-                            <span className="font-semibold text-center leading-tight">
-                              {showInsuranceCardScanner ? "Processando..." : "Carteirinha"}
-                            </span>
-                            <span className="text-xs text-sky-600 mt-1 text-center leading-tight">
-                              Clique ou arraste aqui
-                            </span>
-                          </button>
-                        </DragDropZone>
-                        
-                        <input
-                          ref={insuranceCardFileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleInsuranceCardFileSelected}
-                          className="hidden"
-                        />
-                      </div>
+                          {isProcessingDocument ? (
+                            <>
+                              <Loader2 className="h-8 w-8 mx-auto mb-2 text-sky-600 animate-spin" />
+                              <p className="font-medium text-sky-700 text-sm">Detectando e Processando...</p>
+                            </>
+                          ) : (
+                            <>
+                              <Scan className="h-8 w-8 mx-auto mb-2 text-sky-600" />
+                              <p className="font-medium text-sky-700 text-sm mb-1">
+                                Arraste e solte ou clique para selecionar
+                              </p>
+                              <p className="text-xs text-sky-600 mb-2">
+                                RG, CNH, Carteirinha ou Tela MV
+                              </p>
+                              <div className="flex flex-wrap justify-center gap-1">
+                                <Badge variant="outline" className="text-xs">PDF</Badge>
+                                <Badge variant="outline" className="text-xs">PNG</Badge>
+                                <Badge variant="outline" className="text-xs">JPG</Badge>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </DragDropZone>
+                      
+                      <input
+                        ref={docFileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                        onChange={handleUnifiedDocumentFileSelected}
+                        className="hidden"
+                      />
                     </div>
-
-                    {/* Informações extraídas */}
-                    {extractedInfo && (
-                      <div className="mt-3 p-2 bg-sky-50 rounded text-sky-900 text-sm border border-sky-200">
-                        <div className="font-semibold mb-1 text-foreground">Dados extraídos:</div>
-                        {extractedInfo.type === 'identity' && (
-                          <>
-                            {extractedInfo.data.fullName && (
-                              <div>Nome: {extractedInfo.data.fullName}</div>
-                            )}
-                            {extractedInfo.data.idNumber && (
-                              <div>CPF: {extractedInfo.data.idNumber}</div>
-                            )}
-                            {extractedInfo.data.birthDate && (
-                              <div>Data de Nascimento: {extractedInfo.data.birthDate}</div>
-                            )}
-                          </>
-                        )}
-                        {extractedInfo.type === 'insurance' && (
-                          <>
-                            {extractedInfo.data.operadora && (
-                              <div>Seguradora: {extractedInfo.data.operadora}</div>
-                            )}
-                            {extractedInfo.data.numeroCarteirinha && (
-                              <div>Número da Carteirinha: {extractedInfo.data.numeroCarteirinha}</div>
-                            )}
-                            {extractedInfo.data.nomeTitular && (
-                              <div>Nome do Titular: {extractedInfo.data.nomeTitular}</div>
-                            )}
-                            {extractedInfo.data.plano && (
-                              <div>Plano: {extractedInfo.data.plano}</div>
-                            )}
-                            {extractedInfo.data.cpf && (
-                              <div>CPF: {extractedInfo.data.cpf}</div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
 
@@ -930,6 +997,184 @@ export function PatientFormDialog({
 
               </div>
             </div>
+
+            {/* Card de Endereço - Largura Total */}
+            <Card className="bg-white border-sky-200" data-testid="patient-form-address">
+              <CardHeader 
+                className="cursor-pointer hover:bg-sky-50 transition-colors rounded-t-lg"
+                onClick={() => setIsAddressVisible(!isAddressVisible)}
+              >
+                <CardTitle className="flex items-center justify-between text-foreground text-sm font-semibold">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4" />
+                    Endereço
+                  </div>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                  >
+                    {isAddressVisible ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              {isAddressVisible && (
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="cep"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground font-semibold">CEP</FormLabel>
+                        <FormControl>
+                          <Input 
+                            id="patient-cep"
+                            placeholder="00000-000" 
+                            value={field.value}
+                            onChange={(e) => {
+                              const maskedValue = applyCEPMask(e.target.value);
+                              field.onChange(maskedValue);
+                            }}
+                            onBlur={(e) => {
+                              setTimeout(() => {
+                                handleCEPChange(e.target.value);
+                              }, 100);
+                            }}
+                            maxLength={9}
+                            className="input-medsync-combo"
+                            disabled={isLoadingCEP}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="logradouro"
+                    render={({ field }) => (
+                      <FormItem className="lg:col-span-2">
+                        <FormLabel className="text-foreground font-semibold">Logradouro</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Rua, Avenida, Travessa..." 
+                            {...field} 
+                            className="input-medsync-combo"
+                            disabled={isLoadingCEP}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="numero"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground font-semibold">Número</FormLabel>
+                        <FormControl>
+                          <Input 
+                            id="patient-numero"
+                            placeholder="123" 
+                            {...field} 
+                            className="input-medsync-combo"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="complemento"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground font-semibold">Complemento</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Apto, Bloco..." 
+                            {...field} 
+                            className="input-medsync-combo"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="bairro"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground font-semibold">Bairro</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="Centro" 
+                            {...field} 
+                            className="input-medsync-combo"
+                            disabled={isLoadingCEP}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="cidade"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground font-semibold">Cidade</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="São Paulo" 
+                            {...field} 
+                            className="input-medsync-combo"
+                            disabled={isLoadingCEP}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="estado"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-foreground font-semibold">Estado</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="SP" 
+                            maxLength={2}
+                            {...field} 
+                            className="input-medsync-combo uppercase"
+                            disabled={isLoadingCEP}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </CardContent>
+              )}
+            </Card>
 
             {/* Botões de Ação */}
             <div className="flex justify-end space-x-2 pt-4" data-testid="patient-form-actions">

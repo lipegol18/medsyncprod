@@ -45,43 +45,13 @@ import { registerDoctorImageRoutes } from "./doctor-images-routes";
 import { registerHospitalImageRoutes } from "./hospital-images-routes";
 import relationalRoutes from "./relational-routes";
 import { relationalOrderService } from "./relational-services";
+import documentProcessingRoutes from "./routes/document-processing";
 import { randomUUID } from "crypto";
 import { getPaymentProvider } from "./payments";
 import { db, pool } from "./db";
 import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans, medicalSpecialties, userSubscriptions, discountCodes, insertDiscountCodeSchema, webhookEvents, surgeryAppointments, insertHealthInsurancePlanSchema } from "../shared/schema";
 import { eq, and, or, isNull, sql, desc, asc, not, ne, count, isNotNull } from "drizzle-orm";
 import { normalizeText } from "./utils/normalize";
-import { documentExtractionService } from "./services/document-extraction";
-import { normalizeExtractedData } from "./services/data-normalizer";
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
-
-// Função para converter PDF para imagem
-async function convertPDFToImage(pdfPath: string): Promise<Buffer> {
-  const outputPath = `${pdfPath}.png`;
-  
-  try {
-    // Usar convert do ImageMagick para converter PDF para PNG
-    const command = `convert -density 300 "${pdfPath}[0]" -quality 90 "${outputPath}"`;
-    await execAsync(command);
-    
-    // Ler a imagem convertida
-    const imageBuffer = fs.readFileSync(outputPath);
-    
-    // Limpar arquivo temporário
-    fs.unlinkSync(outputPath);
-    
-    return imageBuffer;
-  } catch (error) {
-    // Limpar arquivos em caso de erro
-    if (fs.existsSync(outputPath)) {
-      fs.unlinkSync(outputPath);
-    }
-    throw new Error(`Erro na conversão PDF: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
-  }
-}
 
 // Configurar o armazenamento de upload
 const uploadStorage = multer.diskStorage({
@@ -111,6 +81,9 @@ const isAdmin = (req: Request, res: Response, next: NextFunction) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  
+  // Registrar rotas de processamento de documentos (OCR)
+  app.use('/api', documentProcessingRoutes);
   
   // ROTA HOSPITAL STATS - CORRIGIDA PARA FUNCIONAR - REMOVIDA (DUPLICADA)
   
@@ -4628,11 +4601,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const userId = (req.user as any)?.id;
 
         if (existingPatient) {
-          return res.status(409).json({ 
-            message: "Paciente já existe na base de dados",
-            patient: existingPatient,
-            shouldAssociate: true
-          });
+          // Se o médico estiver logado, tentar associar o paciente existente
+          if (userId) {
+            try {
+              // Verificar se já existe associação
+              const existingAssociations = await storage.getDoctorPatients(userId);
+              const alreadyAssociated = existingAssociations.some(
+                assoc => assoc.patientId === existingPatient.id
+              );
+
+              if (alreadyAssociated) {
+                return res.status(200).json({ 
+                  message: "Paciente já está associado a você",
+                  patient: existingPatient,
+                  alreadyAssociated: true
+                });
+              }
+
+              // Criar associação médico-paciente
+              await storage.addDoctorPatient({
+                doctorId: userId,
+                patientId: existingPatient.id,
+                isActive: true
+              });
+
+              // Buscar endereço do paciente existente
+              const existingAddress = await storage.getPatientPrimaryAddress(existingPatient.id);
+
+              console.log(`Paciente ${existingPatient.fullName} associado ao médico ${userId}`);
+              return res.status(200).json({ 
+                ...existingPatient, 
+                address: existingAddress,
+                wasAssociated: true,
+                message: "Paciente existente associado com sucesso"
+              });
+            } catch (assocError) {
+              console.error("Erro ao associar paciente existente:", assocError);
+              return res.status(500).json({ 
+                message: "Erro ao associar paciente existente"
+              });
+            }
+          } else {
+            // Sem usuário logado, retorna erro de duplicidade
+            return res.status(409).json({ 
+              message: "Paciente já existe na base de dados",
+              patient: existingPatient
+            });
+          }
         }
 
         // Preparar dados do paciente para salvar no banco
@@ -4660,6 +4675,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Exibir informações do paciente salvo
         console.log("Novo paciente cadastrado no banco de dados:", newPatient);
 
+        // Associar o novo paciente ao médico (se logado)
+        if (userId) {
+          try {
+            await storage.addDoctorPatient({
+              doctorId: userId,
+              patientId: newPatient.id,
+              isActive: true
+            });
+            console.log(`Novo paciente ${newPatient.fullName} associado ao médico ${userId}`);
+          } catch (assocError) {
+            console.error("Erro ao associar novo paciente ao médico:", assocError);
+          }
+        }
+        
+        // Salvar endereço do paciente (se fornecido)
+        let savedAddress = null;
+        if (patientData.address && patientData.address.cep) {
+          try {
+            savedAddress = await storage.createPatientAddress({
+              patientId: newPatient.id,
+              isPrimary: true,
+              cep: patientData.address.cep,
+              logradouro: patientData.address.logradouro || '',
+              numero: patientData.address.numero || null,
+              complemento: patientData.address.complemento || null,
+              bairro: patientData.address.bairro || null,
+              cidade: patientData.address.cidade || '',
+              uf: patientData.address.uf || '',
+            });
+            console.log("Endereço do paciente salvo:", savedAddress);
+          } catch (addressError) {
+            console.error("Erro ao salvar endereço do paciente:", addressError);
+          }
+        }
+
         // Definir cabeçalhos de resposta para evitar problemas de cache
         res.setHeader("Content-Type", "application/json");
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -4667,7 +4717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.setHeader("Expires", "0");
 
         // Retornar o paciente criado com sucesso no formato JSON
-        return res.status(200).json(newPatient);
+        return res.status(200).json({ ...newPatient, address: savedAddress });
       } catch (error) {
         console.error("Erro ao cadastrar paciente:", error);
         res.status(500).json({ message: "Erro ao cadastrar paciente" });
@@ -4675,7 +4725,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  // Endpoint para buscar paciente por ID
+  // Endpoint para buscar paciente por ID (inclui endereço)
   app.get(
     "/api/patients/:id",
     
@@ -4694,8 +4744,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(404).json({ message: "Paciente não encontrado" });
         }
 
+        // Buscar endereço principal do paciente
+        const address = await storage.getPatientPrimaryAddress(patientId);
+
         console.log(`Paciente encontrado: ${patient.fullName}`);
-        res.json(patient);
+        res.json({ ...patient, address: address || null });
       } catch (error) {
         console.error("Erro ao buscar paciente por ID:", error);
         res.status(500).json({ message: "Erro interno do servidor" });
@@ -5304,8 +5357,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "ID de paciente inválido" });
         }
 
-        // Obter os dados do paciente
-        const patientData = req.body;
+        // Separar dados do paciente dos dados de endereço
+        const { address, ...patientData } = req.body;
 
         // Atualizar o paciente no banco de dados com auditoria
         const userId = req.user?.id; // Pegar ID do usuário autenticado
@@ -5317,8 +5370,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!updatedPatient) {
           return res.status(404).json({ message: "Paciente não encontrado" });
         }
+        
+        // Atualizar ou criar endereço do paciente
+        let savedAddress = null;
+        if (address && address.cep) {
+          try {
+            // Buscar endereço existente
+            const existingAddress = await storage.getPatientPrimaryAddress(patientId);
+            
+            if (existingAddress) {
+              // Atualizar endereço existente
+              savedAddress = await storage.updatePatientAddress(existingAddress.id, {
+                cep: address.cep,
+                logradouro: address.logradouro || '',
+                numero: address.numero || null,
+                complemento: address.complemento || null,
+                bairro: address.bairro || null,
+                cidade: address.cidade || '',
+                uf: address.uf || '',
+              });
+            } else {
+              // Criar novo endereço
+              savedAddress = await storage.createPatientAddress({
+                patientId: patientId,
+                isPrimary: true,
+                cep: address.cep,
+                logradouro: address.logradouro || '',
+                numero: address.numero || null,
+                complemento: address.complemento || null,
+                bairro: address.bairro || null,
+                cidade: address.cidade || '',
+                uf: address.uf || '',
+              });
+            }
+            console.log("Endereço do paciente atualizado:", savedAddress);
+          } catch (addressError) {
+            console.error("Erro ao atualizar endereço do paciente:", addressError);
+          }
+        }
 
-        res.status(200).json(updatedPatient);
+        res.status(200).json({ ...updatedPatient, address: savedAddress });
       } catch (error) {
         console.error("Erro ao atualizar paciente:", error);
         res.status(500).json({ message: "Erro ao atualizar paciente" });
@@ -8127,205 +8218,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Erro ao atualizar valor recebido:', error);
       res.status(500).json({ error: "Erro interno do servidor" });
-    }
-  });
-
-  // Rota para processar documentos com Google Vision API
-  app.post('/api/process-document', upload.single('document'), async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ error: 'Nenhum arquivo foi enviado' });
-      }
-
-      const { documentType } = req.body; // 'identity' ou 'insurance'
-      
-      console.log(`🔄 Processando documento tipo: ${documentType}`);
-      
-      let imageBuffer: Buffer;
-      
-      // Verificar se é PDF
-      if (req.file.mimetype === 'application/pdf') {
-        console.log('📄 Detectado PDF - convertendo para imagem...');
-        imageBuffer = await convertPDFToImage(req.file.path);
-      } else {
-        // Ler arquivo de imagem diretamente
-        imageBuffer = fs.readFileSync(req.file.path);
-      }
-      
-      let processedData;
-      let extractedText = '';
-      
-      if (documentType === 'identity') {
-        console.log('🆕 Usando nova arquitetura unificada para documento de identidade...');
-        
-        try {
-          // Importar e usar o novo ExtractionOrchestrator
-          const { ExtractionOrchestrator } = await import('./services/document-extraction/core/extraction-orchestrator');
-          
-          const orchestrator = new ExtractionOrchestrator();
-          console.log('🔄 ROTA /api/process-document: Iniciando processamento com nova arquitetura unificada...');
-          console.log('📄 ROTA: Tamanho do buffer de imagem:', imageBuffer.length, 'bytes');
-          
-          const result = await orchestrator.processDocument(imageBuffer);
-          
-          console.log('📋 ROTA: Resultado da nova arquitetura:', result.success ? '✅ SUCESSO' : '❌ FALHA');
-          console.log('📊 ROTA: Detalhes do resultado:', JSON.stringify(result, null, 2));
-          
-          if (result.success) {
-            console.log('✅ Documento de identidade processado:', result.data);
-            
-            // Converter resultado para formato compatível
-            const compatibleData = {
-              fullName: result.data.nomeCompleto,
-              idNumber: result.data.rg || result.data.cpf,
-              cpf: result.data.cpf,
-              birthDate: result.data.dataNascimento,
-              mothersName: result.data.nomeMae,
-              fathersName: result.data.nomePai,
-              birthPlace: result.data.naturalidade,
-              issuedBy: result.data.orgaoExpedidor,
-              documentType: result.data.tipoDocumento,
-              subtype: result.data.subtipoDocumento,
-              // Metadados da nova arquitetura
-              confidence: result.confidence,
-              method: result.method,
-              newArchitecture: true
-            };
-            
-            res.json({
-              success: true,
-              extractedText: 'Processado pela nova arquitetura unificada',
-              data: compatibleData,
-              metadata: {
-                architecture: 'unified',
-                confidence: result.confidence,
-                detectionMethod: result.method,
-                version: '2.0'
-              }
-            });
-            return;
-            
-          } else {
-            console.log('❌ ROTA: Falha na extração de documento de identidade:', result.errors?.join(', ') || 'Erro desconhecido');
-            
-            res.status(500).json({
-              success: false,
-              error: 'Falha no processamento do documento de identidade',
-              errors: result.errors,
-              metadata: {
-                architecture: 'unified',
-                version: '2.0'
-              }
-            });
-          }
-          
-        } catch (error) {
-          console.error('❌ Erro na extração de documento:', error);
-          
-          res.status(500).json({
-            success: false,
-            error: 'Erro interno na extração do documento',
-            details: error instanceof Error ? error.message : 'Erro desconhecido',
-            metadata: {
-              architecture: 'unified',
-              version: '2.0'
-            }
-          });
-        }
-        
-      } else if (documentType === 'insurance') {
-        console.log('📋 Processando carteirinha com arquitetura modular...');
-        
-        try {
-          const result = await documentExtractionService.processInsuranceCard(imageBuffer);
-          
-          console.log('📋 Resultado da nova arquitetura:', result.success ? '✅ SUCESSO' : '❌ FALHA');
-          
-          if (result.errors) {
-            console.log('🔍 Erros encontrados:', result.errors);
-          }
-        
-          if (result.success) {
-            console.log('✅ Carteirinha processada com nova arquitetura:', result.data);
-            
-            // Converter resultado para formato compatível com sistema atual
-            const compatibleData = {
-              operadora: result.data.operadora,
-              normalizedOperadora: result.data.normalizedOperadora,
-              nomeTitular: result.data.nomeTitular,
-              numeroCarteirinha: result.data.numeroCarteirinha,
-              plano: result.data.plano,
-              dataNascimento: result.data.dataNascimento,
-              cns: result.data.cns,
-              ansCode: result.data.ansCode,
-              // Metadados da nova arquitetura
-              confidence: result.confidence,
-              method: result.method,
-              newArchitecture: true
-            };
-            
-            res.json({
-              success: true,
-              extractedText: 'Processado pela nova arquitetura modular',
-              data: compatibleData,
-              metadata: {
-                architecture: 'modular',
-                confidence: result.confidence,
-                detectionMethod: result.method,
-                version: '2.0'
-              }
-            });
-            return;
-            
-          } else {
-            console.log('❌ Falha na nova arquitetura:', result.errors?.join(', ') || 'Erro desconhecido');
-            
-            res.status(500).json({
-              success: false,
-              error: 'Falha no processamento da carteirinha',
-              errors: result.errors,
-              metadata: {
-                architecture: 'modular',
-                version: '2.0'
-              }
-            });
-          }
-        } catch (error) {
-          console.error('❌ Erro na nova arquitetura:', error);
-          
-          res.status(500).json({
-            success: false,
-            error: 'Erro interno na nova arquitetura',
-            details: error instanceof Error ? error.message : 'Erro desconhecido',
-            metadata: {
-              architecture: 'modular',
-              version: '2.0'
-            }
-          });
-        }
-        
-      } else {
-        return res.status(400).json({ error: 'Tipo de documento inválido' });
-      }
-      
-      
-      // Remover o arquivo temporário
-      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      
-    } catch (error) {
-      console.error('❌ Erro ao processar documento:', error);
-      
-      // Remover arquivo temporário em caso de erro
-      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      
-      res.status(500).json({ 
-        error: 'Erro ao processar documento',
-        details: error instanceof Error ? error.message : 'Erro desconhecido'
-      });
     }
   });
 

@@ -3,11 +3,17 @@
  * Implementa padrões específicos de extração para documentos Bradesco
  */
 
-import { IOperatorExtractor } from '../types/extraction-types';
-import type { ExtractedData } from '../types/extraction-types';
 import { CNSValidator } from '../utils/cns-validator';
 
-export class BradescoExtractor implements IOperatorExtractor {
+interface InsuranceExtractedData {
+  operadora?: string;
+  numeroCarteirinha?: string;
+  plano?: string;
+  nomeTitular?: string;
+  cns?: string;
+}
+
+export class BradescoExtractor {
   /**
    * Extrai número da carteirinha específico do Bradesco (excluindo CNS)
    */
@@ -226,7 +232,7 @@ export class BradescoExtractor implements IOperatorExtractor {
   /**
    * Calcula confiança específica para Bradesco
    */
-  getConfidence(data: ExtractedData): number {
+  getConfidence(data: InsuranceExtractedData): number {
     let confidence = 0;
     let factors = 0;
 

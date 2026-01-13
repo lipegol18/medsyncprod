@@ -58,6 +58,7 @@ import { TrialExpiredModal } from "@/components/trial/trial-expired-modal";
 import { PastDueBanner } from "@/components/trial/past-due-banner";
 import { PastDueModal } from "@/components/trial/past-due-modal";
 import { UserSubscription } from "@/../../shared/schema";
+import { PatientFormDialog } from "@/components/patients/patient-form-dialog";
 
 // Adicionar traduções para a página inicial
 const translations = {
@@ -310,6 +311,7 @@ export default function Home() {
         const [orders, setOrders] = useState<any[]>([]);
         const [isLoading, setIsLoading] = useState(true);
         const [hasShownPendingToast, setHasShownPendingToast] = useState(false);
+        const [showPatientModal, setShowPatientModal] = useState(false);
 
         // Buscar estatísticas do dashboard usando a API existente
         const { data: dashboardStats, isLoading: statsLoading } =
@@ -801,10 +803,7 @@ export default function Home() {
                                                                                                         Pedido
                                                                                                 </button>
                                                                                                 <button
-                                                                                                        onClick={() =>
-                                                                                                                (window.location.href =
-                                                                                                                        "/patients")
-                                                                                                        }
+                                                                                                        onClick={() => setShowPatientModal(true)}
                                                                                                         className="btn-medsync-light flex items-center justify-center gap-2 flex-1"
                                                                                                         data-testid="button-novo-paciente"
                                                                                                 >
@@ -1079,6 +1078,12 @@ export default function Home() {
                                 isBlocking={isPastDueBlocking}
                                 onClose={() => setShowPastDueModal(false)}
                                 onLogout={() => logoutMutation.mutate()}
+                        />
+
+                        {/* Modal de cadastro de paciente */}
+                        <PatientFormDialog
+                                open={showPatientModal}
+                                onOpenChange={setShowPatientModal}
                         />
                 </div>
         );

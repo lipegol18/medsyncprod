@@ -284,13 +284,15 @@ export class RGAntigoUnificadoExtractor implements IIdentityExtractor {
       /(\d{3}\.?\d{3}\.?\d{3}[-]?\d{2})/g,
       // CPF após "CPF"
       /CPF[:\s]*(\d{3}\.?\d{3}\.?\d{3}[-]?\d{2})/i,
+      // CPF com 11 dígitos
+      /\b(\d{11})\b/,
     ];
     
     for (const pattern of cpfPatterns) {
       let match;
       while ((match = pattern.exec(text)) !== null) {
         const cleanCPF = match[1].replace(/[^\d]/g, '');
-        if (cleanCPF.length === 11) {
+        if (cleanCPF.length === 11 && this.isValidCPF(cleanCPF)) {
           const formattedCPF = this.formatCPF(cleanCPF);
           console.log('✅ RG Antigo SP: CPF encontrado:', formattedCPF);
           return formattedCPF;
@@ -299,8 +301,45 @@ export class RGAntigoUnificadoExtractor implements IIdentityExtractor {
       }
     }
     
+    // Fallback: buscar qualquer sequência de 11+ dígitos e validar
+    const allDigitSequences = text.match(/\d{11,}/g) || [];
+    for (const seq of allDigitSequences) {
+      const cpf = seq.substring(0, 11);
+      if (this.isValidCPF(cpf)) {
+        const formattedCPF = this.formatCPF(cpf);
+        console.log('✅ RG Antigo SP: CPF encontrado via fallback:', formattedCPF);
+        return formattedCPF;
+      }
+    }
+    
     console.log('❌ RG Antigo SP: CPF não encontrado');
     return null;
+  }
+  
+  /**
+   * Valida CPF usando algoritmo oficial
+   */
+  private isValidCPF(cpf: string): boolean {
+    if (cpf.length !== 11) return false;
+    if (/^(\d)\1+$/.test(cpf)) return false;
+    
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+      sum += parseInt(cpf.charAt(i)) * (10 - i);
+    }
+    let digit = 11 - (sum % 11);
+    if (digit > 9) digit = 0;
+    if (digit !== parseInt(cpf.charAt(9))) return false;
+    
+    sum = 0;
+    for (let i = 0; i < 10; i++) {
+      sum += parseInt(cpf.charAt(i)) * (11 - i);
+    }
+    digit = 11 - (sum % 11);
+    if (digit > 9) digit = 0;
+    if (digit !== parseInt(cpf.charAt(10))) return false;
+    
+    return true;
   }
   
   /**

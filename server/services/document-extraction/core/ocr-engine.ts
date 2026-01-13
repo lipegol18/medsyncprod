@@ -30,9 +30,9 @@ export class GoogleVisionOCREngine {
         "ocr-engine.ts",
         "extractText",
         "Chamando Google Vision API",
-        "textDetection",
+        "documentTextDetection",
       );
-      const [result] = await this.client.textDetection({
+      const [result] = await this.client.documentTextDetection({
         image: {
           content: imageBuffer,
         },
@@ -55,7 +55,7 @@ export class GoogleVisionOCREngine {
         return "";
       }
 
-      const extractedText = detections[0]?.description || "";
+      const extractedText = result.fullTextAnnotation?.text || "";
       FlowDebugger.data("ocr-engine.ts", "extractText", "Texto extraído", {
         length: extractedText.length,
         preview: extractedText.substring(0, 100),

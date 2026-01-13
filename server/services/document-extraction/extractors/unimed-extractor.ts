@@ -3,10 +3,18 @@
  * Implementa padrões específicos de extração para documentos Unimed
  */
 
-import type { IOperatorExtractor, ExtractedData } from '../types/extraction-types';
 import { CNSValidator } from '../utils/cns-validator';
 
-export class UnimedExtractor implements IOperatorExtractor {
+interface InsuranceExtractedData {
+  operadora?: string;
+  numeroCarteirinha?: string;
+  plano?: string;
+  nomeTitular?: string;
+  cns?: string;
+  ansCode?: string;
+}
+
+export class UnimedExtractor {
   /**
    * Extrai número da carteirinha específico da Unimed
    * Padrão comum: 0 994 910825083001 5 (formato fragmentado)
@@ -143,7 +151,7 @@ export class UnimedExtractor implements IOperatorExtractor {
   /**
    * Calcula confiança específica para Unimed
    */
-  getConfidence(data: ExtractedData): number {
+  getConfidence(data: InsuranceExtractedData): number {
     let confidence = 0;
     let factors = 0;
 

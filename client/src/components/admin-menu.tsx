@@ -178,6 +178,18 @@ export function AdminMenu() {
             </Link>
           </DropdownMenuItem>
 
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="header-text">Ferramentas de Teste</DropdownMenuLabel>
+          
+          <DropdownMenuItem asChild>
+            <Link href="/admin/ocr-validator">
+              <div className="flex items-center w-full">
+                <ScanLine className="mr-2 h-4 w-4" />
+                <span className="header-text">Validador OCR</span>
+              </div>
+            </Link>
+          </DropdownMenuItem>
+
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

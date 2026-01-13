@@ -3,11 +3,18 @@
  * Implementa padrões específicos de extração para documentos Amil
  */
 
-import { IOperatorExtractor } from '../types/extraction-types';
-import type { ExtractedData } from '../types/extraction-types';
 import { CNSValidator } from '../utils/cns-validator';
 
-export class AmilExtractor implements IOperatorExtractor {
+interface InsuranceExtractedData {
+  operadora?: string;
+  numeroCarteirinha?: string;
+  plano?: string;
+  nomeTitular?: string;
+  dataNascimento?: string;
+  cns?: string;
+}
+
+export class AmilExtractor {
   
   /**
    * Identifica se o texto pertence à Amil
@@ -31,10 +38,10 @@ export class AmilExtractor implements IOperatorExtractor {
   /**
    * Extrai dados específicos da Amil
    */
-  async extract(text: string): Promise<ExtractedData> {
+  async extract(text: string): Promise<InsuranceExtractedData> {
     console.log('🔍 Amil: Iniciando extração específica...');
     
-    const data: ExtractedData = {
+    const data: InsuranceExtractedData = {
       operadora: 'AMIL',
       numeroCarteirinha: this.extractCardNumber(text) ?? undefined,
       plano: this.extractPlan(text) ?? undefined,
@@ -277,7 +284,7 @@ export class AmilExtractor implements IOperatorExtractor {
   /**
    * Calcula confiança específica para Amil
    */
-  getConfidence(data: ExtractedData): number {
+  getConfidence(data: InsuranceExtractedData): number {
     let confidence = 0;
     let factors = 0;
 

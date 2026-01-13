@@ -96,6 +96,9 @@ import {
   userAddresses,
   type UserAddress,
   type InsertUserAddress,
+  patientAddresses,
+  type PatientAddress,
+  type InsertPatientAddress,
   incompleteRegistrations,
   type IncompleteRegistration,
   type InsertIncompleteRegistration,
@@ -285,6 +288,17 @@ export interface IStorage {
   ): Promise<UserAddress | undefined>;
   deleteUserAddress(id: number): Promise<boolean>;
   setUserPrimaryAddress(userId: number, addressId: number): Promise<boolean>;
+
+  // Patient address operations
+  getPatientAddresses(patientId: number): Promise<PatientAddress[]>;
+  getPatientPrimaryAddress(patientId: number): Promise<PatientAddress | undefined>;
+  createPatientAddress(address: InsertPatientAddress): Promise<PatientAddress>;
+  updatePatientAddress(
+    id: number,
+    updates: Partial<InsertPatientAddress>,
+  ): Promise<PatientAddress | undefined>;
+  deletePatientAddress(id: number): Promise<boolean>;
+  deletePatientAddressesByPatientId(patientId: number): Promise<boolean>;
 
   // Medical specialty operations
   getMedicalSpecialties(): Promise<MedicalSpecialty[]>;
@@ -1197,6 +1211,98 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // Patient address methods
+  async getPatientAddresses(patientId: number): Promise<PatientAddress[]> {
+    return await db
+      .select()
+      .from(patientAddresses)
+      .where(eq(patientAddresses.patientId, patientId))
+      .orderBy(desc(patientAddresses.isPrimary), patientAddresses.id);
+  }
+
+  async getPatientPrimaryAddress(
+    patientId: number,
+  ): Promise<PatientAddress | undefined> {
+    const [address] = await db
+      .select()
+      .from(patientAddresses)
+      .where(
+        and(
+          eq(patientAddresses.patientId, patientId),
+          eq(patientAddresses.isPrimary, true),
+        ),
+      );
+    return address || undefined;
+  }
+
+  async createPatientAddress(address: InsertPatientAddress): Promise<PatientAddress> {
+    // Se é o endereço principal, desmarcar outros como principais
+    if (address.isPrimary) {
+      await db
+        .update(patientAddresses)
+        .set({ isPrimary: false })
+        .where(eq(patientAddresses.patientId, address.patientId));
+    }
+
+    const [newAddress] = await db
+      .insert(patientAddresses)
+      .values(address)
+      .returning();
+    return newAddress;
+  }
+
+  async updatePatientAddress(
+    id: number,
+    updates: Partial<InsertPatientAddress>,
+  ): Promise<PatientAddress | undefined> {
+    // Se está marcando como principal, desmarcar outros
+    if (updates.isPrimary) {
+      const [address] = await db
+        .select()
+        .from(patientAddresses)
+        .where(eq(patientAddresses.id, id));
+
+      if (address) {
+        await db
+          .update(patientAddresses)
+          .set({ isPrimary: false })
+          .where(eq(patientAddresses.patientId, address.patientId));
+      }
+    }
+
+    const [updated] = await db
+      .update(patientAddresses)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(patientAddresses.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deletePatientAddress(id: number): Promise<boolean> {
+    try {
+      const [deleted] = await db
+        .delete(patientAddresses)
+        .where(eq(patientAddresses.id, id))
+        .returning();
+      return !!deleted;
+    } catch (error) {
+      console.error("Erro ao deletar endereço do paciente:", error);
+      return false;
+    }
+  }
+
+  async deletePatientAddressesByPatientId(patientId: number): Promise<boolean> {
+    try {
+      await db
+        .delete(patientAddresses)
+        .where(eq(patientAddresses.patientId, patientId));
+      return true;
+    } catch (error) {
+      console.error("Erro ao deletar endereços do paciente:", error);
+      return false;
+    }
+  }
+
   // Role methods
   async getRoles(): Promise<Role[]> {
     return await db.select().from(roles);
@@ -1408,7 +1514,8 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(patients)
-      .where(eq(patients.isDeleted, false)); // Filtrar pacientes não excluídos
+      .where(eq(patients.isDeleted, false)) // Filtrar pacientes não excluídos
+      .orderBy(patients.fullName); // Ordenar por nome alfabeticamente
   }
 
   async getPatientsByDoctor(doctorId: number): Promise<Patient[]> {
