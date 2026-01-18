@@ -308,6 +308,8 @@ export const surgicalProcedureApproaches = pgTable("surgical_procedure_approache
   complexity: text("complexity"), // Complexidade específica para esta associação (Baixa, Média, Alta)
   estimatedDuration: integer("estimated_duration"), // Duração estimada em minutos
   notes: text("notes"), // Observações específicas para esta associação
+  defaultLaterality: text("default_laterality"), // Lateralidade padrão: "esquerdo", "direito", "bilateral", "indeterminado" ou null
+  defaultCharacter: text("default_character"), // Caráter padrão: "eletiva", "urgencia" ou null
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
@@ -336,6 +338,8 @@ export const insertSurgicalProcedureApproachSchema = createInsertSchema(surgical
   complexity: true,
   estimatedDuration: true,
   notes: true,
+  defaultLaterality: true,
+  defaultCharacter: true,
 });
 
 export type SurgicalProcedureApproach = typeof surgicalProcedureApproaches.$inferSelect;

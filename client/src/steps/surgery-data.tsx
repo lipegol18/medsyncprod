@@ -520,6 +520,9 @@ interface ConductSelectorProps {
   }>;
   // Flag para detectar modo de edição e desabilitar auto-preenchimento
   isEditMode?: boolean;
+  // Props para auto-preenchimento de lateralidade e caráter
+  setProcedureLaterality?: (laterality: string) => void;
+  setProcedureType?: (type: string) => void;
   // Props para inserir subtítulos automáticos nas caixas de texto de observações
   cbhpmAdditionalNotes?: string;
   setCbhpmAdditionalNotes?: (notes: string) => void;
@@ -547,6 +550,8 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
   setSelectedSurgicalApproaches,
   selectedSurgicalApproaches = [],
   isEditMode = false,
+  setProcedureLaterality,
+  setProcedureType,
   cbhpmAdditionalNotes = "",
   setCbhpmAdditionalNotes,
   opmeAdditionalNotes = "",
@@ -851,6 +856,33 @@ const ConductSelector: React.FC<ConductSelectorProps> = ({
       // ========== PROCESSAR DADOS COMPLETOS (OPME, Fornecedores, Justificativas) ==========
       if (completeData) {
         console.log('📋 Dados completos da conduta cirúrgica:', completeData);
+        
+        // 🎯 AUTO-PREENCHIMENTO: Lateralidade e Caráter baseado nos valores padrão da API /complete
+        if (completeData.defaultLaterality && setProcedureLaterality) {
+          const normalizedLaterality = completeData.defaultLaterality.toLowerCase().trim();
+          console.log(`🎯 [handleConductSelect] Auto-preenchendo lateralidade: ${normalizedLaterality}`);
+          const lateralityMap: Record<string, string> = {
+            'esquerdo': 'esquerdo',
+            'direito': 'direito',
+            'bilateral': 'bilateral',
+            'indeterminado': 'nao_se_aplica',
+            'nao_se_aplica': 'nao_se_aplica'
+          };
+          const mappedLaterality = lateralityMap[normalizedLaterality] || normalizedLaterality;
+          setProcedureLaterality(mappedLaterality);
+        }
+        
+        if (completeData.defaultCharacter && setProcedureType) {
+          const normalizedCharacter = completeData.defaultCharacter.toLowerCase().trim();
+          console.log(`🎯 [handleConductSelect] Auto-preenchendo caráter: ${normalizedCharacter}`);
+          const characterMap: Record<string, string> = {
+            'eletiva': 'eletiva',
+            'urgencia': 'urgencia',
+            'emergencia': 'urgencia'
+          };
+          const mappedCharacter = characterMap[normalizedCharacter] || normalizedCharacter;
+          setProcedureType(mappedCharacter);
+        }
         
         // 🔄 MERGE INTELIGENTE: Sempre combinar itens OPME (soma quantidades)
         if (completeData.opmeItems && completeData.opmeItems.length > 0 && setSelectedOpmeItems) {
@@ -3819,6 +3851,8 @@ export function SurgeryData({
                           setSelectedSurgicalApproaches={setSelectedSurgicalApproaches}
                           selectedSurgicalApproaches={selectedSurgicalApproaches}
                           isEditMode={isEditMode}
+                          setProcedureLaterality={setProcedureLaterality}
+                          setProcedureType={setProcedureType}
                           cbhpmAdditionalNotes={cbhpmAdditionalNotes}
                           setCbhpmAdditionalNotes={setCbhpmAdditionalNotes}
                           opmeAdditionalNotes={opmeAdditionalNotes}
@@ -5876,6 +5910,35 @@ export function SurgeryData({
                             console.error("❌ Valor recebido:", setSelectedSurgicalApproaches);
                           }
                           
+                          // AUTO-PREENCHIMENTO: Lateralidade e Caráter baseado nos valores padrão da conduta
+                          if (association.defaultLaterality && setProcedureLaterality) {
+                            const normalizedLaterality = association.defaultLaterality.toLowerCase().trim();
+                            console.log(`🎯 Auto-preenchendo lateralidade: ${normalizedLaterality}`);
+                            // Mapear valores do banco para valores do frontend
+                            const lateralityMap: Record<string, string> = {
+                              'esquerdo': 'esquerdo',
+                              'direito': 'direito',
+                              'bilateral': 'bilateral',
+                              'indeterminado': 'nao_se_aplica',
+                              'nao_se_aplica': 'nao_se_aplica'
+                            };
+                            const mappedLaterality = lateralityMap[normalizedLaterality] || normalizedLaterality;
+                            setProcedureLaterality(mappedLaterality);
+                          }
+                          
+                          if (association.defaultCharacter && setProcedureType) {
+                            const normalizedCharacter = association.defaultCharacter.toLowerCase().trim();
+                            console.log(`🎯 Auto-preenchendo caráter: ${normalizedCharacter}`);
+                            // Mapear valores do banco para valores do frontend (eletiva/urgencia)
+                            const characterMap: Record<string, string> = {
+                              'eletiva': 'eletiva',
+                              'urgencia': 'urgencia',
+                              'emergencia': 'urgencia'
+                            };
+                            const mappedCharacter = characterMap[normalizedCharacter] || normalizedCharacter;
+                            setProcedureType(mappedCharacter);
+                          }
+                          
                           // AUTO-PREENCHIMENTO: Buscar dados completos da conduta cirúrgica
                           try {
                             // Buscar o ID do procedimento cirúrgico selecionado
@@ -5890,7 +5953,32 @@ export function SurgeryData({
                               const completeData = await response.json();
                               console.log('📋 Dados completos da conduta cirúrgica:', completeData);
                               
-
+                              // AUTO-PREENCHIMENTO: Lateralidade e Caráter baseado nos valores padrão da API /complete
+                              if (completeData.defaultLaterality && setProcedureLaterality) {
+                                const normalizedLaterality = completeData.defaultLaterality.toLowerCase().trim();
+                                console.log(`🎯 [API Complete] Auto-preenchendo lateralidade: ${normalizedLaterality}`);
+                                const lateralityMap: Record<string, string> = {
+                                  'esquerdo': 'esquerdo',
+                                  'direito': 'direito',
+                                  'bilateral': 'bilateral',
+                                  'indeterminado': 'nao_se_aplica',
+                                  'nao_se_aplica': 'nao_se_aplica'
+                                };
+                                const mappedLaterality = lateralityMap[normalizedLaterality] || normalizedLaterality;
+                                setProcedureLaterality(mappedLaterality);
+                              }
+                              
+                              if (completeData.defaultCharacter && setProcedureType) {
+                                const normalizedCharacter = completeData.defaultCharacter.toLowerCase().trim();
+                                console.log(`🎯 [API Complete] Auto-preenchendo caráter: ${normalizedCharacter}`);
+                                const characterMap: Record<string, string> = {
+                                  'eletiva': 'eletiva',
+                                  'urgencia': 'urgencia',
+                                  'emergencia': 'urgencia'
+                                };
+                                const mappedCharacter = characterMap[normalizedCharacter] || normalizedCharacter;
+                                setProcedureType(mappedCharacter);
+                              }
                               
                               // Auto-preencher procedimentos CBHPM
                               if (completeData.procedures && completeData.procedures.length > 0) {

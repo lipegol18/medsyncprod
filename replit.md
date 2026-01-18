@@ -130,6 +130,26 @@ Preferred communication style: Simple, everyday language.
   - Components: `client/src/pages/admin/insurance-plans.tsx`, `client/src/components/admin/insurance-plans/`
   - Fields: código do plano, nome, modalidade, segmentação, acomodação, tipo de contratação, abrangência geográfica, situação, data início comercialização
 
+### Surgical Procedure-Approach Default Values System (Jan 2026)
+- **Table**: `surgical_procedure_approaches` - association between surgical procedures and approaches (conducts)
+- **New Fields Added**:
+  - `default_laterality` (TEXT, nullable): Pre-defined laterality for the combination. Values: `esquerdo`, `direito`, `bilateral`, `indeterminado`
+  - `default_character` (TEXT, nullable): Pre-defined surgery character. Values: `eletiva`, `urgencia`
+- **Auto-fill Behavior**: When a surgical approach is selected during order creation, the system automatically populates:
+  - Lateralidade field (if `default_laterality` is set)
+  - Caráter do Procedimento field (if `default_character` is set)
+- **Value Mapping**:
+  - Laterality: `indeterminado` → `nao_se_aplica` (frontend uses different value for "not applicable")
+  - Character: `emergencia` → `urgencia` (normalized to database enum values)
+- **Use Cases**:
+  - Spine surgeries (Coluna): Set `default_laterality = 'indeterminado'` to auto-select "Não se aplica"
+  - Fracture procedures: Set `default_character = 'urgencia'` to default to emergency character
+  - Elective procedures: Set `default_character = 'eletiva'` for scheduled surgeries
+- **Implementation Files**:
+  - `shared/schema.ts`: Field definitions in `surgicalProcedureApproaches` table
+  - `server/routes.ts`: API endpoints return new fields
+  - `client/src/steps/surgery-data.tsx`: Auto-fill logic on conduct selection
+
 ### Observation Notes System (Additional Notes)
 - **Subtitle Format**: `### [Procedimento] → [Conduta]` (human-readable, no IDs visible)
 - **Association Key**: Uses procedure name + approach name for grouping observations with their respective items

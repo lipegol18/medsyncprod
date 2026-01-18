@@ -74,42 +74,45 @@ export const validations = {
       return !email.includes(" ");
     }, "Email não pode conter espaços"),
 
-  // Telefone Celular - Validação específica para celular brasileiro com +55
+  // Telefone Brasileiro - Aceita celular (9 dígitos) e fixo (8 dígitos)
+  // Formatos aceitos: (11) 4130-8950, (11) 99999-9999, +551141308950, +5511999999999
   phone: z.string()
-    .min(13, "Telefone celular deve ter pelo menos 13 caracteres")
-    .max(17, "Telefone celular muito longo")
+    .min(10, "Telefone deve ter pelo menos 10 caracteres")
+    .max(20, "Telefone muito longo")
     .refine((phone) => {
-      // Remove todos os caracteres não numéricos exceto o sinal de +
-      const cleanedPhone = phone.replace(/[^\d+]/g, "");
+      // Remove todos os caracteres não numéricos
+      let phoneNumber = phone.replace(/\D/g, "");
       
-      // Verifica se começa com +55
-      if (!cleanedPhone.startsWith("+55")) {
+      // Se começa com 55 e tem 12 ou 13 dígitos, remove o código do país
+      if (phoneNumber.startsWith("55") && (phoneNumber.length === 12 || phoneNumber.length === 13)) {
+        phoneNumber = phoneNumber.substring(2);
+      }
+      
+      // Celular: 11 dígitos (DDD + 9 dígitos começando com 9)
+      // Fixo: 10 dígitos (DDD + 8 dígitos)
+      if (phoneNumber.length !== 10 && phoneNumber.length !== 11) {
         return false;
       }
       
-      // Remove o +55 e verifica se restam 11 dígitos (DDD + 9 dígitos)
-      const phoneNumber = cleanedPhone.substring(3);
-      if (phoneNumber.length !== 11) {
-        return false;
-      }
-      
-      // Verifica se o primeiro dígito após o DDD é 9 (celular)
+      // Extrai o DDD (primeiros 2 dígitos)
       const ddd = phoneNumber.substring(0, 2);
-      const firstDigit = phoneNumber.substring(2, 3);
       
-      // DDD válidos no Brasil (11 a 89)
+      // DDD válidos no Brasil (11 a 99)
       const dddNum = parseInt(ddd);
-      if (dddNum < 11 || dddNum > 89) {
+      if (dddNum < 11 || dddNum > 99) {
         return false;
       }
       
-      // Primeiro dígito deve ser 9 para celular
-      if (firstDigit !== "9") {
-        return false;
+      // Se tem 11 dígitos, deve começar com 9 (celular)
+      if (phoneNumber.length === 11) {
+        const firstDigit = phoneNumber.substring(2, 3);
+        if (firstDigit !== "9") {
+          return false;
+        }
       }
       
       return true;
-    }, "Formato deve ser +55 + DDD + 9 dígitos (ex: +5521999999999)"),
+    }, "Formato: (DDD) XXXX-XXXX ou (DDD) 9XXXX-XXXX"),
 
   // CEP - Validação para formato brasileiro
   cep: z.string()

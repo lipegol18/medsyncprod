@@ -1055,6 +1055,40 @@ export default function ProcedureAssociationsPage() {
     },
   });
 
+  // Atualizar valores padrão de lateralidade, caráter e preferencial da associação
+  const updateDefaultsMutation = useMutation({
+    mutationFn: async (data: { procedureId: number; approachId: number; defaultLaterality?: string | null; defaultCharacter?: string | null; isPreferred?: boolean }) => {
+      const response = await fetch(`/api/admin/procedure-approaches/${data.procedureId}/${data.approachId}/defaults`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          defaultLaterality: data.defaultLaterality, 
+          defaultCharacter: data.defaultCharacter,
+          isPreferred: data.isPreferred
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao atualizar valores padrão');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/procedure-approaches", selectedProcedure] });
+      toast({
+        title: "Sucesso",
+        description: "Valores padrão atualizados com sucesso!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       procedureId: "",
@@ -1429,43 +1463,38 @@ export default function ProcedureAssociationsPage() {
                       {procedureApproaches && procedureApproaches.length > 0 ? (
                         <div className="space-y-2">
                           <Label className="text-sm font-medium">Condutas Associadas:</Label>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 gap-3">
                             {procedureApproaches.map((approach: any) => (
                               <div 
                                 key={approach.id} 
-                                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${
+                                className={`p-4 rounded-lg cursor-pointer transition-all ${
                                   selectedApproach === approach.id
                                     ? "bg-teal-100 border-2 border-teal-500"
                                     : "bg-teal-50 border border-teal-200 hover:bg-teal-100"
                                 }`}
                                 onClick={() => setSelectedApproach(approach.id)}
                               >
-                                <div className="flex items-center space-x-3">
-                                  <div className="w-8 h-8 bg-teal-600 rounded-full flex items-center justify-center">
-                                    <span className="text-white font-semibold text-sm">
-                                      {approach.name.charAt(0)}
-                                    </span>
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center space-x-3">
+                                    <div className="w-8 h-8 bg-teal-600 rounded-full flex items-center justify-center">
+                                      <span className="text-white font-semibold text-sm">
+                                        {approach.name.charAt(0)}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <div className="font-medium text-teal-900">{approach.name}</div>
+                                      {approach.description && (
+                                        <div className="text-sm text-teal-700 line-clamp-1">
+                                          {approach.description}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-                                  <div>
-                                    <div className="font-medium text-teal-900">{approach.name}</div>
-                                    {approach.description && (
-                                      <div className="text-sm text-teal-700 line-clamp-1">
-                                        {approach.description}
-                                      </div>
-                                    )}
-                                    {selectedApproach === approach.id && (
-                                      <div className="mt-1 text-xs text-teal-600 font-medium">
-                                        ← Clique para configurar associações
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex items-center space-x-1">
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={(e) => {
-                                      e.stopPropagation(); // Evita selecionar a conduta ao clicar no X
+                                      e.stopPropagation();
                                       if (selectedProcedure) {
                                         removeApproachMutation.mutate({
                                           procedureId: selectedProcedure,
@@ -1479,6 +1508,97 @@ export default function ProcedureAssociationsPage() {
                                     <X className="h-4 w-4" />
                                   </Button>
                                 </div>
+                                
+                                {/* Campos de valores padrão */}
+                                <div className="grid grid-cols-2 gap-3 mt-2" onClick={(e) => e.stopPropagation()}>
+                                  <div>
+                                    <Label className="text-xs text-teal-700">Lateralidade Padrão</Label>
+                                    <Select
+                                      value={approach.defaultLaterality || "none"}
+                                      onValueChange={(value) => {
+                                        if (selectedProcedure) {
+                                          updateDefaultsMutation.mutate({
+                                            procedureId: selectedProcedure,
+                                            approachId: approach.id,
+                                            defaultLaterality: value === "none" ? null : value,
+                                            defaultCharacter: approach.defaultCharacter
+                                          });
+                                        }
+                                      }}
+                                      disabled={updateDefaultsMutation.isPending}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-white">
+                                        <SelectValue placeholder="Selecione..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none">Não definido</SelectItem>
+                                        <SelectItem value="esquerdo">Esquerdo</SelectItem>
+                                        <SelectItem value="direito">Direito</SelectItem>
+                                        <SelectItem value="bilateral">Bilateral</SelectItem>
+                                        <SelectItem value="indeterminado">Não se aplica</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs text-teal-700">Caráter Padrão</Label>
+                                    <Select
+                                      value={approach.defaultCharacter || "none"}
+                                      onValueChange={(value) => {
+                                        if (selectedProcedure) {
+                                          updateDefaultsMutation.mutate({
+                                            procedureId: selectedProcedure,
+                                            approachId: approach.id,
+                                            defaultLaterality: approach.defaultLaterality,
+                                            defaultCharacter: value === "none" ? null : value
+                                          });
+                                        }
+                                      }}
+                                      disabled={updateDefaultsMutation.isPending}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-white">
+                                        <SelectValue placeholder="Selecione..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none">Não definido</SelectItem>
+                                        <SelectItem value="eletiva">Eletiva</SelectItem>
+                                        <SelectItem value="urgencia">Urgência</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                                
+                                {/* Checkbox para Conduta Preferencial */}
+                                <div className="mt-3 flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+                                  <Checkbox
+                                    id={`preferred-${approach.id}`}
+                                    checked={approach.isPreferred || false}
+                                    onCheckedChange={(checked) => {
+                                      if (selectedProcedure) {
+                                        updateDefaultsMutation.mutate({
+                                          procedureId: selectedProcedure,
+                                          approachId: approach.id,
+                                          defaultLaterality: approach.defaultLaterality,
+                                          defaultCharacter: approach.defaultCharacter,
+                                          isPreferred: checked === true
+                                        });
+                                      }
+                                    }}
+                                    disabled={updateDefaultsMutation.isPending}
+                                    className="border-teal-400 data-[state=checked]:bg-teal-600 data-[state=checked]:border-teal-600"
+                                  />
+                                  <Label 
+                                    htmlFor={`preferred-${approach.id}`}
+                                    className="text-xs text-teal-700 cursor-pointer"
+                                  >
+                                    Conduta Preferencial (selecionada automaticamente)
+                                  </Label>
+                                </div>
+                                
+                                {selectedApproach === approach.id && (
+                                  <div className="mt-2 text-xs text-teal-600 font-medium">
+                                    ↓ Clique para configurar CID-10, CBHPM, OPME e mais
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>

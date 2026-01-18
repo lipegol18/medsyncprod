@@ -8635,6 +8635,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         complexity: surgicalProcedureApproaches.complexity,
         estimatedDuration: surgicalProcedureApproaches.estimatedDuration,
         notes: surgicalProcedureApproaches.notes,
+        defaultLaterality: surgicalProcedureApproaches.defaultLaterality,
+        defaultCharacter: surgicalProcedureApproaches.defaultCharacter,
         createdAt: surgicalProcedureApproaches.createdAt,
         updatedAt: surgicalProcedureApproaches.updatedAt,
         procedureName: surgicalProcedures.name,
@@ -8674,6 +8676,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         complexity: surgicalProcedureApproaches.complexity,
         estimatedDuration: surgicalProcedureApproaches.estimatedDuration,
         notes: surgicalProcedureApproaches.notes,
+        defaultLaterality: surgicalProcedureApproaches.defaultLaterality,
+        defaultCharacter: surgicalProcedureApproaches.defaultCharacter,
         createdAt: surgicalProcedureApproaches.createdAt,
         updatedAt: surgicalProcedureApproaches.updatedAt,
         procedureName: surgicalProcedures.name,
@@ -8712,6 +8716,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         complexity: surgicalProcedureApproaches.complexity,
         estimatedDuration: surgicalProcedureApproaches.estimatedDuration,
         notes: surgicalProcedureApproaches.notes,
+        defaultLaterality: surgicalProcedureApproaches.defaultLaterality,
+        defaultCharacter: surgicalProcedureApproaches.defaultCharacter,
         createdAt: surgicalProcedureApproaches.createdAt,
         updatedAt: surgicalProcedureApproaches.updatedAt,
         procedureName: surgicalProcedures.name,
@@ -10800,12 +10806,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(and(...justificationsWhereConditions))
         .orderBy(surgicalApproachJustifications.isPreferred);
 
+      // Buscar valores padrão de lateralidade e caráter da associação procedimento+conduta
+      let defaultLaterality: string | null = null;
+      let defaultCharacter: string | null = null;
+      
+      if (surgicalProcedureId) {
+        const associationDefaults = await db
+          .select({
+            defaultLaterality: surgicalProcedureApproaches.defaultLaterality,
+            defaultCharacter: surgicalProcedureApproaches.defaultCharacter,
+          })
+          .from(surgicalProcedureApproaches)
+          .where(and(
+            eq(surgicalProcedureApproaches.surgicalProcedureId, surgicalProcedureId),
+            eq(surgicalProcedureApproaches.surgicalApproachId, approachId)
+          ))
+          .limit(1);
+        
+        if (associationDefaults.length > 0) {
+          defaultLaterality = associationDefaults[0].defaultLaterality;
+          defaultCharacter = associationDefaults[0].defaultCharacter;
+          console.log(`🎯 Valores padrão encontrados: lateralidade=${defaultLaterality}, caráter=${defaultCharacter}`);
+        }
+      }
+
       const completeData = {
         approach: approach[0],
         procedures: associatedProcedures,
         opmeItems: associatedOpmeItems,
         suppliers: suppliersData,
-        justifications: justifications
+        justifications: justifications,
+        defaultLaterality: defaultLaterality,
+        defaultCharacter: defaultCharacter
       };
 
       console.log(`✅ Dados completos encontrados: ${associatedProcedures.length} procedimentos, ${associatedOpmeItems.length} OPME, ${suppliersData.length} fornecedores, ${justifications.length} justificativas`);
@@ -13295,6 +13327,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: surgicalApproaches.name,
           description: surgicalApproaches.description,
           isPreferred: surgicalProcedureApproaches.isPreferred,
+          defaultLaterality: surgicalProcedureApproaches.defaultLaterality,
+          defaultCharacter: surgicalProcedureApproaches.defaultCharacter,
         })
         .from(surgicalProcedureApproaches)
         .innerJoin(surgicalApproaches, eq(surgicalProcedureApproaches.surgicalApproachId, surgicalApproaches.id))
@@ -13304,6 +13338,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(associatedApproaches);
     } catch (error) {
       console.error("Erro ao buscar condutas do procedimento:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  // PATCH /api/admin/procedure-approaches/{procedureId}/{approachId}/defaults - Atualizar valores padrão de lateralidade, caráter e preferencial
+  app.patch("/api/admin/procedure-approaches/:procedureId/:approachId/defaults", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const procedureId = parseInt(req.params.procedureId);
+      const approachId = parseInt(req.params.approachId);
+      const { defaultLaterality, defaultCharacter, isPreferred } = req.body;
+      
+      console.log(`📝 Atualizando valores padrão da associação procedimento ${procedureId} + conduta ${approachId}:`, { defaultLaterality, defaultCharacter, isPreferred });
+
+      // Preparar objeto de atualização
+      const updateData: any = {
+        defaultLaterality: defaultLaterality || null,
+        defaultCharacter: defaultCharacter || null,
+      };
+      
+      // Incluir isPreferred apenas se foi fornecido explicitamente
+      if (typeof isPreferred === 'boolean') {
+        updateData.isPreferred = isPreferred;
+      }
+
+      await db
+        .update(surgicalProcedureApproaches)
+        .set(updateData)
+        .where(and(
+          eq(surgicalProcedureApproaches.surgicalProcedureId, procedureId),
+          eq(surgicalProcedureApproaches.surgicalApproachId, approachId)
+        ));
+
+      console.log(`✅ Valores padrão atualizados com sucesso`);
+      res.json({ message: "Valores padrão atualizados com sucesso" });
+    } catch (error) {
+      console.error("Erro ao atualizar valores padrão:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   });
