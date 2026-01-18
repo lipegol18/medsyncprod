@@ -358,9 +358,9 @@ export function normalizeOperadora(operadora: string): { normalized: string; con
   
   const mappings: Record<string, string> = {
     // Bradesco variações
-    'BRADESCO': 'Bradesco Saúde',
-    'BRADESCO SAUDE': 'Bradesco Saúde',
-    'BRADESCO SAÚDE': 'Bradesco Saúde',
+    'BRADESCO': 'Bradesco',
+    'BRADESCO SAUDE': 'Bradesco',
+    'BRADESCO SAÚDE': 'Bradesco',
     
     // Unimed variações
     'UNIMED': 'Unimed',

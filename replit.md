@@ -59,6 +59,11 @@ Preferred communication style: Simple, everyday language.
 - **Key Tables**: Medical orders, patients, hospitals, order statuses, CIDs, CBHPM procedures, OPME items, suppliers, surgical procedures, surgical approaches, clinical justifications, surgery appointments, anatomical regions. Many-to-many relationships are managed via association tables.
 - **Anatomical Region Persistence**: Medical orders include `anatomicalRegionId` foreign key, with full end-to-end persistence and visual feedback.
 - **Complete Audit System**: Patient records have full lifecycle tracking with 7 audit fields: `created_at`, `created_by`, `updated_at`, `updated_by`, `is_deleted`, `deleted_at`, and `deleted_by` for full accountability and LGPD/ISO 27001 compliance.
+- **Patient-Provider Relationships**: 
+    - `insuranceProviderId` (FK) links patients to `health_insurance_providers` table for standardized insurance data
+    - Doctor-patient relationships managed via `doctor_patients` junction table
+    - `createdBy` (FK) tracks who created the patient record (audit field)
+    - Legacy fields removed: `insurance`, `activatedBy`, `activated_by_id` (Jan 2026)
 
 ### Deployment and Environment Configuration
 - **Multi-Environment Support**: Flexible deployment across Replit, production, staging, and development environments.

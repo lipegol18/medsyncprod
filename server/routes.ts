@@ -1626,13 +1626,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         WITH insurance_counts AS (
           SELECT 
             CASE 
-              WHEN p.insurance LIKE 'BRADESCO SAÚDE%' THEN 'BRADESCO SAÚDE'
-              WHEN p.insurance = 'SUL AMERICA COMPANHIA DE SEGURO SAÚDE' THEN 'SUL AMERICA'
-              WHEN p.insurance = 'SUL AMÉRICA SERVIÇOS DE SAÚDE S.A.' THEN 'SUL AMERICA'
+              WHEN p.insurance LIKE 'BRADESCO%' THEN 'BRADESCO'
+              WHEN p.insurance ILIKE 'SUL AM%RICA%' THEN 'SUL AMERICA'
+              WHEN p.insurance ILIKE 'SULAM%RICA%' THEN 'SUL AMERICA'
+              WHEN p.insurance ILIKE 'PETROBR%S%' THEN 'PETROBRAS'
+              WHEN p.insurance ILIKE 'PROASA%' THEN 'PROASA'
               WHEN p.insurance = 'AMIL ASSISTÊNCIA MÉDICA INTERNACIONAL S.A.' THEN 'AMIL'
+              WHEN p.insurance ILIKE 'AMIL%' THEN 'AMIL'
               WHEN p.insurance = 'NOTRE DAME INTERMÉDICA SAÚDE S.A.' THEN 'NOTRE DAME'
+              WHEN p.insurance ILIKE 'NOTRE DAME%' THEN 'NOTRE DAME'
               WHEN p.insurance = 'CAIXA ECONÔMICA FEDERAL' THEN 'CAIXA'
-              WHEN p.insurance = 'UNIMED LESTE FLUMINENSE' THEN 'UNIMED'
+              WHEN p.insurance ILIKE 'UNIMED%' THEN 'UNIMED'
               ELSE COALESCE(p.insurance, 'Particular')
             END as insurance,
             COUNT(*) as count
@@ -1644,13 +1648,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ${whereClause}
           GROUP BY 
             CASE 
-              WHEN p.insurance LIKE 'BRADESCO SAÚDE%' THEN 'BRADESCO SAÚDE'
-              WHEN p.insurance = 'SUL AMERICA COMPANHIA DE SEGURO SAÚDE' THEN 'SUL AMERICA'
-              WHEN p.insurance = 'SUL AMÉRICA SERVIÇOS DE SAÚDE S.A.' THEN 'SUL AMERICA'
+              WHEN p.insurance LIKE 'BRADESCO%' THEN 'BRADESCO'
+              WHEN p.insurance ILIKE 'SUL AM%RICA%' THEN 'SUL AMERICA'
+              WHEN p.insurance ILIKE 'SULAM%RICA%' THEN 'SUL AMERICA'
+              WHEN p.insurance ILIKE 'PETROBR%S%' THEN 'PETROBRAS'
+              WHEN p.insurance ILIKE 'PROASA%' THEN 'PROASA'
               WHEN p.insurance = 'AMIL ASSISTÊNCIA MÉDICA INTERNACIONAL S.A.' THEN 'AMIL'
+              WHEN p.insurance ILIKE 'AMIL%' THEN 'AMIL'
               WHEN p.insurance = 'NOTRE DAME INTERMÉDICA SAÚDE S.A.' THEN 'NOTRE DAME'
+              WHEN p.insurance ILIKE 'NOTRE DAME%' THEN 'NOTRE DAME'
               WHEN p.insurance = 'CAIXA ECONÔMICA FEDERAL' THEN 'CAIXA'
-              WHEN p.insurance = 'UNIMED LESTE FLUMINENSE' THEN 'UNIMED'
+              WHEN p.insurance ILIKE 'UNIMED%' THEN 'UNIMED'
               ELSE COALESCE(p.insurance, 'Particular')
             END
           ORDER BY 
@@ -2922,7 +2930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           patient: patientData ? {
             fullName: patientData.fullName,
             birthDate: patientData.birthDate,
-            insurance: patientData.insurance,
+            insuranceProviderId: patientData.insuranceProviderId,
             insuranceNumber: patientData.insuranceNumber,
             plan: patientData.plan
           } : null,
@@ -4376,12 +4384,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: patientData.email || null,
           phone: patientData.phone || null,
           phone2: patientData.phone2 || null,
-          insurance: patientData.insurance || null,
+          insuranceProviderId: patientData.insuranceProviderId || null,
           insuranceNumber: patientData.insuranceNumber || null,
           plan: patientData.plan || null,
           notes: patientData.notes || null,
           isActive: patientData.isActive !== undefined ? patientData.isActive : true,
-          activatedBy: patientData.activatedBy || (req.user?.name as string) || "Sistema",
         };
 
         // Obter ID do usuário autenticado para auditoria
@@ -4558,7 +4565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               phone: existingPatient.phone,
               phone2: existingPatient.phone2,
               email: existingPatient.email,
-              insurance: existingPatient.insurance,
+              insuranceProviderId: existingPatient.insuranceProviderId,
               insuranceNumber: existingPatient.insuranceNumber,
               plan: existingPatient.plan,
               notes: existingPatient.notes
@@ -4654,19 +4661,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const patientToSave = {
           fullName: patientData.fullName,
           cpf: patientData.cpf,
-          birthDate: patientData.birthDate, // Mantém o formato de string para data
+          birthDate: patientData.birthDate,
           gender: patientData.gender,
           email: patientData.email || null,
           phone: patientData.phone || null,
           phone2: patientData.phone2 || null,
-          insurance: patientData.insurance || null,
+          insuranceProviderId: patientData.insuranceProviderId || null,
           insuranceNumber: patientData.insuranceNumber || null,
           plan: patientData.plan || null,
           notes: patientData.notes || null,
           isActive:
             patientData.isActive !== undefined ? patientData.isActive : true,
-          activatedBy:
-            patientData.activatedBy || (req.user?.name as string) || "Sistema",
         };
 
         // Salvar o paciente no banco de dados com auditoria de criação
@@ -4798,8 +4803,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Adicionar campos que podem não ter sido enviados
           isActive:
             patientData.isActive !== undefined ? patientData.isActive : true,
-          activatedBy:
-            patientData.activatedBy || (req.user?.name as string) || "Sistema",
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };

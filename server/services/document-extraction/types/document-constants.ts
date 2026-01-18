@@ -8,6 +8,7 @@ export const DocumentType = {
   CNH: 'CNH',
   CARTEIRINHA: 'CARTEIRINHA',
   MV_PATIENT_SCREEN: 'MV_PATIENT_SCREEN',
+  EMERGENCY_LABEL: 'EMERGENCY_LABEL',
   UNKNOWN: 'UNKNOWN'
 } as const;
 
@@ -30,6 +31,8 @@ export const DocumentSubtype = {
   MV_ADV: 'MV_ADV',
   MV_UNKNOWN: 'MV_UNKNOWN',
   
+  EMERGENCY_LABEL_HOSPITAL: 'EMERGENCY_LABEL_HOSPITAL',
+  
   SULAMERICA: 'SULAMERICA',
   BRADESCO: 'BRADESCO',
   UNIMED: 'UNIMED',
@@ -47,6 +50,7 @@ export const DefaultSubtypes: Record<DocumentTypeValue, string> = {
   [DocumentType.CNH]: DocumentSubtype.CNH_GENERICA,
   [DocumentType.CARTEIRINHA]: DocumentSubtype.GENERIC,
   [DocumentType.MV_PATIENT_SCREEN]: DocumentSubtype.MV_UNKNOWN,
+  [DocumentType.EMERGENCY_LABEL]: DocumentSubtype.EMERGENCY_LABEL_HOSPITAL,
   [DocumentType.UNKNOWN]: DocumentSubtype.ERROR
 };
 
@@ -55,5 +59,6 @@ export const DocumentTypeLabels: Record<DocumentTypeValue, string> = {
   [DocumentType.CNH]: 'Carteira de Habilitação (CNH)',
   [DocumentType.CARTEIRINHA]: 'Carteirinha de Plano de Saúde',
   [DocumentType.MV_PATIENT_SCREEN]: 'Tela do Sistema MV',
+  [DocumentType.EMERGENCY_LABEL]: 'Etiqueta de Emergência',
   [DocumentType.UNKNOWN]: 'Documento não identificado'
 };

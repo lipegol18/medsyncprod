@@ -17,8 +17,7 @@ import { DragDropZone } from "@/components/ui/drag-drop-zone";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { HealthInsuranceSearch } from "@/components/health-insurance/health-insurance-search";
-import { HealthInsurancePlanSearch } from "@/components/health-insurance/health-insurance-plan-search";
-import { HealthInsuranceProvider, HealthInsurancePlan } from "@shared/schema";
+import { HealthInsuranceProvider } from "@shared/schema";
 
 import {
   Dialog,
@@ -101,7 +100,6 @@ const patientFormSchema = z.object({
   email: z.string().email("Email inválido").or(z.literal("")),
   phone: z.string().optional(),
   phone2: z.string().optional(),
-  insurance: z.string().optional(),
   insuranceNumber: z.string().optional(),
   plan: z.string().optional(),
   notes: z.string().optional(),
@@ -134,7 +132,6 @@ export function PatientFormDialog({
   const { toast } = useToast();
   const { user } = useAuth();
   const [selectedProvider, setSelectedProvider] = useState<HealthInsuranceProvider | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<HealthInsurancePlan | null>(null);
   const [extractedInfo, setExtractedInfo] = useState<{
     type: 'identity' | 'insurance';
     data: any;
@@ -162,7 +159,6 @@ export function PatientFormDialog({
       email: "",
       phone: "",
       phone2: "",
-      insurance: "",
       insuranceNumber: "",
       plan: "",
       notes: "",
@@ -238,8 +234,13 @@ export function PatientFormDialog({
             form.setValue('email', data.patient.email || '');
             form.setValue('phone', data.patient.phone || '');
             form.setValue('phone2', data.patient.phone2 || '');
-            form.setValue('insurance', data.patient.insurance || '');
             form.setValue('insuranceNumber', data.patient.insuranceNumber || '');
+            
+            // Buscar operadora pelo ID se existir
+            if (data.patient.insuranceProviderId && healthInsuranceProviders.length > 0) {
+              const provider = healthInsuranceProviders.find(p => p.id === data.patient.insuranceProviderId);
+              if (provider) setSelectedProvider(provider);
+            }
             form.setValue('plan', data.patient.plan || '');
             form.setValue('notes', data.patient.notes || '');
             
@@ -286,7 +287,6 @@ export function PatientFormDialog({
                 email: patientData.email || "",
                 phone: patientData.phone || "",
                 phone2: patientData.phone2 || "",
-                insurance: patientData.insurance || "",
                 insuranceNumber: patientData.insuranceNumber || "",
                 plan: patientData.plan || "",
                 notes: patientData.notes || "",
@@ -314,7 +314,6 @@ export function PatientFormDialog({
           email: patient?.email || "",
           phone: patient?.phone || "",
           phone2: patient?.phone2 || "",
-          insurance: patient?.insurance || "",
           insuranceNumber: patient?.insuranceNumber || "",
           plan: patient?.plan || "",
           notes: patient?.notes || "",
@@ -331,41 +330,18 @@ export function PatientFormDialog({
       loadPatientWithAddress();
       
       // Se está em modo de edição e tem uma seguradora, buscar e definir o provider selecionado
-      if (isEditMode && patient?.insurance && healthInsuranceProviders.length > 0) {
-        const matchingProvider = healthInsuranceProviders.find(
-          provider => provider.name === patient.insurance
-        );
+      if (isEditMode && healthInsuranceProviders.length > 0) {
+        let matchingProvider = null;
+        
+        // Buscar pelo ID
+        if (patient?.insuranceProviderId) {
+          matchingProvider = healthInsuranceProviders.find(
+            provider => provider.id === patient.insuranceProviderId
+          );
+        }
+        
         if (matchingProvider) {
           setSelectedProvider(matchingProvider);
-          
-          // Se também tem um plano, buscar e selecionar automaticamente
-          if (patient?.plan && matchingProvider.ansCode) {
-            const loadPlanForEdit = async () => {
-              try {
-                const response = await fetch(`/api/health-insurance-plans/provider/${matchingProvider.ansCode}`, {
-                  credentials: 'include'
-                });
-                
-                if (response.ok) {
-                  const plans = await response.json();
-                  // Buscar o plano que corresponde ao nome salvo
-                  const matchingPlan = plans.find((plan: any) => 
-                    plan.nmPlano === patient.plan || 
-                    (plan.nmPlano && patient.plan && plan.nmPlano.toLowerCase().includes(patient.plan.toLowerCase())) ||
-                    (patient.plan && plan.nmPlano && patient.plan.toLowerCase().includes(plan.nmPlano.toLowerCase()))
-                  );
-                  
-                  if (matchingPlan) {
-                    setSelectedPlan(matchingPlan);
-                  }
-                }
-              } catch (error) {
-                console.error('Erro ao carregar plano para edição:', error);
-              }
-            };
-            
-            loadPlanForEdit();
-          }
         } else {
           setSelectedProvider(null);
         }
@@ -406,8 +382,8 @@ export function PatientFormDialog({
       formData.append('document', file);
       formData.append('usePreprocessing', 'true');
 
-      // Usar o novo endpoint unificado
-      const response = await fetch("/api/process-document-unified", {
+      // Usar o endpoint de detecção automática (mesmo do OCR Validator)
+      const response = await fetch("/api/process-document-auto", {
         method: "POST",
         body: formData,
       });
@@ -422,7 +398,60 @@ export function PatientFormDialog({
         
         const { patient, insurance, metadata } = result;
         
-        // Preencher dados do paciente (sempre presente)
+        // Verificar se é carteirinha de plano de saúde
+        const isInsuranceCard = metadata?.documentType === 'CARTEIRINHA' || 
+                                metadata?.documentType === 'INSURANCE_CARD';
+        
+        // Para carteirinhas: preencher APENAS operadora e número da carteirinha
+        // Os extratores de carteirinha ainda precisam de aperfeiçoamento
+        if (isInsuranceCard) {
+          // Preencher apenas dados do plano de saúde
+          if (insurance) {
+            if (insurance.provider) {
+              try {
+                const searchUrl = `/api/health-insurance-providers/search?q=${encodeURIComponent(insurance.provider)}`;
+                const providerResponse = await fetch(searchUrl, {
+                  method: 'GET',
+                  headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                  credentials: 'include'
+                });
+                
+                if (providerResponse.ok) {
+                  const providersResult = await providerResponse.json();
+                  if (providersResult && providersResult.length > 0) {
+                    setSelectedProvider(providersResult[0]);
+                  }
+                }
+              } catch (error) {
+                console.error('Erro ao buscar operadora:', error);
+              }
+            }
+            
+            if (insurance.cardNumber) {
+              form.setValue('insuranceNumber', insurance.cardNumber);
+            }
+          }
+          
+          // Armazenar informações da extração para exibição
+          setExtractedInfo({
+            type: 'insurance',
+            data: { patient, insurance },
+            detectedType: metadata.documentType,
+            detectedSubtype: metadata.subtype,
+            extractorVersion: metadata.extractorVersion,
+            typeConfidence: metadata.confidence,
+          });
+          
+          toast({
+            title: 'Carteirinha processada',
+            description: 'Operadora e número da carteirinha extraídos.',
+          });
+          
+          setIsProcessingDocument(false);
+          return;
+        }
+        
+        // Para outros documentos (RG, CNH, MV, Etiquetas): preencher todos os campos
         if (patient.fullName) {
           form.setValue('fullName', patient.fullName);
         }
@@ -506,65 +535,9 @@ export function PatientFormDialog({
           }
         }
         
-        // Preencher dados do plano de saúde (quando disponível)
-        if (insurance) {
-          if (insurance.provider) {
-            form.setValue('insurance', insurance.provider);
-            
-            // Buscar operadora no banco para obter dados completos
-            try {
-              const searchUrl = `/api/health-insurance-providers/search?q=${encodeURIComponent(insurance.provider)}`;
-              const providerResponse = await fetch(searchUrl, {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                credentials: 'include'
-              });
-              
-              if (providerResponse.ok) {
-                const providersResult = await providerResponse.json();
-                if (providersResult && providersResult.length > 0) {
-                  const provider = providersResult[0];
-                  setSelectedProvider(provider);
-                  form.setValue('insurance', provider.name);
-                  
-                  // Buscar plano se disponível
-                  if (insurance.plan) {
-                    const planUrl = `/api/health-insurance-plans/search?q=${encodeURIComponent(insurance.plan)}&registroAns=${encodeURIComponent(provider.ansCode)}`;
-                    const planResponse = await fetch(planUrl, {
-                      method: 'GET',
-                      headers: { 'Content-Type': 'application/json' },
-                      credentials: 'include'
-                    });
-                    
-                    if (planResponse.ok) {
-                      const plansResult = await planResponse.json();
-                      if (plansResult && plansResult.length > 0) {
-                        setSelectedPlan(plansResult[0]);
-                        form.setValue('plan', plansResult[0].name);
-                      } else {
-                        form.setValue('plan', insurance.plan);
-                      }
-                    }
-                  }
-                }
-              }
-            } catch (error) {
-              console.error('Erro ao buscar operadora:', error);
-            }
-          }
-          
-          if (insurance.plan && !form.getValues('plan')) {
-            form.setValue('plan', insurance.plan);
-          }
-          if (insurance.cardNumber) {
-            form.setValue('insuranceNumber', insurance.cardNumber);
-          }
-        }
-        
         // Armazenar informações da extração para exibição
-        const isInsuranceDoc = metadata.documentType === 'CARTEIRINHA';
         setExtractedInfo({
-          type: isInsuranceDoc ? 'insurance' : 'identity',
+          type: 'identity',
           data: { patient, insurance },
           detectedType: metadata.documentType,
           detectedSubtype: metadata.subtype,
@@ -576,15 +549,13 @@ export function PatientFormDialog({
         const typeMessages: Record<string, string> = {
           'RG': 'RG processado com sucesso',
           'CNH': 'CNH processada com sucesso',
-          'CARTEIRINHA': 'Carteirinha processada com sucesso',
           'MV_PATIENT_SCREEN': 'Tela MV processada com sucesso',
+          'EMERGENCY_LABEL': 'Etiqueta de emergência processada',
         };
         
         toast({
           title: typeMessages[metadata.documentType] || 'Documento processado',
-          description: insurance 
-            ? 'Dados do paciente e plano extraídos automaticamente.' 
-            : 'Dados extraídos e preenchidos automaticamente.',
+          description: 'Dados extraídos e preenchidos automaticamente.',
         });
         
       } else {
@@ -616,6 +587,7 @@ export function PatientFormDialog({
       const patientData = {
         ...patientFields,
         cpf: formatCPF(data.cpf),
+        insuranceProviderId: selectedProvider?.id || null,
       };
       
       // Preparar dados de endereço (se houver CEP preenchido)
@@ -930,26 +902,16 @@ export function PatientFormDialog({
                   </CardHeader>
                   <CardContent className="space-y-3 flex-1">
                     <div className="space-y-3">
-                      <FormField
-                        control={form.control}
-                        name="insurance"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-foreground font-semibold text-sm">Seguradora</FormLabel>
-                            <FormControl>
-                              <HealthInsuranceSearch
-                                selectedProvider={selectedProvider}
-                                setSelectedProvider={(provider) => {
-                                  setSelectedProvider(provider);
-                                  field.onChange(provider?.name || "");
-                                }}
-                                className="h-8"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <div className="space-y-2">
+                        <label className="text-foreground font-semibold text-sm">Seguradora</label>
+                        <HealthInsuranceSearch
+                          selectedProvider={selectedProvider}
+                          setSelectedProvider={(provider) => {
+                            setSelectedProvider(provider);
+                          }}
+                          className="h-8"
+                        />
+                      </div>
 
                       <FormField
                         control={form.control}
@@ -958,14 +920,10 @@ export function PatientFormDialog({
                           <FormItem>
                             <FormLabel className="text-foreground font-semibold text-sm">Plano</FormLabel>
                             <FormControl>
-                              <HealthInsurancePlanSearch
-                                selectedPlan={selectedPlan}
-                                setSelectedPlan={(plan) => {
-                                  setSelectedPlan(plan);
-                                  field.onChange(plan ? plan.nmPlano || `Plano ${plan.cdPlano}` : "");
-                                }}
-                                providerId={selectedProvider?.ansCode}
-                                className="h-8"
+                              <Input 
+                                placeholder="Nome do plano"
+                                {...field} 
+                                className="input-medsync-combo text-sm h-8"
                               />
                             </FormControl>
                             <FormMessage />

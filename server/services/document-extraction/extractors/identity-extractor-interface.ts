@@ -7,6 +7,7 @@ export interface ExtractedIdentityData {
   rg?: string;
   cpf?: string;
   birthDate?: string;
+  gender?: 'M' | 'F'; // Sexo: M = Masculino, F = Feminino
   filiation?: {
     mother?: string;
     father?: string;

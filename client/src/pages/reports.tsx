@@ -3446,8 +3446,8 @@ export default function Reports() {
                 </Card>
               </div>
 
-              {/* Cirurgias por Convênio - Grid com 2 colunas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Cirurgias por Convênio - Empilhados verticalmente */}
+              <div className="grid grid-cols-1 gap-6">
                 {/* Cirurgias solicitadas por convênio */}
                 <Card className="border-border bg-card shadow-lg">
                   <CardHeader className="pb-2">

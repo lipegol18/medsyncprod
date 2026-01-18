@@ -52,8 +52,8 @@ async function processCarteirinha() {
     
     // Detectar operadora
     if (result.data.text.toUpperCase().includes('BRADESCO')) {
-      extractedData.insuranceName = 'Bradesco Saúde';
-      console.log('✓ Operadora detectada: Bradesco Saúde');
+      extractedData.insuranceName = 'Bradesco';
+      console.log('✓ Operadora detectada: Bradesco');
     } else {
       console.log('✗ Operadora não detectada');
     }

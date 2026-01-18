@@ -44,7 +44,7 @@ const genderOptions = [
 const insuranceOptions = [
   { value: "unimed", label: "Unimed" },
   { value: "amil", label: "Amil" },
-  { value: "bradesco", label: "Bradesco Saúde" },
+  { value: "bradesco", label: "Bradesco" },
   { value: "sulamerica", label: "SulAmérica" },
   { value: "other", label: "Outro" },
 ];

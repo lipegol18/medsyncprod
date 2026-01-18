@@ -78,15 +78,15 @@ async function unifyBradescoPlans() {
   
   // Categorias principais do Bradesco para manter
   const mainCategories = [
-    { pattern: 'Bradesco Saúde 1+', newName: 'Bradesco Saúde 1+' },
-    { pattern: 'Bradesco Saúde Efetivo III', newName: 'Bradesco Saúde Efetivo III' },
-    { pattern: 'Bradesco Saúde Efetivo IV', newName: 'Bradesco Saúde Efetivo IV' },
-    { pattern: 'Bradesco Saúde Hospitalar Nacional', newName: 'Bradesco Saúde Hospitalar Nacional' },
-    { pattern: 'Bradesco Saúde Hospitalar NPlus', newName: 'Bradesco Saúde Hospitalar NPlus' },
-    { pattern: 'Bradesco Saúde Top', newName: 'Bradesco Saúde Top' },
-    { pattern: 'Bradesco Saúde Clinic', newName: 'Bradesco Saúde Clinic' },
-    { pattern: 'Bradesco Saúde Nacional', newName: 'Bradesco Saúde Nacional' },
-    { pattern: 'Bradesco Saúde Efetivo', newName: 'Bradesco Saúde Efetivo' }
+    { pattern: 'Bradesco 1+', newName: 'Bradesco 1+' },
+    { pattern: 'Bradesco Efetivo III', newName: 'Bradesco Efetivo III' },
+    { pattern: 'Bradesco Efetivo IV', newName: 'Bradesco Efetivo IV' },
+    { pattern: 'Bradesco Hospitalar Nacional', newName: 'Bradesco Hospitalar Nacional' },
+    { pattern: 'Bradesco Hospitalar NPlus', newName: 'Bradesco Hospitalar NPlus' },
+    { pattern: 'Bradesco Top', newName: 'Bradesco Top' },
+    { pattern: 'Bradesco Clinic', newName: 'Bradesco Clinic' },
+    { pattern: 'Bradesco Nacional', newName: 'Bradesco Nacional' },
+    { pattern: 'Bradesco Efetivo', newName: 'Bradesco Efetivo' }
   ];
 
   for (const category of mainCategories) {
@@ -138,7 +138,7 @@ async function unifyBradescoPlans() {
   const numberedPlans = await client.query(`
     SELECT id, nm_plano FROM health_insurance_plans 
     WHERE registro_ans = '5711' 
-    AND nm_plano ~ '^Bradesco Saúde [0-9]+'
+    AND nm_plano ~ '^Bradesco [0-9]+'
     AND situacao = 'Ativo'
     ORDER BY nm_plano
   `);
@@ -149,11 +149,11 @@ async function unifyBradescoPlans() {
     
     await client.query(`
       UPDATE health_insurance_plans 
-      SET nm_plano = 'Bradesco Saúde Numerado' 
+      SET nm_plano = 'Bradesco Numerado' 
       WHERE id = $1
     `, [keepPlan.id]);
 
-    console.log(`Mantido: Bradesco Saúde Numerado (ID: ${keepPlan.id})`);
+    console.log(`Mantido: Bradesco Numerado (ID: ${keepPlan.id})`);
 
     // Remover os outros planos numerados
     if (numberedPlans.rows.length > 1) {

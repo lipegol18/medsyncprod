@@ -417,7 +417,7 @@ export function extractInsuranceCardData(text: string): Partial<ExtractedDocumen
   // Lista de operadoras comuns no Brasil com seus padrões de identificação
   const operadoras = [
     { 
-      name: 'Bradesco Saúde', 
+      name: 'Bradesco', 
       patterns: ['BRADESCO', 'BRADESCO SAUDE', 'BRADESCO SAÚDE'],
       numberPatterns: [
         /(\d{9}[\s\-]?\d{2})/,  // formato 000000000-00 ou 00000000000

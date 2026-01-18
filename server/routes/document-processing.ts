@@ -134,17 +134,20 @@ router.post('/process-document-auto', ocrUpload.single('document'), async (req: 
     console.log(`🔧 [OCR-Auto] Pré-processamento: ${usePreprocessing ? 'ATIVADO' : 'DESATIVADO'}`);
     
     let imageBuffer: Buffer;
+    const isPDF = req.file.mimetype === 'application/pdf';
     
-    if (req.file.mimetype === 'application/pdf') {
-      console.log('📄 [OCR-Auto] Detectado PDF - convertendo para imagem...');
-      imageBuffer = await convertPDFToImage(req.file.path);
+    if (isPDF) {
+      console.log('📄 [OCR-Auto] Detectado PDF - usando processamento direto do Google Vision...');
+      // Ler o PDF como buffer para processamento direto
+      imageBuffer = fs.readFileSync(req.file.path);
     } else {
       imageBuffer = fs.readFileSync(req.file.path);
     }
     
     const result = await documentExtractionManager.extractUnified(imageBuffer, {
-      usePreprocessing,
-      returnProcessedImage: true,
+      usePreprocessing: isPDF ? false : usePreprocessing, // Desativar pré-processamento para PDFs
+      returnProcessedImage: !isPDF,
+      isPDF, // Indicar que é PDF para usar método correto
     });
     
     cleanupTempFile(req.file.path);
@@ -388,152 +391,6 @@ router.get('/ocr/status', (req: Request, res: Response) => {
     supportedFormats: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'],
     maxFileSize: '10MB'
   });
-});
-
-/**
- * POST /api/process-document-unified
- * Processa documentos e retorna resultado no FORMATO UNIFICADO
- * Todos os tipos de documento retornam a mesma estrutura de dados
- * 
- * @param document - Arquivo de imagem ou PDF
- * @returns UnifiedExtractionResult
- */
-router.post('/process-document-unified', ocrUpload.single('document'), async (req: Request, res: Response) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ 
-        success: false, 
-        patient: {},
-        metadata: {
-          documentType: 'UNKNOWN',
-          extractorVersion: 'ERROR',
-          confidence: 0
-        },
-        errors: ['Nenhum arquivo foi enviado']
-      } as UnifiedExtractionResult);
-    }
-
-    const usePreprocessing = req.body.usePreprocessing !== 'false';
-    
-    console.log(`🔄 [OCR-Unified] Processando documento...`);
-    console.log(`📄 [OCR-Unified] Arquivo: ${req.file.originalname} (${req.file.mimetype})`);
-    
-    let imageBuffer: Buffer;
-    
-    if (req.file.mimetype === 'application/pdf') {
-      console.log('📄 [OCR-Unified] Convertendo PDF para imagem...');
-      imageBuffer = await convertPDFToImage(req.file.path);
-    } else {
-      imageBuffer = fs.readFileSync(req.file.path);
-    }
-    
-    let processedBuffer: Buffer;
-    let processedImageUrl: string | null = null;
-    let preprocessingInfo: any = null;
-    
-    if (usePreprocessing) {
-      console.log('🖼️ [OCR-Unified] Aplicando pré-processamento...');
-      const isScreenPhoto = await ImagePreprocessor.detectIfScreenPhoto(imageBuffer);
-      
-      if (isScreenPhoto) {
-        const preprocessResult = await ImagePreprocessor.preprocessForScreenPhoto(imageBuffer);
-        processedBuffer = preprocessResult.buffer;
-        preprocessingInfo = { 
-          appliedOperations: preprocessResult.appliedOperations,
-          isScreenPhoto,
-          originalSize: preprocessResult.originalSize,
-          processedSize: preprocessResult.processedSize
-        };
-      } else {
-        const preprocessResult = await ImagePreprocessor.preprocess(imageBuffer);
-        processedBuffer = preprocessResult.buffer;
-        preprocessingInfo = { 
-          appliedOperations: preprocessResult.appliedOperations,
-          isScreenPhoto,
-          originalSize: preprocessResult.originalSize,
-          processedSize: preprocessResult.processedSize
-        };
-      }
-      
-      const processedImageFilename = `processed-${Date.now()}-${Math.round(Math.random() * 1e9)}.png`;
-      const processedImagePath = path.join('uploads/ocr-temp/', processedImageFilename);
-      fs.writeFileSync(processedImagePath, processedBuffer);
-      processedImageUrl = `/uploads/ocr-temp/${processedImageFilename}`;
-    } else {
-      processedBuffer = imageBuffer;
-    }
-    
-    const ocrEngine = new GoogleVisionOCREngine();
-    console.log('🔍 [OCR-Unified] Extraindo texto...');
-    const rawText = await ocrEngine.extractText(processedBuffer);
-    const cleanedText = TextPreprocessor.cleanText(rawText);
-    
-    console.log('🔍 [OCR-Unified] Detectando tipo de documento...');
-    const detectionResult = DocumentTypeDetector.detectDocumentType(cleanedText);
-    
-    console.log(`📋 [OCR-Unified] Tipo: ${detectionResult.type} (${Math.round(detectionResult.confidence * 100)}%)`);
-    
-    let result: UnifiedExtractionResult;
-    
-    if (detectionResult.type === 'MV_PATIENT_SCREEN') {
-      console.log('🏨 [OCR-Unified] Usando MV Orchestrator...');
-      result = MVOrchestrator.extractUnified(cleanedText);
-      
-    } else if (detectionResult.type === 'RG_IDENTITY' || detectionResult.type === 'CNH_LICENSE') {
-      console.log('🪪 [OCR-Unified] Usando Identity Orchestrator...');
-      const identityOrchestrator = new IdentityOrchestrator();
-      result = await identityOrchestrator.extractUnified(cleanedText);
-      
-    } else if (detectionResult.type === 'INSURANCE_CARD') {
-      console.log('🏥 [OCR-Unified] Usando Insurance Orchestrator...');
-      const insuranceOrchestrator = new InsuranceOrchestrator();
-      result = await insuranceOrchestrator.processDocumentUnified(imageBuffer);
-      
-    } else {
-      result = {
-        success: false,
-        patient: {},
-        metadata: {
-          documentType: 'UNKNOWN',
-          subtype: 'UNKNOWN',
-          extractorVersion: 'DETECTION_V1',
-          confidence: detectionResult.confidence
-        },
-        errors: ['Tipo de documento não reconhecido. Envie um RG, CNH, carteirinha de plano de saúde ou tela do sistema MV.']
-      };
-    }
-    
-    // Adicionar informações extras ao resultado
-    result.processedImageUrl = processedImageUrl || undefined;
-    result.preprocessing = preprocessingInfo || undefined;
-    result.rawText = cleanedText;
-    
-    cleanupTempFile(req.file.path);
-    
-    console.log(`✅ [OCR-Unified] Processamento concluído: ${result.success ? 'SUCESSO' : 'FALHA'}`);
-    console.log(`📊 [OCR-Unified] Tipo: ${result.metadata.documentType}, Subtipo: ${result.metadata.subtype}`);
-    
-    return res.json(result);
-    
-  } catch (error) {
-    console.error('❌ [OCR-Unified] Erro:', error);
-    
-    if (req.file?.path) {
-      cleanupTempFile(req.file.path);
-    }
-    
-    return res.status(500).json({ 
-      success: false,
-      patient: {},
-      metadata: {
-        documentType: 'UNKNOWN',
-        subtype: 'ERROR',
-        extractorVersion: 'ERROR',
-        confidence: 0
-      },
-      errors: [error instanceof Error ? error.message : 'Erro desconhecido']
-    } as UnifiedExtractionResult);
-  }
 });
 
 /**

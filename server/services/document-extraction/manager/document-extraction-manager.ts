@@ -5,6 +5,7 @@ import { DocumentTypeDetector, DocumentType } from '../detectors/document-type-d
 import { InsuranceOrchestrator } from '../orchestrators/insurance-orchestrator';
 import { IdentityOrchestrator } from '../orchestrators/identity-orchestrator';
 import { MVOrchestrator } from '../orchestrators/mv-orchestrator';
+import { LabelOrchestrator } from '../orchestrators/label-orchestrator';
 import { UnifiedResultBuilder, type UnifiedExtractionResult, type UnifiedInsuranceData } from '../types/unified-result-builder';
 import { DocumentType as DocType } from '../types/document-constants';
 
@@ -12,6 +13,7 @@ export interface ExtractionOptions {
   usePreprocessing?: boolean;
   returnRawText?: boolean;
   returnProcessedImage?: boolean;
+  isPDF?: boolean; // Indica se o buffer é um PDF para usar processamento direto
 }
 
 export interface ExtractionContext {
@@ -71,6 +73,11 @@ export class DocumentExtractionManager {
         canHandle: (type) => type === 'MV_PATIENT_SCREEN',
         extract: async (ctx) => this.extractMV(ctx),
       },
+      {
+        type: 'EMERGENCY_LABEL',
+        canHandle: (type) => type === 'EMERGENCY_LABEL',
+        extract: async (ctx) => this.extractEmergencyLabel(ctx),
+      },
     ];
   }
 
@@ -78,12 +85,13 @@ export class DocumentExtractionManager {
     imageBuffer: Buffer,
     options: ExtractionOptions = {}
   ): Promise<UnifiedExtractionResult> {
-    const { usePreprocessing = true, returnProcessedImage = false } = options;
+    const { usePreprocessing = true, returnProcessedImage = false, isPDF = false } = options;
 
     console.log('🎯 [DocumentManager] Iniciando extração unificada...');
+    console.log(`📄 [DocumentManager] Tipo: ${isPDF ? 'PDF' : 'Imagem'}`);
 
     try {
-      const context = await this.buildContext(imageBuffer, usePreprocessing);
+      const context = await this.buildContext(imageBuffer, usePreprocessing, isPDF);
 
       console.log('🔍 [DocumentManager] Detectando tipo de documento...');
       const detection = DocumentTypeDetector.detectDocumentType(context.cleanedText);
@@ -145,19 +153,34 @@ export class DocumentExtractionManager {
   }
 
   private async buildContext(
-    imageBuffer: Buffer,
-    usePreprocessing: boolean
+    buffer: Buffer,
+    usePreprocessing: boolean,
+    isPDF: boolean = false
   ): Promise<ExtractionContext> {
-    let processedBuffer: Buffer = imageBuffer;
+    let processedBuffer: Buffer = buffer;
     let preprocessingInfo: ExtractionContext['preprocessingInfo'];
+
+    // Se for PDF, extrair texto diretamente sem pré-processamento de imagem
+    if (isPDF) {
+      console.log('📄 [DocumentManager] Processando PDF diretamente via Google Vision...');
+      const rawText = await this.ocrEngine.extractTextFromPDF(buffer);
+      const cleanedText = TextPreprocessor.cleanText(rawText);
+      
+      return {
+        rawText,
+        cleanedText,
+        imageBuffer: buffer,
+        processedBuffer: buffer,
+      };
+    }
 
     if (usePreprocessing) {
       console.log('🖼️ [DocumentManager] Aplicando pré-processamento...');
-      const isScreenPhoto = await ImagePreprocessor.detectIfScreenPhoto(imageBuffer);
+      const isScreenPhoto = await ImagePreprocessor.detectIfScreenPhoto(buffer);
 
       if (isScreenPhoto) {
         console.log('📸 [DocumentManager] Detectada foto de tela');
-        const result = await ImagePreprocessor.preprocessForScreenPhoto(imageBuffer);
+        const result = await ImagePreprocessor.preprocessForScreenPhoto(buffer);
         processedBuffer = result.buffer;
         preprocessingInfo = {
           appliedOperations: result.appliedOperations,
@@ -166,7 +189,7 @@ export class DocumentExtractionManager {
           processedSize: result.processedSize,
         };
       } else {
-        const result = await ImagePreprocessor.preprocess(imageBuffer);
+        const result = await ImagePreprocessor.preprocess(buffer);
         processedBuffer = result.buffer;
         preprocessingInfo = {
           appliedOperations: result.appliedOperations,
@@ -184,7 +207,7 @@ export class DocumentExtractionManager {
     return {
       rawText,
       cleanedText,
-      imageBuffer,
+      imageBuffer: buffer,
       processedBuffer,
       preprocessingInfo,
     };
@@ -201,6 +224,11 @@ export class DocumentExtractionManager {
   ): Promise<UnifiedExtractionResult> {
     console.log(`🪪 [DocumentManager] Processando ${docType}...`);
     return await this.identityOrchestrator.extractUnified(context.cleanedText);
+  }
+
+  private async extractEmergencyLabel(context: ExtractionContext): Promise<UnifiedExtractionResult> {
+    console.log('🏷️ [DocumentManager] Processando etiqueta de emergência...');
+    return await LabelOrchestrator.processFromText(context.cleanedText);
   }
 
   private async extractMV(context: ExtractionContext): Promise<UnifiedExtractionResult> {

@@ -508,7 +508,7 @@ export class InsuranceOrchestrator {
   private normalizeOperatorName(operatorCode: string): string {
     const operatorMapping = {
       'SULAMERICA': 'Sul América',
-      'BRADESCO': 'Bradesco Saúde',
+      'BRADESCO': 'Bradesco',
       'UNIMED': 'Unimed',
       'AMIL': 'Amil',
       'PORTO': 'Porto Seguro'
@@ -801,7 +801,7 @@ export class InsuranceOrchestrator {
   private getNormalizedOperatorName(detectedOperator: string): string {
     const mapping: Record<string, string> = {
       'SULAMERICA': 'Sul América',
-      'BRADESCO': 'Bradesco Saúde',
+      'BRADESCO': 'Bradesco',
       'UNIMED': 'Unimed',
       'AMIL': 'Amil',
       'PORTO': 'Porto Seguro'

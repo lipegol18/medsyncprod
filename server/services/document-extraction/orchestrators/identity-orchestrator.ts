@@ -293,6 +293,9 @@ export class IdentityOrchestrator {
     // Usar lógica eficaz do sistema legado para extração de data de nascimento
     this.extractBirthDateFromRG(text, data);
     
+    // Extrair sexo/gênero
+    this.extractGenderFromRG(text, data);
+    
     // Extrações adicionais (filiação, naturalidade, etc.)
     this.extractAdditionalRGData(text, data);
 
@@ -486,13 +489,34 @@ export class IdentityOrchestrator {
   private extractBirthDateFromRG(text: string, data: ExtractedIdentityData): void {
     console.log('🔍 Iniciando extração de data de nascimento...');
     
+    // PRIORIDADE 1: Buscar data na linha seguinte a "DATA DE NASCIMENTO" (análise estrutural)
+    const lines = text.split('\n').map(l => l.trim());
+    for (let i = 0; i < lines.length - 1; i++) {
+      const currentLine = lines[i].toUpperCase();
+      if (currentLine.includes('DATA DE NASCIMENTO') || currentLine.includes('DATE OF BIRTH')) {
+        // Verificar próxima linha para encontrar a data
+        const nextLine = lines[i + 1];
+        const dateMatch = nextLine.match(/^(\d{1,2}\/\d{1,2}\/\d{4})$/);
+        if (dateMatch) {
+          const formattedDate = this.formatBirthDate(dateMatch[1]);
+          if (formattedDate && this.isValidBirthDate(formattedDate)) {
+            data.birthDate = formattedDate;
+            console.log('✅ Data de nascimento extraída via análise estrutural:', data.birthDate);
+            return;
+          } else {
+            console.log(`❌ Data estrutural "${dateMatch[1]}" inválida (futuro ou formato incorreto)`);
+          }
+        }
+      }
+    }
+    
     // Padrões mais precisos para data de nascimento
     const datePatterns = [
-      // Padrão específico: DATA DE NASCIMENTO seguido da data
+      // Padrão específico: DATA DE NASCIMENTO seguido da data na mesma linha
       /DATA\s+DE\s+NASCIMENTO\s+(\d{1,2}\/[A-Z]{3}\/\d{4})/i,
       // Padrão: NASCIMENTO seguido da data com mês abreviado
       /NASCIMENTO\s+(\d{1,2}\/[A-Z]{3}\/\d{4})/i,
-      // Padrão numérico tradicional
+      // Padrão numérico tradicional na mesma linha
       /DATA\s+DE\s+NASCIMENTO\s+(\d{1,2}\/\d{1,2}\/\d{4})/i,
       /NASCIMENTO\s+(\d{1,2}\/\d{1,2}\/\d{4})/i,
       // Padrão específico para RG RS: data após NATURALIDADE ou DOC. ORIGEM
@@ -513,15 +537,104 @@ export class IdentityOrchestrator {
         const formattedDate = this.formatBirthDate(dateStr);
         console.log(`Data candidata: "${dateStr}" → Formatada: "${formattedDate}"`);
         
-        if (formattedDate) {
+        if (formattedDate && this.isValidBirthDate(formattedDate)) {
           data.birthDate = formattedDate;
           console.log('✅ Data de nascimento encontrada e validada:', data.birthDate);
           return;
+        } else if (formattedDate) {
+          console.log(`❌ Data "${formattedDate}" rejeitada: está no futuro`);
         }
       }
     }
     
     console.log('❌ Nenhuma data de nascimento válida encontrada');
+  }
+
+  /**
+   * Valida se a data de nascimento é válida (não pode ser no futuro)
+   */
+  private isValidBirthDate(dateStr: string): boolean {
+    try {
+      const birthDate = new Date(dateStr);
+      const today = new Date();
+      
+      // Data de nascimento não pode ser no futuro
+      if (birthDate > today) {
+        console.log(`❌ Data ${dateStr} é no futuro (hoje: ${today.toISOString().split('T')[0]})`);
+        return false;
+      }
+      
+      // Data de nascimento não pode ser antes de 1900 (pessoa teria mais de 120 anos)
+      const minDate = new Date('1900-01-01');
+      if (birthDate < minDate) {
+        console.log(`❌ Data ${dateStr} é muito antiga (antes de 1900)`);
+        return false;
+      }
+      
+      console.log(`✅ Data ${dateStr} é válida (não está no futuro)`);
+      return true;
+    } catch {
+      console.log(`❌ Erro ao validar data ${dateStr}`);
+      return false;
+    }
+  }
+
+  /**
+   * Extrai sexo/gênero do RG
+   */
+  private extractGenderFromRG(text: string, data: ExtractedIdentityData): void {
+    console.log('🔍 Iniciando extração de sexo...');
+    
+    // Análise estrutural: buscar linha após "SEXO"
+    const lines = text.split('\n').map(l => l.trim());
+    for (let i = 0; i < lines.length - 1; i++) {
+      const currentLine = lines[i].toUpperCase();
+      if (currentLine.includes('SEXO') || currentLine === 'SEX') {
+        // Verificar próxima linha para encontrar M ou F
+        const nextLine = lines[i + 1].toUpperCase().trim();
+        if (nextLine === 'M' || nextLine === 'MASCULINO' || nextLine === 'MASC') {
+          data.gender = 'M';
+          console.log('✅ Sexo extraído via análise estrutural: M (Masculino)');
+          return;
+        } else if (nextLine === 'F' || nextLine === 'FEMININO' || nextLine === 'FEM') {
+          data.gender = 'F';
+          console.log('✅ Sexo extraído via análise estrutural: F (Feminino)');
+          return;
+        }
+      }
+    }
+    
+    // Padrões regex para sexo na mesma linha
+    const genderPatterns = [
+      // Padrão: SEXO seguido de M/F na mesma linha
+      /SEXO[\s:]+([MF])\b/i,
+      // Padrão: SEXO/SEX seguido de MASCULINO/FEMININO
+      /SEXO[\s:]+(?:MASCULINO|MASC)/i,
+      /SEXO[\s:]+(?:FEMININO|FEM)/i,
+      // Padrão inglês
+      /SEX[\s:]+([MF])\b/i,
+    ];
+    
+    for (const pattern of genderPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        if (match[1]) {
+          data.gender = match[1].toUpperCase() as 'M' | 'F';
+          console.log(`✅ Sexo extraído via regex: ${data.gender}`);
+          return;
+        } else if (pattern.source.includes('MASCULINO') || pattern.source.includes('MASC')) {
+          data.gender = 'M';
+          console.log('✅ Sexo extraído via regex: M (Masculino)');
+          return;
+        } else if (pattern.source.includes('FEMININO') || pattern.source.includes('FEM')) {
+          data.gender = 'F';
+          console.log('✅ Sexo extraído via regex: F (Feminino)');
+          return;
+        }
+      }
+    }
+    
+    console.log('❌ Sexo não encontrado');
   }
 
   /**

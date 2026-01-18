@@ -9,6 +9,7 @@ export type DocumentType =
   | "RG_IDENTITY"
   | "CNH_LICENSE"
   | "MV_PATIENT_SCREEN"
+  | "EMERGENCY_LABEL"
   | "UNKNOWN";
 
 export interface DocumentTypeResult {
@@ -87,6 +88,21 @@ export class DocumentTypeDetector {
       /V[AÁ]LIDA\s+EM\s+TODO\s+O\s+TERRIT[OÓ]RIO/i, // Também no RG, mas "VÁLIDA" é mais forte em CNH
     ];
 
+    // Padrões EXCLUSIVOS para etiquetas de emergência hospitalar
+    // Etiquetas impressas na entrada do paciente na urgência
+    const emergencyLabelPatterns = [
+      /LEITO\s*:\s*URGEN/i,                           // Leito:URGEN é muito característico
+      /\bURGEN\b/,                                     // Palavra URGEN isolada
+      /NSOCIAL\s*:/i,                                  // Campo NSocial típico de etiquetas
+      /NASC\s*[.:]\s*\d{2}\/\d{2}\/\d{4}/i,           // Nasc.: DD/MM/YYYY
+      /ENT\s*:\s*\d{2}\/\d{2}\/\d{4}/i,               // Ent: DD/MM/YYYY (data entrada)
+      /HORA\s*[.:]+\s*\d{2}:\d{2}/i,                  // Hora: HH:MM
+      /PRONT\s*\.\s*\d{6,}/i,                         // Pront.000056350
+      /IDADE\s*:\s*\d{1,3}A\d{1,2}M/i,                // Idade: 46a6m (formato abreviado)
+      /SEXO\s*:\s*[FM]/i,                             // Sexo: F ou Sexo: M
+      /[EF]\d{6}/,                                     // Códigos como E563162 ou F769684
+    ];
+
     // Padrões EXCLUSIVOS para tela do sistema MV (prontuário eletrônico)
     // Apenas padrões que NÃO aparecem em carteirinhas de saúde
     const mvPatterns = [
@@ -150,6 +166,9 @@ export class DocumentTypeDetector {
     const mvExclusiveMatches = mvPatterns.filter((p) =>
       p.test(normalizedText),
     ).length;
+    const emergencyLabelMatches = emergencyLabelPatterns.filter((p) =>
+      p.test(normalizedText),
+    ).length;
     const sharedMatches = sharedPatterns.filter((p) =>
       p.test(normalizedText),
     ).length;
@@ -159,6 +178,7 @@ export class DocumentTypeDetector {
     const rgScore = rgExclusiveMatches * 2 + sharedMatches * 0.5; // Exclusivos peso 2, compartilhados peso 0.5
     const cnhScore = cnhExclusiveMatches * 2 + sharedMatches * 0.5; // Exclusivos peso 2, compartilhados peso 0.5
     const mvScore = mvExclusiveMatches * 2; // MV tem muitos padrões exclusivos
+    const emergencyLabelScore = emergencyLabelMatches * 2.5; // Peso 2.5 para etiquetas (padrões muito específicos)
 
     console.log("📊 Contagem de matches:");
     console.log(
@@ -172,6 +192,9 @@ export class DocumentTypeDetector {
     );
     console.log(
       `   🏨 MV: ${mvExclusiveMatches} exclusivos (score: ${mvScore})`,
+    );
+    console.log(
+      `   🏷️ Etiqueta: ${emergencyLabelMatches} exclusivos (score: ${emergencyLabelScore})`,
     );
 
     // Encontrar o maior score
@@ -195,6 +218,11 @@ export class DocumentTypeDetector {
         type: "MV_PATIENT_SCREEN" as DocumentType,
         score: mvScore,
         exclusiveMatches: mvExclusiveMatches,
+      },
+      {
+        type: "EMERGENCY_LABEL" as DocumentType,
+        score: emergencyLabelScore,
+        exclusiveMatches: emergencyLabelMatches,
       },
     ];
 

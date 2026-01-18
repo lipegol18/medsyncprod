@@ -49,7 +49,7 @@ async function processDocument() {
     
     // Detectar operadora
     const operadoraPatterns = [
-      { nome: "Bradesco Saúde", keys: [/BRADESCO/i, /BRADESCO SAÚDE/i] },
+      { nome: "Bradesco", keys: [/BRADESCO/i, /BRADESCO SAÚDE/i] },
       { nome: "Unimed", keys: [/UNIMED/i] },
       { nome: "Amil", keys: [/AMIL/i] },
       { nome: "SulAmérica", keys: [/SULAMERICA/i, /SULAMÉRICA/i] },

@@ -1529,15 +1529,18 @@ export class DatabaseStorage implements IStorage {
         phone: patients.phone,
         phone2: patients.phone2,
         email: patients.email,
-        insurance: patients.insurance,
+        insuranceProviderId: patients.insuranceProviderId,
         insuranceNumber: patients.insuranceNumber,
         plan: patients.plan,
         notes: patients.notes,
         isActive: patients.isActive,
-        activatedBy: patients.activatedBy,
         isDeleted: patients.isDeleted,
         deletedAt: patients.deletedAt,
         deletedBy: patients.deletedBy,
+        createdAt: patients.createdAt,
+        createdBy: patients.createdBy,
+        updatedAt: patients.updatedAt,
+        updatedBy: patients.updatedBy,
       })
       .from(patients)
       .innerJoin(doctorPatients, eq(patients.id, doctorPatients.patientId))
@@ -1545,7 +1548,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(doctorPatients.doctorId, doctorId),
           eq(doctorPatients.isActive, true),
-          eq(patients.isDeleted, false), // Filtrar pacientes não excluídos
+          eq(patients.isDeleted, false),
         ),
       )
       .orderBy(patients.fullName);
@@ -1565,15 +1568,18 @@ export class DatabaseStorage implements IStorage {
         phone: patients.phone,
         phone2: patients.phone2,
         email: patients.email,
-        insurance: patients.insurance,
+        insuranceProviderId: patients.insuranceProviderId,
         insuranceNumber: patients.insuranceNumber,
         plan: patients.plan,
         notes: patients.notes,
         isActive: patients.isActive,
-        activatedBy: patients.activatedBy,
         isDeleted: patients.isDeleted,
         deletedAt: patients.deletedAt,
         deletedBy: patients.deletedBy,
+        createdAt: patients.createdAt,
+        createdBy: patients.createdBy,
+        updatedAt: patients.updatedAt,
+        updatedBy: patients.updatedBy,
       })
       .from(patients)
       .innerJoin(doctorPatients, eq(patients.id, doctorPatients.patientId))
@@ -1581,7 +1587,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(doctorPatients.doctorId, doctorId),
           eq(doctorPatients.isActive, true),
-          eq(patients.isDeleted, false), // Filtrar pacientes não excluídos
+          eq(patients.isDeleted, false),
         ),
       )
       .orderBy(desc(doctorPatients.associatedAt))

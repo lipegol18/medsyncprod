@@ -150,12 +150,11 @@ export const patients = pgTable("patients", {
   email: text("email"),
   phone: text("phone"),
   phone2: text("phone2"),
-  insurance: text("insurance"),
+  insuranceProviderId: integer("insurance_provider_id").references(() => healthInsuranceProviders.id), // Operadora de saúde
   insuranceNumber: text("insurance_number"),
-  plan: text("plan"), // Plano
+  plan: text("plan"), // Plano (texto livre)
   notes: text("notes"),
   isActive: boolean("is_active").default(false), // Paciente ativo
-  activatedBy: text("activated_by"), // Médico que ativou o paciente
   createdAt: timestamp("created_at").defaultNow().notNull(), // Data/hora da criação
   createdBy: integer("created_by").references(() => users.id), // Usuário que criou
   isDeleted: boolean("is_deleted").default(false).notNull(), // Soft delete: paciente foi excluído?
@@ -173,12 +172,11 @@ export const insertPatientSchema = createInsertSchema(patients).pick({
   email: true,
   phone: true,
   phone2: true,
-  insurance: true,
+  insuranceProviderId: true,
   insuranceNumber: true,
   plan: true,
   notes: true,
   isActive: true,
-  activatedBy: true,
 });
 
 // Patient Addresses table - separating address management from patients

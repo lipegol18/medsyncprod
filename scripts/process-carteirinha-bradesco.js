@@ -37,7 +37,7 @@ async function processCarteirinhaBradesco() {
     
     // Dados extraídos da carteirinha
     const dados = {
-      operadora: "Bradesco Saúde",
+      operadora: "Bradesco",
       numeroCarteirinha: null,
       nomeTitular: null,
       plano: null,

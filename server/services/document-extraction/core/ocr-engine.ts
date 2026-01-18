@@ -1,16 +1,87 @@
-import { ImageAnnotatorClient } from "@google-cloud/vision";
+import { ImageAnnotatorClient, protos } from "@google-cloud/vision";
 import * as fs from "fs";
 import { FlowDebugger } from "../utils/flow-debugger";
 
 /**
  * Passo 1: Extração de texto via Google Vision API
  * Esta classe encapsula toda a lógica de comunicação com o Google Vision
+ * Suporta tanto imagens quanto PDFs diretamente
  */
 export class GoogleVisionOCREngine {
   private client: ImageAnnotatorClient;
 
   constructor() {
     this.client = this.createVisionClient();
+  }
+
+  /**
+   * Extrai texto de um PDF usando Google Vision API diretamente
+   * Usa a API batchAnnotateFiles para processar PDFs sem conversão
+   * @param pdfBuffer Buffer do arquivo PDF
+   * @returns Promise<string> Texto extraído de todas as páginas
+   */
+  async extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
+    FlowDebugger.enter("ocr-engine.ts", "extractTextFromPDF", {
+      bufferSize: pdfBuffer.length,
+    });
+
+    try {
+      console.log("📄 [OCR-Engine] Extraindo texto de PDF com Google Vision API...");
+      console.log("📄 [OCR-Engine] Tamanho do PDF:", pdfBuffer.length, "bytes");
+
+      const request: protos.google.cloud.vision.v1.IBatchAnnotateFilesRequest = {
+        requests: [
+          {
+            inputConfig: {
+              content: pdfBuffer.toString('base64'),
+              mimeType: 'application/pdf',
+            },
+            features: [
+              {
+                type: 'DOCUMENT_TEXT_DETECTION',
+              },
+            ],
+            pages: [1], // Processar apenas a primeira página (índice 1-based)
+          },
+        ],
+      };
+
+      const [result] = await this.client.batchAnnotateFiles(request);
+      
+      if (!result.responses || result.responses.length === 0) {
+        console.log("⚠️ [OCR-Engine] Nenhuma resposta do Google Vision para PDF");
+        FlowDebugger.exit("ocr-engine.ts", "extractTextFromPDF", "");
+        return "";
+      }
+
+      const fileResponse = result.responses[0];
+      if (!fileResponse.responses || fileResponse.responses.length === 0) {
+        console.log("⚠️ [OCR-Engine] Nenhuma página processada no PDF");
+        FlowDebugger.exit("ocr-engine.ts", "extractTextFromPDF", "");
+        return "";
+      }
+
+      // Concatenar texto de todas as páginas
+      let fullText = "";
+      for (const pageResponse of fileResponse.responses) {
+        if (pageResponse.fullTextAnnotation?.text) {
+          fullText += pageResponse.fullTextAnnotation.text + "\n";
+        }
+      }
+
+      console.log("✅ [OCR-Engine] Texto extraído do PDF com sucesso");
+      console.log("📝 [OCR-Engine] Tamanho do texto:", fullText.length, "caracteres");
+
+      FlowDebugger.exit("ocr-engine.ts", "extractTextFromPDF", {
+        textLength: fullText.length,
+      });
+
+      return fullText.trim();
+    } catch (error) {
+      FlowDebugger.error("ocr-engine.ts", "extractTextFromPDF", error);
+      console.error("❌ [OCR-Engine] Erro na extração de texto do PDF:", error);
+      throw new Error(`Falha na extração de texto do PDF: ${error}`);
+    }
   }
 
   /**
