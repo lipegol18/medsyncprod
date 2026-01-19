@@ -1990,7 +1990,7 @@ export default function Reports() {
         // Buscar dados reais de cirurgias por hospital da API
         try {
           const hospitalUrl = buildFilterUrl(
-            "/api/hospital-distribution-debug",
+            "/api/hospital-distribution-working",
           );
           const hospitalStatsResponse = await fetch(hospitalUrl, {
             credentials: "include",
@@ -2000,34 +2000,22 @@ export default function Reports() {
           });
           if (hospitalStatsResponse.ok) {
             const hospitalStatsData = await hospitalStatsResponse.json();
-            setHospitalStats(hospitalStatsData);
+            // Mapear os dados para o formato esperado pelo gráfico
+            const mappedData = hospitalStatsData.map((item: any) => ({
+              name: item.hospitalName,
+              value: parseInt(item.surgeryCount) || 0,
+            }));
+            setHospitalStats(mappedData);
             console.log(
               "Dados de cirurgias por hospital carregados da API:",
-              hospitalStatsData,
+              mappedData,
             );
           } else {
             console.error(
               "Erro ao buscar estatísticas de hospitais:",
               hospitalStatsResponse.statusText,
             );
-            // Se a API falhar, buscar dados usando a API de hospital-stats debug
-            const fallbackUrl = buildFilterUrl("/api/hospital-stats-debug");
-            const fallbackResponse = await fetch(fallbackUrl, {
-              credentials: "include",
-              headers: {
-                "Content-Type": "application/json",
-              },
-            });
-            if (fallbackResponse.ok) {
-              const fallbackData = await fallbackResponse.json();
-              setHospitalStats(fallbackData);
-              console.log(
-                "Dados de cirurgias por hospital carregados via fallback:",
-                fallbackData,
-              );
-            } else {
-              setHospitalStats([]);
-            }
+            setHospitalStats([]);
           }
         } catch (hospitalError) {
           console.error(
@@ -2037,9 +2025,9 @@ export default function Reports() {
           setHospitalStats([]);
         }
 
-        // Dados reais de cirurgias por fornecedor (via API debug)
+        // Dados reais de cirurgias por fornecedor
         try {
-          const supplierUrl = buildFilterUrl("/api/supplier-stats-debug");
+          const supplierUrl = buildFilterUrl("/api/supplier-distribution-working");
           const supplierResponse = await fetch(supplierUrl, {
             credentials: "include",
             headers: {
@@ -2048,10 +2036,15 @@ export default function Reports() {
           });
           if (supplierResponse.ok) {
             const supplierData = await supplierResponse.json();
-            setSupplierStats(supplierData);
+            // Mapear os dados para o formato esperado pelo gráfico
+            const mappedData = supplierData.map((item: any) => ({
+              name: item.supplierName,
+              value: parseInt(item.surgeryCount) || 0,
+            }));
+            setSupplierStats(mappedData);
             console.log(
               "Dados de cirurgias por fornecedor carregados via API:",
-              supplierData,
+              mappedData,
             );
           } else {
             console.error(

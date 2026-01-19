@@ -127,4 +127,26 @@ export interface PaymentProvider {
    * Listar todos os cupons (com paginação automática)
    */
   listAllCoupons(params?: any): Promise<any[]>;
+
+  // === MÉTODOS PARA GESTÃO DE FATURAS ===
+
+  /**
+   * Listar faturas de um cliente
+   */
+  listInvoices(customerId: string, limit?: number): Promise<any[]>;
+
+  /**
+   * Buscar fatura por ID
+   */
+  getInvoice(invoiceId: string): Promise<any>;
+
+  /**
+   * Cancelar assinatura ao final do período (graceful cancel)
+   */
+  cancelSubscriptionAtPeriodEnd(subscriptionId: string): Promise<any>;
+
+  /**
+   * Reativar assinatura (desfazer cancelamento agendado)
+   */
+  reactivateSubscription(subscriptionId: string): Promise<any>;
 }

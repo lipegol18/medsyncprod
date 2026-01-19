@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2, User, Shield, Calendar, Mail, Key, IdCard, Sun, Moon, Laptop, Building2 as BuildingHospital, Pencil as PencilIcon, Check, X, Upload, Image as ImageIcon, Trash2, ArrowLeft, CreditCard, Clock, BadgeCheck, DollarSign, Package, Search } from "lucide-react";
+import { Loader2, User, Shield, Calendar, Mail, Key, IdCard, Sun, Moon, Laptop, Building2 as BuildingHospital, Pencil as PencilIcon, Check, X, Upload, Image as ImageIcon, Trash2, ArrowLeft, CreditCard, Clock, BadgeCheck, DollarSign, Package, Search, FileText, Download, ExternalLink, XCircle, RefreshCw, AlertTriangle, Infinity } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useTheme } from "@/components/theme-provider";
 import { t } from "@/lib/i18n";
@@ -135,6 +135,82 @@ const Profile = () => {
       return await apiRequest('/api/user/subscription', "GET");
     },
     enabled: !!user?.id,
+  });
+
+  // Buscar histórico de faturas do usuário
+  const { data: userInvoices, isLoading: isInvoicesLoading } = useQuery({
+    queryKey: ['/api/user/invoices'],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      return await apiRequest('/api/user/invoices', "GET");
+    },
+    enabled: !!user?.id,
+  });
+
+  // Estado para modais de confirmação
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  // Mutation para cancelar assinatura
+  const cancelSubscriptionMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/user/subscription/cancel', "POST");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/subscription'] });
+      setShowCancelModal(false);
+      toast({
+        title: "Cancelamento agendado",
+        description: "Sua assinatura será cancelada ao final do período atual. Você ainda terá acesso até lá.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao cancelar",
+        description: error.message || "Não foi possível cancelar a assinatura",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation para reativar assinatura
+  const reactivateSubscriptionMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/user/subscription/reactivate', "POST");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/subscription'] });
+      toast({
+        title: "Assinatura reativada",
+        description: "O cancelamento foi desfeito. Sua assinatura continuará normalmente.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao reativar",
+        description: error.message || "Não foi possível reativar a assinatura",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation para abrir billing portal
+  const billingPortalMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/user/billing-portal', "POST");
+    },
+    onSuccess: (data: any) => {
+      if (data.url) {
+        window.open(data.url, '_blank');
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível abrir o portal de pagamentos",
+        variant: "destructive",
+      });
+    },
   });
 
   useEffect(() => {
@@ -2206,6 +2282,56 @@ const Profile = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Ações da Assinatura */}
+                    <div className="pt-4 border-t flex flex-wrap gap-2">
+                      <button
+                        onClick={() => billingPortalMutation.mutate()}
+                        disabled={billingPortalMutation.isPending}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                      >
+                        {billingPortalMutation.isPending ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CreditCard className="w-3.5 h-3.5" />
+                        )}
+                        Atualizar Pagamento
+                      </button>
+
+                      {userSubscription.status === 'cancelling' ? (
+                        <button
+                          onClick={() => reactivateSubscriptionMutation.mutate()}
+                          disabled={reactivateSubscriptionMutation.isPending}
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50"
+                        >
+                          {reactivateSubscriptionMutation.isPending ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          )}
+                          Reativar
+                        </button>
+                      ) : userSubscription.status === 'active' ? (
+                        <button
+                          onClick={() => setShowCancelModal(true)}
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Cancelar
+                        </button>
+                      ) : null}
+                    </div>
+
+                    {userSubscription.status === 'cancelling' && (
+                      <div className="mt-3 p-2 bg-orange-50 border border-orange-200 rounded-lg">
+                        <div className="flex items-center gap-2 text-orange-700">
+                          <AlertTriangle className="w-4 h-4" />
+                          <p className="text-xs font-medium">
+                            Cancelamento agendado para o final do período.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
                 
@@ -2281,6 +2407,101 @@ const Profile = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Limites de Uso integrado */}
+                    <div className="pt-3 border-t">
+                      <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="flex items-center gap-2">
+                          <Infinity className="w-5 h-5 text-green-600" />
+                          <span className="font-medium text-green-800 text-sm">Uso Ilimitado</span>
+                        </div>
+                        <BadgeCheck className="w-5 h-5 text-green-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Card de Histórico de Faturas */}
+                <Card className="w-full shadow-lg md:col-span-2">
+                  <CardHeader className="bg-medsync-blue text-white flex flex-col rounded-t-lg p-6 pb-3 pt-3 border-b space-y-0">
+                    <CardTitle className="text-2xl font-bold">
+                      Histórico de Faturas
+                    </CardTitle>
+                    <CardDescription className="text-white">
+                      Suas faturas e recibos de pagamento
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6">
+                    {isInvoicesLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        <p className="ml-2 text-sm text-muted-foreground">Carregando faturas...</p>
+                      </div>
+                    ) : userInvoices && userInvoices.length > 0 ? (
+                      <div className="space-y-3">
+                        {userInvoices.map((invoice: any) => (
+                          <div key={invoice.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <FileText className="w-5 h-5 text-medsync-blue" />
+                              <div>
+                                <p className="font-medium text-sm">
+                                  {invoice.number || `Fatura ${invoice.id.slice(-8)}`}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {format(new Date(invoice.created * 1000), "dd/MM/yyyy", { locale: ptBR })}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <p className="font-semibold text-medsync-blue">
+                                  R$ {(invoice.amount / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  invoice.status === 'paid' ? 'bg-green-100 text-green-700' :
+                                  invoice.status === 'open' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {invoice.status === 'paid' ? 'Pago' :
+                                   invoice.status === 'open' ? 'Pendente' :
+                                   invoice.status === 'draft' ? 'Rascunho' :
+                                   invoice.status}
+                                </span>
+                              </div>
+                              <div className="flex gap-1">
+                                {invoice.invoicePdf && (
+                                  <a
+                                    href={invoice.invoicePdf}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="Baixar PDF"
+                                  >
+                                    <Download className="w-4 h-4 text-gray-600" />
+                                  </a>
+                                )}
+                                {invoice.hostedInvoiceUrl && (
+                                  <a
+                                    href={invoice.hostedInvoiceUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="Ver online"
+                                  >
+                                    <ExternalLink className="w-4 h-4 text-gray-600" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                        <p className="text-sm text-muted-foreground">Nenhuma fatura encontrada</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </>
@@ -2293,12 +2514,73 @@ const Profile = () => {
                     <p className="text-sm text-muted-foreground mt-2">
                       Você ainda não possui uma assinatura ativa.
                     </p>
+                    <button
+                      onClick={() => setLocation('/plans')}
+                      className="mt-4 px-6 py-2 bg-medsync-blue text-white rounded-lg hover:bg-medsync-dark-blue transition-colors"
+                    >
+                      Ver Planos Disponíveis
+                    </button>
                   </div>
                 </CardContent>
               </Card>
             )}
           </div>
         </TabsContent>
+
+        {/* Modal de Confirmação de Cancelamento */}
+        <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="w-5 h-5" />
+                Cancelar Assinatura
+              </DialogTitle>
+              <DialogDescription>
+                Tem certeza que deseja cancelar sua assinatura?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  <strong>Importante:</strong> Sua assinatura continuará ativa até o final do período atual. 
+                  Após isso, você perderá acesso aos recursos premium.
+                </p>
+              </div>
+              <ul className="text-sm text-muted-foreground space-y-2">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-600" />
+                  Você pode continuar usando até o fim do período
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-600" />
+                  Seus dados serão mantidos por 90 dias
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-600" />
+                  Você pode reativar a qualquer momento
+                </li>
+              </ul>
+            </div>
+            <DialogFooter className="gap-2">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={() => cancelSubscriptionMutation.mutate()}
+                disabled={cancelSubscriptionMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {cancelSubscriptionMutation.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Confirmar Cancelamento
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </Tabs>
 
       {/* Dialog para crop da assinatura */}

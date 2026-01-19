@@ -347,6 +347,9 @@ export default function CreateOrder() {
   // Estado para evitar chamadas duplicadas
   const [isLoadingPatientOrder, setIsLoadingPatientOrder] = useState(false);
   
+  // Estado para controlar loading do modo de edição
+  const [isLoadingEditMode, setIsLoadingEditMode] = useState(!!urlParams.get('edit'));
+  
   // Estado para controlar loading de transição do passo 3 para 4 (visualização)
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   
@@ -380,6 +383,7 @@ export default function CreateOrder() {
     const loadOrderForEdit = async () => {
       if (editOrderId && user?.id) {
         console.log('🚀 OTIMIZADO: Carregando pedido para edição DIRETAMENTE:', editOrderId);
+        setIsLoadingEditMode(true);
         
         try {
           console.log('⚡ OTIMIZADO: carregando tudo via loadExistingOrderOptimized incluindo dados básicos');
@@ -406,9 +410,12 @@ export default function CreateOrder() {
             });
           }, 0);
           navigate('/orders');
+        } finally {
+          setIsLoadingEditMode(false);
         }
       } else {
         console.log('❌ Condição não atendida - editOrderId:', editOrderId, 'user.id:', user?.id);
+        setIsLoadingEditMode(false);
       }
     };
 
@@ -3707,6 +3714,18 @@ export default function CreateOrder() {
     navigate("/");
   };
 
+  // Tela de loading para modo de edição
+  if (isLoadingEditMode) {
+    return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150]">
+        <LoadingLogo 
+          message="Verificando a informação do pedido. Aguarde..." 
+          size="lg" 
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-muted">
       <main className="flex-grow overflow-auto">
@@ -4460,7 +4479,7 @@ export default function CreateOrder() {
 
                                   {/* Assinatura do médico */}
                                   <div className="flex justify-center relative mb-0">
-                                    {user?.signatureUrl ? (
+                                    {user?.signatureUrl && (
                                       <img 
                                         src={user.signatureUrl} 
                                         alt="Assinatura do Médico" 
@@ -4471,10 +4490,6 @@ export default function CreateOrder() {
                                           e.currentTarget.style.display = 'none';
                                         }}
                                       />
-                                    ) : (
-                                      <div className="h-36 w-48 border border-border flex items-center justify-center bg-muted/30">
-                                        <span className="text-xs text-muted-foreground">Assinatura não cadastrada</span>
-                                      </div>
                                     )}
                                   </div>
 

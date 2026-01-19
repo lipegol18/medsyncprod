@@ -42,11 +42,9 @@ import {
         Building2,
         MapPin,
         User,
-        HelpCircle,
-        BookOpen,
-        UserCircle,
 } from "lucide-react";
-import { useOnboarding } from "@/features/onboarding";
+import { useSupportContact } from "@/lib/support-contact";
+import { FaWhatsapp } from "react-icons/fa";
 
 import { addTranslations } from "@/lib/i18n";
 import NovoPedidoIcon from "@/assets/icons/novo-pedido-icon.svg";
@@ -231,6 +229,7 @@ export default function Home() {
         const [_, navigate] = useLocation();
         const [labels, setLabels] = useState(translations["pt-BR"]);
         const { user, logoutMutation } = useAuth();
+        const { openSupport } = useSupportContact();
 
         // Estado para modal de pagamento/trial expirado
         const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -438,53 +437,6 @@ export default function Home() {
                 navigate("/create-order");
         }, [navigate]);
 
-        // Hook para onboarding tours
-        const { startTour, isRunning } = useOnboarding();
-
-        // Lista de tours disponíveis
-        const availableTours = [
-                {
-                        id: 'dashboard-tour',
-                        name: 'Conhecer o Dashboard',
-                        description: 'Entenda todos os cards e botões do painel principal',
-                        icon: BarChart,
-                        path: undefined,
-                },
-                {
-                        id: 'create-order-tour',
-                        name: 'Criar Novo Pedido',
-                        description: 'Aprenda a criar um pedido cirúrgico em 5 etapas',
-                        icon: FileText,
-                        path: '/create-order',
-                },
-                {
-                        id: 'patients-tour',
-                        name: 'Cadastrar Paciente',
-                        description: 'Aprenda a cadastrar e gerenciar pacientes',
-                        icon: Users,
-                        path: '/patients',
-                },
-                {
-                        id: 'profile-tour',
-                        name: 'Editar Perfil',
-                        description: 'Aprenda a configurar seu perfil, logo e assinatura',
-                        icon: UserCircle,
-                        path: '/profile',
-                },
-        ];
-
-        const handleStartTour = (tourId: string, path?: string) => {
-                if (path) {
-                        navigate(path);
-                        // Pequeno delay para garantir que a página carregou
-                        setTimeout(() => {
-                                startTour(tourId);
-                        }, 500);
-                } else {
-                        startTour(tourId);
-                }
-        };
-
         return (
                 <div className="min-h-screen flex flex-col bg-muted">
                         <LgpdModal />
@@ -508,46 +460,6 @@ export default function Home() {
                                                                 backgroundBlendMode: 'overlay'
                                                         }}
                                                 >
-                                                        {/* Botão de Tours - Posicionado no canto superior direito */}
-                                                        {user?.roleId === 2 && (
-                                                                <div className="absolute top-4 right-4 z-10">
-                                                                        <DropdownMenu>
-                                                                                <DropdownMenuTrigger asChild>
-                                                                                        <button
-                                                                                                className="flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-[#2ca8e0] rounded-lg shadow-md transition-all duration-200 font-medium"
-                                                                                                disabled={isRunning}
-                                                                                                data-testid="button-tours-menu"
-                                                                                        >
-                                                                                                <BookOpen className="h-4 w-4" />
-                                                                                                Tours de Ajuda
-                                                                                        </button>
-                                                                                </DropdownMenuTrigger>
-                                                                                <DropdownMenuContent align="end" className="w-64">
-                                                                                        <DropdownMenuLabel className="flex items-center gap-2">
-                                                                                                <HelpCircle className="h-4 w-4 text-[#2ca8e0]" />
-                                                                                                Escolha um tour
-                                                                                        </DropdownMenuLabel>
-                                                                                        <DropdownMenuSeparator />
-                                                                                        {availableTours.map((tour) => (
-                                                                                                <DropdownMenuItem
-                                                                                                        key={tour.id}
-                                                                                                        onClick={() => handleStartTour(tour.id, tour.path)}
-                                                                                                        className="flex flex-col items-start gap-1 cursor-pointer py-3"
-                                                                                                        data-testid={`tour-option-${tour.id}`}
-                                                                                                >
-                                                                                                        <div className="flex items-center gap-2 font-medium">
-                                                                                                                <tour.icon className="h-4 w-4 text-[#2ca8e0]" />
-                                                                                                                {tour.name}
-                                                                                                        </div>
-                                                                                                        <span className="text-xs text-muted-foreground pl-6">
-                                                                                                                {tour.description}
-                                                                                                        </span>
-                                                                                                </DropdownMenuItem>
-                                                                                        ))}
-                                                                                </DropdownMenuContent>
-                                                                        </DropdownMenu>
-                                                                </div>
-                                                        )}
                                                         <div className="flex flex-col p-6 lg:p-10 text-center lg:text-left">
                                                                 <h1 className="text-2xl lg:text-3xl font-bold text-white">
                                                                         Olá
@@ -602,7 +514,7 @@ export default function Home() {
                                                         {/* Coluna Esquerda: Cards + Gráfico */}
                                                         <div className="flex flex-col gap-6">
                                                                 {/* Cards de Estatísticas */}
-                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                                                 {/* Total de Pedidos - Clicável */}
                                                                 <Card 
                                                                         className="dashboard-card-interactive"
@@ -625,7 +537,7 @@ export default function Home() {
                                                                                                 </p>
                                                                                         </div>
                                                                                         <div className="text-sm text-muted-foreground mt-2 opacity-70">
-                                                                                                Clique para ver todos
+                                                                                                Clique para filtrar
                                                                                         </div>
                                                                                 </div>
                                                                         </CardContent>
@@ -783,8 +695,69 @@ export default function Home() {
                                                                         </CardContent>
                                                                 </Card>
 
-                                                                {/* CARD PARA ADICIONAR MAIS ALGUMA INFORMACAO UTIL E EQUALIZAR TAMANHO DOS CARDS */}
-                                                                <div className="lg:col-span-3 py-3 px-6">
+                                                                {/* Pedidos Incompletos - Clicável */}
+                                                                <Card 
+                                                                        className="dashboard-card-interactive"
+                                                                        onClick={() => navigate("/orders?statusId=1")}
+                                                                        data-testid="card-pedidos-incompletos"
+                                                                >
+                                                                        <CardContent className="card-content-padding">
+                                                                                <div className="flex flex-col items-center justify-center">
+                                                                                        <p
+                                                                                                className={(homeStats?.incompleteOrdersCount || 0) > 0 ? "metric-value-alert" : "metric-value"}
+                                                                                        >
+                                                                                                {homeStatsLoading
+                                                                                                        ? "..."
+                                                                                                        : homeStats?.incompleteOrdersCount || 0}
+                                                                                        </p>
+                                                                                        <div className="metric-label">
+                                                                                                <p>
+                                                                                                        Pedidos
+                                                                                                </p>
+                                                                                                <p>
+                                                                                                        Incompletos
+                                                                                                </p>
+                                                                                        </div>
+                                                                                        <div className="text-sm text-muted-foreground mt-2 opacity-70">
+                                                                                                Clique para filtrar
+                                                                                        </div>
+                                                                                </div>
+                                                                        </CardContent>
+                                                                </Card>
+
+                                                                {/* Pedidos Recebidos - Clicável */}
+                                                                <Card 
+                                                                        className="dashboard-card-interactive"
+                                                                        onClick={() => navigate("/orders?statusId=9")}
+                                                                        data-testid="card-pedidos-recebidos"
+                                                                >
+                                                                        <CardContent className="card-content-padding">
+                                                                                <div className="flex flex-col items-center justify-center">
+                                                                                        <p className="metric-value">
+                                                                                                {isLoading
+                                                                                                        ? "..."
+                                                                                                        : orders.filter(
+                                                                                                                  (order) =>
+                                                                                                                          order.status === "recebido"
+                                                                                                          ).length}
+                                                                                        </p>
+                                                                                        <div className="metric-label">
+                                                                                                <p>
+                                                                                                        Pedidos
+                                                                                                </p>
+                                                                                                <p>
+                                                                                                        Recebidos
+                                                                                                </p>
+                                                                                        </div>
+                                                                                        <div className="text-sm text-muted-foreground mt-2 opacity-70">
+                                                                                                Clique para filtrar
+                                                                                        </div>
+                                                                                </div>
+                                                                        </CardContent>
+                                                                </Card>
+
+                                                                {/* Botões de Ação - Ocupa toda a linha */}
+                                                                <div className="md:col-span-4 py-3 px-6">
                                                                         <div className="flex flex-col sm:flex-row gap-3 w-full h-full">
                                                                                                 <button
                                                                                                         onClick={() =>
@@ -1085,6 +1058,24 @@ export default function Home() {
                                 open={showPatientModal}
                                 onOpenChange={setShowPatientModal}
                         />
+
+                        {/* Botão flutuante do WhatsApp */}
+                        <div
+                                className="fixed bottom-6 right-6 z-50 transform transition-all duration-300 hover:scale-110"
+                                onClick={() => {
+                                        openSupport("Olá! Gostaria de saber mais sobre o MedSync.");
+                                }}
+                        >
+                                <div className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-full shadow-lg cursor-pointer transition-colors duration-200 group">
+                                        <FaWhatsapp className="h-6 w-6" />
+                                </div>
+                                {/* Tooltip */}
+                                <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block">
+                                        <div className="bg-black text-white text-xs py-1 px-2 rounded whitespace-nowrap">
+                                                Entre em contato via WhatsApp
+                                        </div>
+                                </div>
+                        </div>
                 </div>
         );
 }

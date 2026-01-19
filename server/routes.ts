@@ -519,60 +519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
-  // Endpoint debug de fornecedores
-  app.get("/api/supplier-stats-debug", reportAuth, async (req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'application/json');
-    
-    if (!req.user?.id) {
-      return res.status(401).json({ error: "Usuário não autenticado" });
-    }
-    const userId = req.user.id;
-    const isAdmin = req.user?.roleId === 1 || false;
-    
-    console.log("=== API SUPPLIER-STATS DEBUG EXECUTADA ===");
-    console.log("Usuário ID:", userId);
-    console.log("É Admin:", isAdmin);
-    console.log("User object:", req.user);
-    
-    const query = `
-      SELECT 
-        COALESCE(s.company_name, s.trade_name, 'Fornecedor não especificado') as name,
-        COUNT(DISTINCT mo.id) as value
-      FROM 
-        suppliers s
-      INNER JOIN 
-        medical_order_suppliers mos ON s.id = mos.supplier_id
-      INNER JOIN
-        medical_orders mo ON mos.order_id = mo.id
-      WHERE 
-        ${isAdmin ? '' : 'mo.user_id = $1 AND'} 1=1
-      GROUP BY s.company_name, s.trade_name
-      ORDER BY COUNT(DISTINCT mo.id) DESC
-      LIMIT 10
-    `;
-    
-    console.log("Query:", query);
-    console.log("Parâmetros:", isAdmin ? [] : [userId]);
-    
-    pool.query(query, isAdmin ? [] : [userId])
-    .then(supplierStatsResult => {
-      console.log("Dados encontrados:", supplierStatsResult.rows);
-      
-      const result = supplierStatsResult.rows.map(row => ({
-        name: String(row.name).trim(),
-        value: parseInt(row.value)
-      }));
-      
-      console.log("Enviando dados de fornecedor:", result);
-      res.status(200).json(result);
-    })
-    .catch(error => {
-      console.error("ERRO na API supplier-stats debug:", error);
-      res.status(500).json({ error: "Erro interno do servidor" });
-    });
-  });
-
-  // Debug endpoint para hospital-stats
+  // Debug endpoint para hospital-stats (mantido para compatibilidade)
   app.get("/api/hospital-stats-debug", reportAuth, async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'application/json');
     
@@ -611,51 +558,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
     .catch(error => {
       console.error("ERRO na API hospital-stats debug:", error);
-      res.status(500).json({ error: "Erro interno do servidor" });
-    });
-  });
-
-  // Debug endpoint para hospital-distribution
-  app.get("/api/hospital-distribution-debug", reportAuth, async (req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'application/json');
-    
-    const userId = req.user?.id || 83; // Usuário autenticado ou padrão
-    const isAdmin = req.user?.roleId === 1 || false;
-    
-    const query = `
-      SELECT 
-        TRIM(COALESCE(h.name, 'Hospital não especificado')) as name,
-        COUNT(*) as value,
-        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM medical_orders WHERE ${isAdmin ? '' : 'user_id = $1 AND'} status_id != 1), 1) as percentage
-      FROM 
-        medical_orders mo
-      LEFT JOIN 
-        hospitals h ON mo.hospital_id = h.id
-      WHERE ${isAdmin ? '' : 'mo.user_id = $1 AND'} 1=1
-      GROUP BY h.name
-      ORDER BY COUNT(*) DESC
-      LIMIT 10
-    `;
-    
-    console.log("=== API HOSPITAL-DISTRIBUTION DEBUG EXECUTADA ===");
-    console.log("Query:", query);
-    console.log("Parâmetros:", isAdmin ? [] : [userId]);
-    
-    pool.query(query, isAdmin ? [] : [userId])
-    .then(hospitalDistributionResult => {
-      console.log("Dados encontrados:", hospitalDistributionResult.rows);
-      
-      const result = hospitalDistributionResult.rows.map(row => ({
-        name: String(row.name).trim(),
-        value: parseInt(row.value),
-        percentage: parseFloat(row.percentage)
-      }));
-      
-      console.log("Enviando dados de distribuição hospital:", result);
-      res.status(200).json(result);
-    })
-    .catch(error => {
-      console.error("ERRO na API hospital-distribution debug:", error);
       res.status(500).json({ error: "Erro interno do servidor" });
     });
   });
@@ -1474,9 +1376,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Buscar pedidos aguardando autorização
         const pendingOrdersCount = await storage.getPendingAuthorizationOrdersCount(userId);
 
+        // Buscar pedidos incompletos (status_id = 1, code = 'em_preenchimento')
+        const incompleteOrdersQuery = `
+          SELECT COUNT(*) as count
+          FROM medical_orders
+          WHERE user_id = $1 AND status_id = 1
+        `;
+        const incompleteResult = await pool.query(incompleteOrdersQuery, [userId]);
+        const incompleteOrdersCount = parseInt(incompleteResult.rows[0]?.count || '0');
+
         const stats = {
           pendingSchedulingCount,
-          pendingOrdersCount
+          pendingOrdersCount,
+          incompleteOrdersCount
         };
 
         console.log(`Estatísticas da home encontradas:`, stats);
@@ -5345,6 +5257,184 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res
           .status(500)
           .json({ message: "Erro ao buscar assinatura do usuário" });
+      }
+    },
+  );
+
+  // API para listar faturas do usuário logado
+  app.get(
+    "/api/user/invoices",
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.user?.id;
+        if (!userId) {
+          return res.status(401).json({ message: "Usuário não autenticado" });
+        }
+
+        // Buscar assinatura do usuário para obter o customer ID do Stripe
+        const [subscription] = await db
+          .select()
+          .from(userSubscriptions)
+          .where(eq(userSubscriptions.userId, userId))
+          .limit(1);
+
+        if (!subscription || !subscription.paymentProviderCustomerId) {
+          console.log(`📋 [Invoices] Usuário ${userId} não tem customer ID no Stripe`);
+          return res.json([]); // Retorna lista vazia se não tem customer
+        }
+
+        console.log(`📋 [Invoices] Buscando faturas para customer: ${subscription.paymentProviderCustomerId}`);
+
+        // Buscar faturas do Stripe
+        const paymentProvider = getPaymentProvider();
+        const invoices = await paymentProvider.listInvoices(subscription.paymentProviderCustomerId, 20);
+        
+        // Mapear para formato simplificado
+        const formattedInvoices = invoices.map((invoice: any) => ({
+          id: invoice.id,
+          number: invoice.number,
+          status: invoice.status,
+          amount: invoice.amount_paid || invoice.total,
+          currency: invoice.currency,
+          created: invoice.created,
+          periodStart: invoice.period_start,
+          periodEnd: invoice.period_end,
+          invoicePdf: invoice.invoice_pdf,
+          hostedInvoiceUrl: invoice.hosted_invoice_url,
+          description: invoice.description || invoice.lines?.data?.[0]?.description || 'Assinatura MedSync',
+        }));
+
+        res.json(formattedInvoices);
+      } catch (error) {
+        console.error("Erro ao buscar faturas:", error);
+        res.status(500).json({ message: "Erro ao buscar faturas" });
+      }
+    },
+  );
+
+  // API para cancelar assinatura do usuário
+  app.post(
+    "/api/user/subscription/cancel",
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.user?.id;
+        if (!userId) {
+          return res.status(401).json({ message: "Usuário não autenticado" });
+        }
+
+        // Buscar assinatura do usuário
+        const [subscription] = await db
+          .select()
+          .from(userSubscriptions)
+          .where(eq(userSubscriptions.userId, userId))
+          .limit(1);
+
+        if (!subscription || !subscription.paymentProviderSubscriptionId) {
+          return res.status(404).json({ message: "Assinatura não encontrada" });
+        }
+
+        // Cancelar no final do período (não imediatamente)
+        const paymentProvider = getPaymentProvider();
+        await paymentProvider.cancelSubscriptionAtPeriodEnd(subscription.paymentProviderSubscriptionId);
+
+        // Atualizar status no banco para 'cancelling' (aguardando fim do período)
+        await db
+          .update(userSubscriptions)
+          .set({ 
+            status: 'cancelling',
+            updatedAt: new Date()
+          })
+          .where(eq(userSubscriptions.id, subscription.id));
+
+        res.json({ 
+          message: "Assinatura será cancelada ao final do período atual",
+          cancelAt: subscription.expiresAt
+        });
+      } catch (error) {
+        console.error("Erro ao cancelar assinatura:", error);
+        res.status(500).json({ message: "Erro ao cancelar assinatura" });
+      }
+    },
+  );
+
+  // API para reativar assinatura (desfazer cancelamento)
+  app.post(
+    "/api/user/subscription/reactivate",
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.user?.id;
+        if (!userId) {
+          return res.status(401).json({ message: "Usuário não autenticado" });
+        }
+
+        // Buscar assinatura do usuário
+        const [subscription] = await db
+          .select()
+          .from(userSubscriptions)
+          .where(eq(userSubscriptions.userId, userId))
+          .limit(1);
+
+        if (!subscription || !subscription.paymentProviderSubscriptionId) {
+          return res.status(404).json({ message: "Assinatura não encontrada" });
+        }
+
+        // Reativar no Stripe
+        const paymentProvider = getPaymentProvider();
+        await paymentProvider.reactivateSubscription(subscription.paymentProviderSubscriptionId);
+
+        // Atualizar status no banco
+        await db
+          .update(userSubscriptions)
+          .set({ 
+            status: 'active',
+            updatedAt: new Date()
+          })
+          .where(eq(userSubscriptions.id, subscription.id));
+
+        res.json({ message: "Assinatura reativada com sucesso" });
+      } catch (error) {
+        console.error("Erro ao reativar assinatura:", error);
+        res.status(500).json({ message: "Erro ao reativar assinatura" });
+      }
+    },
+  );
+
+  // API para abrir portal de billing do Stripe (atualizar cartão, etc)
+  app.post(
+    "/api/user/billing-portal",
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.user?.id;
+        if (!userId) {
+          return res.status(401).json({ message: "Usuário não autenticado" });
+        }
+
+        // Buscar assinatura do usuário para obter o customer ID do Stripe
+        const [subscription] = await db
+          .select()
+          .from(userSubscriptions)
+          .where(eq(userSubscriptions.userId, userId))
+          .limit(1);
+
+        if (!subscription || !subscription.paymentProviderCustomerId) {
+          return res.status(400).json({ message: "Usuário não possui conta de pagamento configurada" });
+        }
+
+        // Gerar URL de retorno
+        const { getBaseUrl } = await import("./utils/environment");
+        const returnUrl = `${getBaseUrl()}/profile?tab=subscription`;
+
+        // Criar sessão do billing portal
+        const paymentProvider = getPaymentProvider();
+        const session = await paymentProvider.createBillingPortalSession({
+          customerId: subscription.paymentProviderCustomerId,
+          returnUrl: returnUrl,
+        });
+
+        res.json({ url: session.url });
+      } catch (error) {
+        console.error("Erro ao criar sessão do billing portal:", error);
+        res.status(500).json({ message: "Erro ao abrir portal de pagamentos" });
       }
     },
   );

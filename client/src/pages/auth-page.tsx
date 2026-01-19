@@ -289,10 +289,10 @@ export default function AuthPage() {
       {/* Header */}
       <header className="bg-muted shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center min-h-[9rem] py-0.5">
+          <div className="flex flex-col sm:flex-row justify-between items-center min-h-[9rem] py-4 sm:py-0.5 gap-4 sm:gap-0">
             {/* Logo */}
-            <div className="flex items-center justify-center cursor-pointer pt-6">
-              <img src={MedSyncLogoGray} alt="MedSync Logo" className="h-32 scale-90" />
+            <div className="flex items-center justify-center cursor-pointer pt-2 sm:pt-6">
+              <img src={MedSyncLogoGray} alt="MedSync Logo" className="h-24 sm:h-32 scale-90" />
             </div>
 
             {/* Login/Register buttons */}
@@ -319,7 +319,7 @@ export default function AuthPage() {
       <section
         className="py-24 auth-hero-section"
         style={{
-          backgroundImage: `url(${medsyncBanner})`,
+          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url(${medsyncBanner})`,
         }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -675,7 +675,7 @@ export default function AuthPage() {
           openSupport("Olá! Gostaria de saber mais sobre o MedSync.");
         }}
       >
-        <div className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg cursor-pointer transition-colors duration-200 group">
+        <div className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-full shadow-lg cursor-pointer transition-colors duration-200 group">
           <FaWhatsapp className="h-6 w-6" />
         </div>
         {/* Tooltip */}

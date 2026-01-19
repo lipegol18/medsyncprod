@@ -1067,4 +1067,98 @@ export class StripeProvider implements PaymentProvider {
       );
     }
   }
+
+  // === MÉTODOS PARA GESTÃO DE FATURAS ===
+
+  /**
+   * Listar faturas de um cliente
+   */
+  async listInvoices(customerId: string, limit: number = 10): Promise<Stripe.Invoice[]> {
+    try {
+      console.log(`📋 [Stripe] Listando faturas do cliente: ${customerId}`);
+
+      const invoices = await this.stripe.invoices.list({
+        customer: customerId,
+        limit: limit,
+        expand: ['data.subscription', 'data.charge'],
+      });
+
+      console.log(`✅ [Stripe] ${invoices.data.length} faturas encontradas`);
+      return invoices.data;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao listar faturas:", error);
+      throw new PaymentError(
+        "INVOICE_LIST_FAILED",
+        `Falha ao listar faturas: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Buscar fatura por ID
+   */
+  async getInvoice(invoiceId: string): Promise<Stripe.Invoice> {
+    try {
+      console.log(`🔍 [Stripe] Buscando fatura: ${invoiceId}`);
+
+      const invoice = await this.stripe.invoices.retrieve(invoiceId, {
+        expand: ['subscription', 'charge', 'customer'],
+      });
+
+      console.log(`✅ [Stripe] Fatura encontrada: ${invoice.id} - Status: ${invoice.status}`);
+      return invoice;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao buscar fatura:", error);
+      throw new PaymentError(
+        "INVOICE_RETRIEVAL_FAILED",
+        `Falha ao buscar fatura: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Cancelar assinatura ao final do período
+   */
+  async cancelSubscriptionAtPeriodEnd(subscriptionId: string): Promise<Stripe.Subscription> {
+    try {
+      console.log(`🛑 [Stripe] Agendando cancelamento da assinatura: ${subscriptionId}`);
+
+      const subscription = await this.stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: true,
+      });
+
+      const periodEnd = (subscription as any).current_period_end;
+      const cancelDate = periodEnd ? new Date(periodEnd * 1000).toISOString() : 'data não disponível';
+      console.log(`✅ [Stripe] Cancelamento agendado para: ${cancelDate}`);
+      return subscription;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao agendar cancelamento:", error);
+      throw new PaymentError(
+        "SUBSCRIPTION_CANCEL_SCHEDULE_FAILED",
+        `Falha ao agendar cancelamento: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Reativar assinatura (desfazer cancelamento agendado)
+   */
+  async reactivateSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+    try {
+      console.log(`🔄 [Stripe] Reativando assinatura: ${subscriptionId}`);
+
+      const subscription = await this.stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: false,
+      });
+
+      console.log(`✅ [Stripe] Assinatura reativada: ${subscription.id}`);
+      return subscription;
+    } catch (error: any) {
+      console.error("❌ [Stripe] Erro ao reativar assinatura:", error);
+      throw new PaymentError(
+        "SUBSCRIPTION_REACTIVATE_FAILED",
+        `Falha ao reativar assinatura: ${error.message}`,
+      );
+    }
+  }
 }

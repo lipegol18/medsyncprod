@@ -623,12 +623,8 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
       <View style={styles.headerRow}>
         {/* Logo do Hospital - Canto superior esquerdo */}
         <View style={styles.headerLogoLeft}>
-          {hospitalData?.logoUrl ? (
+          {hospitalData?.logoUrl && (
             <Image style={styles.hospitalLogo} src={hospitalData.logoUrl} />
-          ) : (
-            <View style={styles.logoPlaceholder}>
-              <Text style={styles.logoPlaceholderText}>Logo Hospital</Text>
-            </View>
           )}
         </View>
 
@@ -639,12 +635,8 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
 
         {/* Logo do Médico - Canto superior direito */}
         <View style={styles.headerLogoRight}>
-          {orderData?.doctorLogoUrl ? (
+          {orderData?.doctorLogoUrl && (
             <Image style={styles.doctorLogo} src={orderData.doctorLogoUrl} />
-          ) : (
-            <View style={styles.logoPlaceholder}>
-              <Text style={styles.logoPlaceholderText}>Logo Médico</Text>
-            </View>
           )}
         </View>
       </View>
@@ -1460,15 +1452,11 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
 
             {/* Espaço para assinatura */}
             <View style={styles.signatureSpace}>
-              {orderData?.doctorSignature ? (
+              {orderData?.doctorSignature && (
                 <Image 
                   style={styles.signatureImage} 
                   src={orderData.doctorSignature} 
                 />
-              ) : (
-                <Text style={styles.signaturePlaceholder}>
-                  Assinatura não cadastrada
-                </Text>
               )}
             </View>
 

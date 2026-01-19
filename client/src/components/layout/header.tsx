@@ -5,6 +5,7 @@ import { ThemeSwitcher } from "@/components/theme-switcher";
 import { t, getCurrentLanguage, SupportedLanguage, addTranslations } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useOnboarding } from "@/features/onboarding";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +17,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, Settings, Sun, Moon, Laptop, CheckCircle, Info, AlertCircle, Send, Menu, X } from "lucide-react";
+import { LogOut, User, Settings, Sun, Moon, Laptop, CheckCircle, Info, AlertCircle, Send, Menu, X, BookOpen, HelpCircle, BarChart, FileText, Users, UserCircle } from "lucide-react";
 import { Bell, BellRing } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { BadgeNative } from "@/components/ui/badge-native";
@@ -120,7 +121,7 @@ const navItems: NavItem[] = [
 ];
 
 export function Header() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { user, logoutMutation } = useAuth();
   const [currentLang, setCurrentLang] = useState<SupportedLanguage>(getCurrentLanguage().code);
   const { theme, setTheme } = useTheme();
@@ -146,6 +147,52 @@ export function Header() {
     togglePendingOrders,
     closePendingOrders
   } = usePendingOrders();
+
+  // Hook para onboarding tours
+  const { startTour, isRunning } = useOnboarding();
+
+  // Lista de tours disponíveis
+  const availableTours = [
+    {
+      id: 'dashboard-tour',
+      name: 'Conhecer o Dashboard',
+      description: 'Entenda todos os cards e botões do painel principal',
+      icon: BarChart,
+      path: '/welcome',
+    },
+    {
+      id: 'create-order-tour',
+      name: 'Criar Novo Pedido',
+      description: 'Aprenda a criar um pedido cirúrgico em 5 etapas',
+      icon: FileText,
+      path: '/create-order',
+    },
+    {
+      id: 'patients-tour',
+      name: 'Cadastrar Paciente',
+      description: 'Aprenda a cadastrar e gerenciar pacientes',
+      icon: Users,
+      path: '/patients',
+    },
+    {
+      id: 'profile-tour',
+      name: 'Editar Perfil',
+      description: 'Aprenda a configurar seu perfil, logo e assinatura',
+      icon: UserCircle,
+      path: '/profile',
+    },
+  ];
+
+  const handleStartTour = (tourId: string, path?: string) => {
+    if (path && location !== path) {
+      navigate(path);
+      setTimeout(() => {
+        startTour(tourId);
+      }, 500);
+    } else {
+      startTour(tourId);
+    }
+  };
   
   // Função para lidar com o logout
   const handleLogout = () => {
@@ -215,32 +262,34 @@ export function Header() {
         </div>
 
         {/* Layout Mobile */}
-        <div className="lg:hidden flex w-full items-center">
-          {/* Menu Hamburger - Canto esquerdo */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-primary-foreground hover:text-primary-foreground/80"
-          >
-            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </Button>
-          
-          {/* Logo centralizado */}
-          <div className="flex-1 flex justify-center">
+        <div className="lg:hidden flex flex-col sm:flex-row w-full items-center gap-2 sm:gap-0 py-2 sm:py-0">
+          {/* Logo - Em cima no mobile, centralizado no sm */}
+          <div className="flex justify-center w-full sm:flex-1 sm:order-2">
             <Link href="/welcome">
               <div className="header-logo">
                 <img 
                   src={MedSyncLogo} 
                   alt="MedSync Logo" 
-                  className="h-20" 
+                  className="h-16 sm:h-20" 
                 />
               </div>
             </Link>
           </div>
           
-          {/* Ícones Mobile - Lado direito */}
-          <div className="flex items-center gap-1">
+          {/* Barra de ícones - Embaixo no mobile */}
+          <div className="flex w-full sm:w-auto justify-between sm:justify-start items-center sm:order-1">
+            {/* Menu Hamburger - Canto esquerdo */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="text-primary-foreground hover:text-primary-foreground/80"
+            >
+              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </Button>
+            
+            {/* Ícones Mobile - Lado direito */}
+            <div className="flex items-center gap-1 sm:hidden">
             {/* Notificações Mobile */}
             <DropdownMenu open={notificationsMobileOpen} onOpenChange={setNotificationsMobileOpen}>
               <DropdownMenuTrigger asChild>
@@ -372,6 +421,7 @@ export function Header() {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
           </div>
         </div>
         
@@ -559,13 +609,38 @@ export function Header() {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator className="bg-border" />
                   <DropdownMenuItem asChild className="hover:bg-muted focus:bg-muted">
-                    <Link href="/profile">
-                      <div className="flex items-center w-full text-foreground">
-                        <User className="mr-2 h-4 w-4 text-primary" />
-                        <span className="header-text">{t('nav.profile')}</span>
-                      </div>
+                    <Link href="/profile" className="flex items-center w-full text-foreground">
+                      <User className="mr-2 h-4 w-4 text-primary-foreground" />
+                      <span className="header-text">{t('nav.profile')}</span>
                     </Link>
                   </DropdownMenuItem>
+                  {user?.roleId === 2 && (
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="hover:bg-muted focus:bg-muted">
+                        <BookOpen className="mr-2 h-4 w-4 text-primary-foreground" />
+                        <span className="header-text">Tours de Ajuda</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="w-64 bg-card border-border">
+                        {availableTours.map((tour) => (
+                          <DropdownMenuItem
+                            key={tour.id}
+                            onClick={() => handleStartTour(tour.id, tour.path)}
+                            className="flex flex-col items-start gap-1 cursor-pointer py-3 hover:bg-muted focus:bg-muted"
+                            disabled={isRunning}
+                            data-testid={`tour-option-${tour.id}`}
+                          >
+                            <div className="flex items-center gap-2 font-medium text-foreground">
+                              <tour.icon className="h-4 w-4 text-primary-foreground" />
+                              {tour.name}
+                            </div>
+                            <span className="text-xs text-muted-foreground pl-6">
+                              {tour.description}
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  )}
                   <DropdownMenuSeparator className="bg-border" />
                   <DropdownMenuItem onClick={handleLogout} className="text-red-400 hover:bg-muted focus:bg-muted">
                     <LogOut className="mr-2 h-4 w-4" />
