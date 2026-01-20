@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Header } from "./header";
 import { useTheme } from "@/components/theme-provider";
 import { ExternalLink, Shield } from "lucide-react";
-import { SiFacebook, SiInstagram, SiLinkedin } from "react-icons/si";
+import { SiInstagram } from "react-icons/si";
 import { Link } from "wouter";
 import medsyncLogo from "@/assets/medsync-logo-new.svg";
 
@@ -64,31 +64,13 @@ export function Layout({ children, includeHeader = false, includeFooter = true }
                 <span className="text-sm font-medium">Siga-nos</span>
                 <div className="flex items-center gap-4">
                   <a
-                    href="https://facebook.com/medsync"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white/80 hover:text-white transition-colors"
-                    aria-label="Facebook"
-                  >
-                    <SiFacebook className="h-5 w-5" />
-                  </a>
-                  <a
-                    href="https://instagram.com/medsync"
+                    href="https://www.instagram.com/medsync.brasil/"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-white/80 hover:text-white transition-colors"
                     aria-label="Instagram"
                   >
                     <SiInstagram className="h-5 w-5" />
-                  </a>
-                  <a
-                    href="https://linkedin.com/company/medsync"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white/80 hover:text-white transition-colors"
-                    aria-label="LinkedIn"
-                  >
-                    <SiLinkedin className="h-5 w-5" />
                   </a>
                 </div>
               </div>
