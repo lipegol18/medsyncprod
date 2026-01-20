@@ -757,7 +757,7 @@ export default function Home() {
                                                                 </Card>
 
                                                                 {/* Botões de Ação - Ocupa toda a linha */}
-                                                                <div className="md:col-span-4 py-3 px-6">
+                                                                <div className="md:col-span-4 py-3 px-6 order-first md:order-last">
                                                                         <div className="flex flex-col sm:flex-row gap-3 w-full h-full">
                                                                                                 <button
                                                                                                         onClick={() =>

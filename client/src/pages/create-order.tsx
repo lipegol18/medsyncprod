@@ -3741,7 +3741,7 @@ export default function CreateOrder() {
               </p>
             </div>
 
-            <div className="mb-8 overflow-x-auto pb-2" data-testid="order-steps-progress">
+            <div className="mb-4 sm:mb-8 overflow-x-auto pb-2" data-testid="order-steps-progress">
               <div className="relative h-16" style={{ minHeight: '4rem' }}>
                 {/* Background progress line */}
                 <div className="absolute top-3 h-2 rounded-full" 
@@ -3802,12 +3802,19 @@ export default function CreateOrder() {
                       >
                         {step.number}
                       </div>
-                      <span className={`mt-2 text-xs text-center whitespace-nowrap ${textColor}`}>
+                      <span className={`mt-2 text-xs text-center whitespace-nowrap ${textColor} hidden sm:block`}>
                         {step.label}
                       </span>
                     </div>
                   );
                 })}
+              </div>
+              
+              {/* Nome do step ativo centralizado - apenas mobile */}
+              <div className="sm:hidden text-center mt-2">
+                <span className="text-sm font-semibold text-muted-foreground">
+                  {steps.find(s => s.number === currentStep)?.label}
+                </span>
               </div>
             </div>
           </div>
@@ -3840,9 +3847,9 @@ export default function CreateOrder() {
         )}
 
         {/* Container principal com estilo do formulário de login */}
-        <div className="container mx-auto px-4">
+        <div className="container mx-auto px-2 sm:px-4">
             {currentStep === 1 && (
-              <div className="p-6" data-testid="order-step-1">
+              <div className="p-3 sm:p-6" data-testid="order-step-1">
                 <PatientSelection
                   selectedPatient={selectedPatient}
                   setSelectedPatient={(patient) => {
@@ -3864,7 +3871,7 @@ export default function CreateOrder() {
             )}
 
             {currentStep === 2 && (
-              <div className="p-6" data-testid="order-step-2">
+              <div className="p-3 sm:p-6" data-testid="order-step-2">
                 <UnifiedExamInfo
                   additionalNotes={additionalNotes}
                   setAdditionalNotes={setAdditionalNotes}
@@ -3883,7 +3890,7 @@ export default function CreateOrder() {
             )}
 
             {currentStep === 3 && (
-              <div className="p-6" data-testid="order-step-3">
+              <div className="p-2 sm:p-6" data-testid="order-step-3">
                 <SurgeryData
                   cidCode={cidCode}
                   setCidCode={setCidCode}
@@ -3934,7 +3941,7 @@ export default function CreateOrder() {
             )}
 
             {currentStep === 4 && (
-              <div className="p-6" data-testid="order-step-4">
+              <div className="p-3 sm:p-6" data-testid="order-step-4">
                 <div className="mb-6 text-foreground">
                   <h3 className="text-lg font-medium text-foreground">
                     Visualização do Pedido
@@ -4533,7 +4540,7 @@ export default function CreateOrder() {
             )}
 
             {currentStep === 5 && (
-              <div className="p-6" data-testid="order-step-5">
+              <div className="p-3 sm:p-6" data-testid="order-step-5">
                 <div className="text-center mt-4 mb-8">
                   <Check className="w-16 h-16 text-medsync-blue mx-auto mb-4" />
                   <h3 className="text-xl font-semibold text-foreground">
@@ -4544,17 +4551,17 @@ export default function CreateOrder() {
                   </p>
                 </div>
 
-                <div className="flex justify-center gap-4 mt-6" data-testid="order-pdf-actions">
+                <div className="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 mt-6" data-testid="order-pdf-actions">
                   <button
-                    className="btn-medsync-dark h-10 flex items-center"
+                    className="btn-medsync-dark h-10 flex items-center justify-center w-full sm:w-auto"
                     onClick={downloadExistingPDF}
                     data-testid="button-download-pdf"
                   >
                     <img src={DownloadIcon} alt="Download" className="mr-2 h-5 w-5" />
-                    Download
+                    Download PDF
                   </button>
                   <button
-                    className="btn-medsync-dark h-10 flex items-center"
+                    className="btn-medsync-dark h-10 flex items-center justify-center w-full sm:w-auto"
                     data-testid="button-send-email"
                     onClick={() => {
                       toast({
@@ -4569,10 +4576,10 @@ export default function CreateOrder() {
                   </button>
                   <Button
                     variant="outline"
-                    className="border-border text-muted-foreground hover:bg-muted/30 h-10 cursor-not-allowed"
+                    className="border-border text-muted-foreground hover:bg-muted/30 h-10 cursor-not-allowed w-full sm:w-auto"
                     disabled
                   >
-                    💬 Enviar pelo WhatsApp
+                    💬 WhatsApp
                   </Button>
                 </div>
               </div>
@@ -4580,13 +4587,16 @@ export default function CreateOrder() {
           
           {/* Botões de navegação */}
           {currentStep < 5 && (
-            <div className="px-6 py-4 grid grid-cols-3 items-center" data-testid="order-navigation-buttons">
+            <div className="px-4 sm:px-6 py-4 flex flex-col sm:grid sm:grid-cols-3 gap-3 sm:gap-0 items-center" data-testid="order-navigation-buttons">
+              {/* Mobile: Botões empilhados centralizados */}
+              {/* Desktop: Grid de 3 colunas */}
+              
               {/* Área esquerda - Botão Voltar */}
-              <div className="flex items-center">
+              <div className="flex items-center justify-center sm:justify-start w-full sm:w-auto order-2 sm:order-1">
                 {currentStep > 1 && (
                   <button
                     onClick={goToPreviousStep}
-                    className="btn-medsync-dark h-10 flex items-center"
+                    className="btn-medsync-dark h-10 flex items-center justify-center w-full sm:w-auto"
                     disabled={isPreparingPreview || isCreatingPDF}
                     data-testid="button-order-back"
                   >
@@ -4597,40 +4607,39 @@ export default function CreateOrder() {
               </div>
 
               {/* Área central - Botão Salvar e Sair */}
-              <div className="flex items-center justify-center">
+              <div className="flex items-center justify-center w-full sm:w-auto order-3 sm:order-2">
                 <button
                   onClick={saveAndExit}
-                  className="btn-medsync-dark h-10 flex items-center"
+                  className="btn-medsync-dark h-10 flex items-center justify-center w-full sm:w-auto"
                   disabled={isPreparingPreview || isCreatingPDF}
                   data-testid="button-order-save-exit"
                 >
                   <Save className="mr-2 h-4 w-4" />
-                  Salvar e Sair
+                  <span>Salvar e Sair</span>
                 </button>
               </div>
 
               {/* Área direita - Botão Próximo/Finalizar */}
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-center sm:justify-end w-full sm:w-auto order-1 sm:order-3">
                 <button
                   onClick={goToNextStep}
-                  className="btn-medsync-dark h-10 flex items-center"
+                  className="btn-medsync-dark h-10 flex items-center justify-center w-full sm:w-auto"
                   disabled={
                     isPreparingPreview || isCreatingPDF ||
                     (currentStep === 1 &&
                       (!selectedPatient || !selectedHospital)) ||
-                    (currentStep === 2 && !clinicalIndication) // Apenas indicação clínica é obrigatória no passo 2
-                    // (currentStep === 3 && !selectedProcedure) // COMENTADO TEMPORARIAMENTE PARA TESTE
+                    (currentStep === 2 && !clinicalIndication)
                   }
                   data-testid="button-order-next"
                 >
                   {currentStep < 4 ? (
                     <>
-                      Próximo
+                      <span>Avançar</span>
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </>
                   ) : (
                     <>
-                      Finalizar
+                      <span>Finalizar</span>
                       <Check className="ml-2 h-4 w-4" />
                     </>
                   )}

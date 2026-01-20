@@ -3416,8 +3416,8 @@ export function SurgeryData({
 
   return (
     <>
-      <Card className="mb-6 bg-popover border-border shadow-md text-foreground">
-      <CardContent className="pt-6">
+      <Card className="mb-4 sm:mb-6 bg-popover border-border shadow-md text-foreground">
+      <CardContent className="p-3 sm:p-6 pt-4 sm:pt-6">
         <div className="space-y-6">
 
           {/* Seção para Seleção de Procedimentos Cirúrgicos */}
@@ -3452,7 +3452,7 @@ export function SurgeryData({
                     onClick={fetchAllSurgicalProcedures}
                   >
                     <span className={surgicalProcedureSearchTerm ? "combobox-value" : "combobox-placeholder"}>
-                      {surgicalProcedureSearchTerm ? surgicalProcedureSearchTerm : "Selecione os procedimentos cirúrgicos apropriados baseados na região anatômica e no diagnóstico"}
+                      {surgicalProcedureSearchTerm ? surgicalProcedureSearchTerm : "Selecione os procedimentos cirúrgicos"}
                     </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -4104,25 +4104,27 @@ export function SurgeryData({
                           return multipleCids.map((item, index) => (
                             <div
                               key={index}
-                              className="flex justify-between items-center rounded-md border border-border bg-accent/20 p-3"
+                              className="flex flex-col sm:flex-row sm:justify-between sm:items-center rounded-md border border-border bg-accent/20 p-2 sm:p-3 gap-2"
                             >
-                              <div>
-                                <div className="font-medium text-muted-foreground">
+                              <div className="min-w-0">
+                                <div className="font-medium text-muted-foreground text-sm sm:text-base break-words">
                                   <span className="font-bold">{item.cid?.code || item.code}</span>{" "}
                                   - {item.cid?.description || item.description}
                                 </div>
                                 {(item.cid?.category || item.category) && (
-                                  <div className="text-xs text-muted-foreground mt-1">
-                                    Categoria: {item.cid?.category || item.category}
+                                  <div className="text-xs text-muted-foreground mt-1 hidden sm:block">
+                                    {item.cid?.category || item.category}
                                   </div>
                                 )}
                               </div>
                               <Button
                                 variant="destructive"
                                 size="sm"
+                                className="h-8 px-2 sm:px-3 self-end sm:self-auto"
                                 onClick={() => handleRemoveCid(index)}
                               >
-                                Remover
+                                <span className="hidden sm:inline">Remover</span>
+                                <X className="h-4 w-4 sm:hidden" />
                               </Button>
                             </div>
                           ));
@@ -4151,30 +4153,32 @@ export function SurgeryData({
                               {groupedCids[groupKey].items.map((item: any) => (
                                 <div
                                   key={item.originalIndex}
-                                  className="flex justify-between items-center bg-accent/10 p-3"
+                                  className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-accent/10 p-2 sm:p-3 gap-2"
                                 >
-                                  <div>
-                                    <div className="font-medium text-muted-foreground">
+                                  <div className="min-w-0">
+                                    <div className="font-medium text-muted-foreground text-sm sm:text-base break-words">
                                       <span className="font-bold">{item.cid?.code || item.code}</span>{" "}
                                       - {item.cid?.description || item.description}
                                       {(item.isAutoAdded || item.cid?.isAutoAdded) && (
-                                        <span className="ml-2 px-2 py-1 bg-accent-light text-accent text-xs rounded-full">
-                                          Automático
+                                        <span className="ml-1 sm:ml-2 px-1.5 py-0.5 bg-accent-light text-accent text-xs rounded-full">
+                                          Auto
                                         </span>
                                       )}
                                     </div>
                                     {(item.cid?.category || item.category) && (
-                                      <div className="text-xs text-muted-foreground mt-1">
-                                        Categoria: {item.cid?.category || item.category}
+                                      <div className="text-xs text-muted-foreground mt-1 hidden sm:block">
+                                        {item.cid?.category || item.category}
                                       </div>
                                     )}
                                   </div>
                                   <Button
                                     variant="destructive"
                                     size="sm"
+                                    className="h-8 px-2 sm:px-3 self-end sm:self-auto"
                                     onClick={() => handleRemoveCid(item.originalIndex)}
                                   >
-                                    Remover
+                                    <span className="hidden sm:inline">Remover</span>
+                                    <X className="h-4 w-4 sm:hidden" />
                                   </Button>
                                 </div>
                               ))}
@@ -4359,29 +4363,29 @@ export function SurgeryData({
           </div>
 
           {/* Procedimentos Cirúrgicos Necessários */}
-          <div className="mb-6 text-foreground mt-6">
+          <div className="mb-4 sm:mb-6 text-foreground mt-4 sm:mt-6">
             <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
               {/* Cabeçalho com fundo azul claro */}
-              <div className="bg-medsync-blue px-4 py-3">
+              <div className="bg-medsync-blue px-3 sm:px-4 py-2 sm:py-3">
                 <div className="flex items-center">
-                  <FileText className="mr-2 h-5 w-5 text-white" />
+                  <FileText className="mr-2 h-4 sm:h-5 w-4 sm:w-5 text-white" />
                   <div>
-                    <h3 className="text-lg font-semibold text-white">
-                      Procedimentos Cirúrgicos Necessários
+                    <h3 className="text-base sm:text-lg font-semibold text-white">
+                      Procedimentos CBHPM
                     </h3>
                   </div>
                 </div>
               </div>
               
               {/* Conteúdo com fundo card */}
-              <div className="p-5">
+              <div className="p-3 sm:p-5">
 
               {/* Dropdown para associação OBRIGATÓRIA à conduta - aparece quando há condutas selecionadas */}
               {selectedSurgicalApproaches.length > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-4">
                   <div className="flex-shrink-0">
                     <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                      Associar à conduta: <span className="text-red-500">*</span>
+                      Conduta: <span className="text-red-500">*</span>
                     </span>
                   </div>
                   <Select
@@ -4389,7 +4393,7 @@ export function SurgeryData({
                     onValueChange={setManualAssociationApproachId}
                   >
                     <SelectTrigger className={`flex-1 h-9 text-sm ${!manualAssociationApproachId || manualAssociationApproachId === "none" ? 'border-amber-400' : 'border-green-500'}`}>
-                      <SelectValue placeholder="Selecione uma conduta (obrigatório)" />
+                      <SelectValue placeholder="Selecione uma conduta" />
                     </SelectTrigger>
                     <SelectContent>
                       {selectedSurgicalApproaches.map((approach: any, index: number) => (
@@ -4403,7 +4407,7 @@ export function SurgeryData({
                     </SelectContent>
                   </Select>
                   {(!manualAssociationApproachId || manualAssociationApproachId === "none") && (
-                    <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                    <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap hidden sm:inline">
                       Obrigatório
                     </span>
                   )}
@@ -4827,57 +4831,56 @@ export function SurgeryData({
                               {sortedItems.map((item: any, idx: number) => (
                                 <div
                                   key={`${item.procedure.id}-${item.isFromMain ? 'main' : 'secondary'}-${idx}`}
-                                  className="flex items-center justify-between p-3 bg-accent/10"
+                                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 sm:p-3 bg-accent/10 gap-2"
                                 >
-                                  <div className="flex-grow">
-                                    <div className="flex items-center space-x-2 flex-wrap">
-                                      <span className="font-medium text-muted-foreground">
+                                  <div className="flex-grow min-w-0">
+                                    <div className="flex flex-wrap items-start sm:items-center gap-1 sm:gap-2">
+                                      <span className="font-medium text-muted-foreground text-sm sm:text-base break-words">
                                         {item.procedure.code} - {item.procedure.name}
                                       </span>
-                                      {item.procedure.porte && (
-                                        <span className="text-xs px-2 py-0.5 bg-accent/50 rounded-full text-muted-foreground">
-                                          Porte: {item.procedure.porte}
-                                        </span>
-                                      )}
-                                      {item.originalIndex === 0 && (
-                                        <span className="text-xs px-2 py-0.5 bg-accent-light rounded-full text-accent">
-                                          Procedimento Principal
-                                        </span>
-                                      )}
+                                      <div className="flex flex-wrap gap-1">
+                                        {item.procedure.porte && (
+                                          <span className="text-xs px-1.5 py-0.5 bg-accent/50 rounded-full text-muted-foreground">
+                                            {item.procedure.porte}
+                                          </span>
+                                        )}
+                                        {item.originalIndex === 0 && (
+                                          <span className="text-xs px-1.5 py-0.5 bg-accent-light rounded-full text-accent">
+                                            Principal
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
-                                    <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
-                                      <span>Auxiliares: {item.procedure.numeroAuxiliares || 0}</span>
-                                      <span>Porte Anestesista: {item.procedure.porteAnestesista || "0"}</span>
+                                    <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2 hidden sm:flex">
+                                      <span>Aux: {item.procedure.numeroAuxiliares || 0}</span>
+                                      <span>Anest: {item.procedure.porteAnestesista || "0"}</span>
                                     </div>
                                   </div>
-                                  <div className="flex items-center space-x-3">
-                                    <div className="flex items-center space-x-2">
-                                      <div className="flex items-center space-x-1">
-                                        <span className="text-xs font-medium text-muted-foreground">
-                                          Qtd:
-                                        </span>
-                                        <Input
-                                          type="number"
-                                          min="1"
-                                          value={item.quantity ?? 1}
-                                          onChange={(e) => {
-                                            const newQuantity = parseInt(e.target.value) || 1;
-                                            if (item.isFromMain) {
-                                              setProcedureQuantity(newQuantity);
-                                            } else {
-                                              const secondaryIndex = secondaryProcedures.findIndex((sp: any) => sp.procedure.id === item.procedure.id);
-                                              if (secondaryIndex !== -1) {
-                                                handleUpdateProcedureQuantity(secondaryIndex, newQuantity);
-                                              }
+                                  <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 mt-1 sm:mt-0">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-xs font-medium text-muted-foreground">Qtd:</span>
+                                      <Input
+                                        type="number"
+                                        min="1"
+                                        value={item.quantity ?? 1}
+                                        onChange={(e) => {
+                                          const newQuantity = parseInt(e.target.value) || 1;
+                                          if (item.isFromMain) {
+                                            setProcedureQuantity(newQuantity);
+                                          } else {
+                                            const secondaryIndex = secondaryProcedures.findIndex((sp: any) => sp.procedure.id === item.procedure.id);
+                                            if (secondaryIndex !== -1) {
+                                              handleUpdateProcedureQuantity(secondaryIndex, newQuantity);
                                             }
-                                          }}
-                                          className="w-16 h-8 text-xs bg-card text-foreground border-border"
-                                        />
-                                      </div>
+                                          }
+                                        }}
+                                        className="w-14 sm:w-16 h-8 text-xs bg-card text-foreground border-border"
+                                      />
                                     </div>
                                     <Button
                                       variant="destructive"
                                       size="sm"
+                                      className="h-8 px-2 sm:px-3"
                                       onClick={() => {
                                         if (item.isFromMain) {
                                           setSelectedProcedure(null);
@@ -4895,7 +4898,8 @@ export function SurgeryData({
                                         }
                                       }}
                                     >
-                                      Remover
+                                      <span className="hidden sm:inline">Remover</span>
+                                      <X className="h-4 w-4 sm:hidden" />
                                     </Button>
                                   </div>
                                 </div>
@@ -4960,29 +4964,29 @@ export function SurgeryData({
           </div>
 
           {/* Seção para Lista de Materiais Necessários para a cirurgia OPME */}
-          <div className="mb-6 text-foreground mt-6">
+          <div className="mb-4 sm:mb-6 text-foreground mt-4 sm:mt-6">
             <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
                 {/* Cabeçalho com fundo azul claro */}
-                <div className="bg-medsync-blue px-4 py-3">
+                <div className="bg-medsync-blue px-3 sm:px-4 py-2 sm:py-3">
                   <div className="flex items-center">
-                    <Package className="mr-2 h-5 w-5 text-white" />
+                    <Package className="mr-2 h-4 sm:h-5 w-4 sm:w-5 text-white" />
                     <div>
-                      <h3 className="text-lg font-semibold text-white">
-                        Lista de Materiais Necessários para a cirurgia OPME
+                      <h3 className="text-base sm:text-lg font-semibold text-white">
+                        Materiais OPME
                       </h3>
                     </div>
                   </div>
                 </div>
                 
                 {/* Conteúdo com fundo card */}
-                <div className="p-5">
+                <div className="p-3 sm:p-5">
               
               {/* Dropdown para associação OBRIGATÓRIA à conduta - aparece quando há condutas selecionadas */}
               {selectedSurgicalApproaches.length > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 mb-4">
                   <div className="flex-shrink-0">
                     <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                      Associar à conduta: <span className="text-red-500">*</span>
+                      Conduta: <span className="text-red-500">*</span>
                     </span>
                   </div>
                   <Select
@@ -4990,7 +4994,7 @@ export function SurgeryData({
                     onValueChange={setManualAssociationApproachId}
                   >
                     <SelectTrigger className={`flex-1 h-9 text-sm ${!manualAssociationApproachId || manualAssociationApproachId === "none" ? 'border-amber-400' : 'border-green-500'}`}>
-                      <SelectValue placeholder="Selecione uma conduta (obrigatório)" />
+                      <SelectValue placeholder="Selecione uma conduta" />
                     </SelectTrigger>
                     <SelectContent>
                       {selectedSurgicalApproaches.map((approach: any, index: number) => (
@@ -5004,7 +5008,7 @@ export function SurgeryData({
                     </SelectContent>
                   </Select>
                   {(!manualAssociationApproachId || manualAssociationApproachId === "none") && (
-                    <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                    <span className="text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap hidden sm:inline">
                       Obrigatório
                     </span>
                   )}
@@ -5231,28 +5235,28 @@ export function SurgeryData({
                               {groupedOpme[groupKey].items.map((opmeItem: any) => (
                                 <div
                                   key={opmeItem.originalIndex}
-                                  className="flex items-center justify-between p-2 bg-accent/10"
+                                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 bg-accent/10 gap-2"
                                 >
-                                  <div className="flex-grow">
-                                    <div className="flex items-center">
-                                      <span className="text-sm font-medium text-foreground">
+                                  <div className="flex-grow min-w-0">
+                                    <div className="flex flex-wrap items-start sm:items-center gap-1">
+                                      <span className="text-sm font-medium text-foreground break-words">
                                         {opmeItem.item.technicalName}
                                       </span>
                                       {opmeItem.item.anvisaRegistrationNumber && (
-                                        <span className="ml-2 text-xs px-2 py-0.5 bg-accent/50 rounded-full text-muted-foreground">
-                                          Reg: {opmeItem.item.anvisaRegistrationNumber}
+                                        <span className="text-xs px-1.5 py-0.5 bg-accent/50 rounded-full text-muted-foreground">
+                                          {opmeItem.item.anvisaRegistrationNumber}
                                         </span>
                                       )}
                                     </div>
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                      <span>Nome Comercial: {opmeItem.item.commercialName}</span>
+                                    <div className="text-xs text-muted-foreground mt-1 truncate">
+                                      {opmeItem.item.commercialName}
                                     </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      <span>Fabricante: {opmeItem.item.manufacturerName}</span>
+                                    <div className="text-xs text-muted-foreground truncate hidden sm:block">
+                                      {opmeItem.item.manufacturerName}
                                     </div>
                                   </div>
-                                  <div className="flex items-center space-x-3">
-                                    <div className="flex items-center space-x-1">
+                                  <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 mt-1 sm:mt-0">
+                                    <div className="flex items-center gap-1">
                                       <span className="text-xs font-medium text-muted-foreground">Qtd:</span>
                                       <Input
                                         type="number"
@@ -5262,15 +5266,17 @@ export function SurgeryData({
                                           const newQuantity = parseInt(e.target.value) || 1;
                                           handleUpdateOpmeQuantity(opmeItem.originalIndex, newQuantity);
                                         }}
-                                        className="w-16 h-8 text-xs bg-card text-foreground border-border"
+                                        className="w-14 sm:w-16 h-8 text-xs bg-card text-foreground border-border"
                                       />
                                     </div>
                                     <Button
                                       variant="destructive"
                                       size="sm"
+                                      className="h-8 px-2 sm:px-3"
                                       onClick={() => handleRemoveOpmeItem(opmeItem.originalIndex)}
                                     >
-                                      Remover
+                                      <span className="hidden sm:inline">Remover</span>
+                                      <X className="h-4 w-4 sm:hidden" />
                                     </Button>
                                   </div>
                                 </div>
@@ -5567,16 +5573,16 @@ export function SurgeryData({
                                 {selectedSuppliers.map((supplier, index) => (
                                   <div
                                     key={`supplier-${supplier.id}-${index}`}
-                                    className="flex items-center justify-between p-3 bg-accent/20 rounded-md border border-border"
+                                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 sm:p-3 bg-accent/20 rounded-md border border-border gap-2"
                                     data-testid={`supplier-row-${index}`}
                                   >
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2">
-                                        <Building2 className="h-4 w-4 text-medsync-blue" />
-                                        <span className="font-medium text-foreground">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                                        <Building2 className="h-4 w-4 text-medsync-blue flex-shrink-0" />
+                                        <span className="font-medium text-foreground text-sm sm:text-base break-words">
                                           {supplier.tradeName || supplier.companyName}
                                         </span>
-                                        <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
+                                        <span className="text-xs px-1.5 py-0.5 bg-accent/50 rounded text-muted-foreground hidden sm:inline">
                                           {supplier.cnpj}
                                         </span>
                                       </div>
@@ -5584,10 +5590,12 @@ export function SurgeryData({
                                     <Button
                                       variant="destructive"
                                       size="sm"
+                                      className="h-8 px-2 sm:px-3 self-end sm:self-auto"
                                       onClick={() => handleRemoveSupplier(index)}
                                       data-testid={`button-remove-supplier-${index}`}
                                     >
-                                      Remover
+                                      <span className="hidden sm:inline">Remover</span>
+                                      <X className="h-4 w-4 sm:hidden" />
                                     </Button>
                                   </div>
                                 ))}
@@ -5618,16 +5626,16 @@ export function SurgeryData({
                                 {groupedSuppliers[groupKey].items.map((item: any) => (
                                   <div
                                     key={`supplier-${item.id}-${item.originalIndex}`}
-                                    className="flex items-center justify-between p-3 bg-accent/10"
+                                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-2 sm:p-3 bg-accent/10 gap-2"
                                     data-testid={`supplier-row-${item.originalIndex}`}
                                   >
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-2">
-                                        <Building2 className="h-4 w-4 text-medsync-blue" />
-                                        <span className="font-medium text-foreground">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                                        <Building2 className="h-4 w-4 text-medsync-blue flex-shrink-0" />
+                                        <span className="font-medium text-foreground text-sm sm:text-base break-words">
                                           {item.tradeName || item.companyName}
                                         </span>
-                                        <span className="text-xs px-2 py-0.5 bg-accent/50 rounded text-muted-foreground">
+                                        <span className="text-xs px-1.5 py-0.5 bg-accent/50 rounded text-muted-foreground hidden sm:inline">
                                           {item.cnpj}
                                         </span>
                                       </div>
@@ -5635,10 +5643,12 @@ export function SurgeryData({
                                     <Button
                                       variant="destructive"
                                       size="sm"
+                                      className="h-8 px-2 sm:px-3 self-end sm:self-auto"
                                       onClick={() => handleRemoveSupplier(item.originalIndex)}
                                       data-testid={`button-remove-supplier-${item.originalIndex}`}
                                     >
-                                      Remover
+                                      <span className="hidden sm:inline">Remover</span>
+                                      <X className="h-4 w-4 sm:hidden" />
                                     </Button>
                                   </div>
                                 ))}
@@ -5736,7 +5746,7 @@ export function SurgeryData({
                       </p>
                     </div>
                     
-                    <div className="mt-3 flex justify-end gap-2">
+                    <div className="mt-3 flex flex-col sm:flex-row justify-center sm:justify-end items-center gap-2">
                       {/* Botão para restaurar texto original */}
                       {originalClinicalJustification && (
                         <button

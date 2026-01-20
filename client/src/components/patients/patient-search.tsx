@@ -173,7 +173,7 @@ export function PatientSearch({
                 <div className="text-xs opacity-80">{formatCPF(selectedPatient.cpf)}</div>
               </div>
             ) : (
-              <span className="combobox-placeholder">Escolha o paciente para o pedido cirúrgico</span>
+              <span className="combobox-placeholder">Escolha o paciente</span>
             )}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-70" />
           </Button>
@@ -181,7 +181,7 @@ export function PatientSearch({
         <PopoverContent className="p-0 bg-card border border-border" align="start">
           <Command shouldFilter={false} className="bg-card">
             <CommandInput 
-              placeholder="Escolha o paciente para o pedido cirúrgico" 
+              placeholder="Escolha o paciente" 
               value={searchQuery}
               onValueChange={setSearchQuery}
               className="h-9 bg-card text-foreground placeholder:text-muted-foreground"

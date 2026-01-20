@@ -661,6 +661,65 @@ export function PatientFormDialog({
         <div className="flex-1 overflow-y-auto">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-4">
+            {/* Digitalizador OCR - Ocupa toda a largura */}
+            <Card className="bg-white border-sky-200 mb-4">
+              <CardContent className="p-6">
+                {/* Upload Unificado de Documento */}
+                <div className="space-y-3">
+                  <DragDropZone
+                    onFileDrop={async (file) => {
+                      const event = { target: { files: [file] } } as any;
+                      await handleUnifiedDocumentFileSelected(event);
+                    }}
+                    accept="image/*,application/pdf"
+                    disabled={isProcessingDocument}
+                    className="w-full"
+                  >
+                    <div
+                      className={`
+                        border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer
+                        ${isProcessingDocument 
+                          ? "border-sky-400 bg-sky-50 cursor-wait" 
+                          : "border-sky-300 hover:border-sky-400 hover:bg-sky-50"
+                        }
+                      `}
+                      onClick={() => !isProcessingDocument && docFileInputRef.current?.click()}
+                    >
+                      {isProcessingDocument ? (
+                        <>
+                          <Loader2 className="h-8 w-8 mx-auto mb-2 text-sky-600 animate-spin" />
+                          <p className="font-medium text-sky-700 text-sm">Detectando e Processando...</p>
+                        </>
+                      ) : (
+                        <>
+                          <Scan className="h-8 w-8 mx-auto mb-2 text-sky-600" />
+                          <p className="font-medium text-sky-700 text-sm mb-1">
+                            Arraste e solte ou clique para selecionar
+                          </p>
+                          <p className="text-xs text-sky-600 mb-2">
+                            RG, CNH, Carteirinha ou Tela MV
+                          </p>
+                          <div className="flex flex-wrap justify-center gap-1">
+                            <Badge variant="outline" className="text-xs">PDF</Badge>
+                            <Badge variant="outline" className="text-xs">PNG</Badge>
+                            <Badge variant="outline" className="text-xs">JPG</Badge>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </DragDropZone>
+                  
+                  <input
+                    ref={docFileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                    onChange={handleUnifiedDocumentFileSelected}
+                    className="hidden"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Layout em duas colunas principais */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
               
@@ -832,66 +891,8 @@ export function PatientFormDialog({
                 </Card>
               </div>
 
-              {/* Coluna Direita - Digitalizador OCR e Plano de Saúde */}
+              {/* Coluna Direita - Plano de Saúde */}
               <div className="flex flex-col space-y-4">
-                <Card className="bg-white border-sky-200">
-                  <CardContent className="p-6">
-                    {/* Upload Unificado de Documento */}
-                    <div className="space-y-3">
-                      <DragDropZone
-                        onFileDrop={async (file) => {
-                          const event = { target: { files: [file] } } as any;
-                          await handleUnifiedDocumentFileSelected(event);
-                        }}
-                        accept="image/*,application/pdf"
-                        disabled={isProcessingDocument}
-                        className="w-full"
-                      >
-                        <div
-                          className={`
-                            border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer
-                            ${isProcessingDocument 
-                              ? "border-sky-400 bg-sky-50 cursor-wait" 
-                              : "border-sky-300 hover:border-sky-400 hover:bg-sky-50"
-                            }
-                          `}
-                          onClick={() => !isProcessingDocument && docFileInputRef.current?.click()}
-                        >
-                          {isProcessingDocument ? (
-                            <>
-                              <Loader2 className="h-8 w-8 mx-auto mb-2 text-sky-600 animate-spin" />
-                              <p className="font-medium text-sky-700 text-sm">Detectando e Processando...</p>
-                            </>
-                          ) : (
-                            <>
-                              <Scan className="h-8 w-8 mx-auto mb-2 text-sky-600" />
-                              <p className="font-medium text-sky-700 text-sm mb-1">
-                                Arraste e solte ou clique para selecionar
-                              </p>
-                              <p className="text-xs text-sky-600 mb-2">
-                                RG, CNH, Carteirinha ou Tela MV
-                              </p>
-                              <div className="flex flex-wrap justify-center gap-1">
-                                <Badge variant="outline" className="text-xs">PDF</Badge>
-                                <Badge variant="outline" className="text-xs">PNG</Badge>
-                                <Badge variant="outline" className="text-xs">JPG</Badge>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </DragDropZone>
-                      
-                      <input
-                        ref={docFileInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
-                        onChange={handleUnifiedDocumentFileSelected}
-                        className="hidden"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
                 {/* Plano de Saúde */}
                 <Card className="bg-white border-sky-200 flex-1 flex flex-col" data-testid="patient-form-insurance">
                   <CardHeader className="p-8">
