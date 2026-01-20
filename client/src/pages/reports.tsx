@@ -1902,7 +1902,12 @@ export default function Reports() {
             `/api/reports/insurance-distribution?statusIds=1,2,3,4,7,8,10`,
           );
           console.log("Buscando dados de cirurgias por convênio (solicitadas)");
-          const insuranceResponse = await fetch(insuranceUrl);
+          const insuranceResponse = await fetch(insuranceUrl, {
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
 
           if (insuranceResponse.ok) {
             const insuranceData = await insuranceResponse.json();
@@ -1948,7 +1953,12 @@ export default function Reports() {
             `/api/reports/insurance-distribution?statusIds=6,9`,
           );
           console.log("Buscando dados de cirurgias por convênio (realizadas)");
-          const insuranceRealizadasResponse = await fetch(insuranceRealizadasUrl);
+          const insuranceRealizadasResponse = await fetch(insuranceRealizadasUrl, {
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
 
           if (insuranceRealizadasResponse.ok) {
             const insuranceRealizadasData = await insuranceRealizadasResponse.json();
@@ -2063,7 +2073,12 @@ export default function Reports() {
 
         // Buscar dados de pedidos para relatórios com filtros
         const ordersUrl = buildFilterUrl("/api/reports/orders");
-        const ordersResponse = await fetch(ordersUrl);
+        const ordersResponse = await fetch(ordersUrl, {
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
 
         if (ordersResponse.ok) {
           const ordersData = await ordersResponse.json();

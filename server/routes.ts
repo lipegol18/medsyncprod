@@ -1533,45 +1533,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         const whereClause = whereConditions.join(' AND ');
         
-        // Consulta SQL para extrair dados reais do banco
+        // Consulta SQL atualizada para usar insurance_provider_id + health_insurance_providers
         const query = `
         WITH insurance_counts AS (
           SELECT 
             CASE 
-              WHEN p.insurance LIKE 'BRADESCO%' THEN 'BRADESCO'
-              WHEN p.insurance ILIKE 'SUL AM%RICA%' THEN 'SUL AMERICA'
-              WHEN p.insurance ILIKE 'SULAM%RICA%' THEN 'SUL AMERICA'
-              WHEN p.insurance ILIKE 'PETROBR%S%' THEN 'PETROBRAS'
-              WHEN p.insurance ILIKE 'PROASA%' THEN 'PROASA'
-              WHEN p.insurance = 'AMIL ASSISTÊNCIA MÉDICA INTERNACIONAL S.A.' THEN 'AMIL'
-              WHEN p.insurance ILIKE 'AMIL%' THEN 'AMIL'
-              WHEN p.insurance = 'NOTRE DAME INTERMÉDICA SAÚDE S.A.' THEN 'NOTRE DAME'
-              WHEN p.insurance ILIKE 'NOTRE DAME%' THEN 'NOTRE DAME'
-              WHEN p.insurance = 'CAIXA ECONÔMICA FEDERAL' THEN 'CAIXA'
-              WHEN p.insurance ILIKE 'UNIMED%' THEN 'UNIMED'
-              ELSE COALESCE(p.insurance, 'Particular')
+              WHEN hip.name ILIKE 'BRADESCO%' THEN 'BRADESCO'
+              WHEN hip.name ILIKE 'SUL AM%RICA%' THEN 'SUL AMERICA'
+              WHEN hip.name ILIKE 'SULAM%RICA%' THEN 'SUL AMERICA'
+              WHEN hip.name ILIKE 'PETROBR%S%' THEN 'PETROBRAS'
+              WHEN hip.name ILIKE 'PROASA%' THEN 'PROASA'
+              WHEN hip.name ILIKE 'AMIL%' THEN 'AMIL'
+              WHEN hip.name ILIKE 'NOTRE DAME%' THEN 'NOTRE DAME'
+              WHEN hip.name ILIKE 'INTERM%DICA%' THEN 'NOTRE DAME'
+              WHEN hip.name ILIKE 'CAIXA%' THEN 'CAIXA'
+              WHEN hip.name ILIKE 'UNIMED%' THEN 'UNIMED'
+              WHEN hip.name ILIKE 'PORTO SEGURO%' THEN 'PORTO SEGURO'
+              ELSE COALESCE(hip.name, 'Particular')
             END as insurance,
             COUNT(*) as count
           FROM 
             medical_orders mo
           JOIN 
             patients p ON mo.patient_id = p.id
+          LEFT JOIN 
+            health_insurance_providers hip ON p.insurance_provider_id = hip.id
           WHERE 
             ${whereClause}
           GROUP BY 
             CASE 
-              WHEN p.insurance LIKE 'BRADESCO%' THEN 'BRADESCO'
-              WHEN p.insurance ILIKE 'SUL AM%RICA%' THEN 'SUL AMERICA'
-              WHEN p.insurance ILIKE 'SULAM%RICA%' THEN 'SUL AMERICA'
-              WHEN p.insurance ILIKE 'PETROBR%S%' THEN 'PETROBRAS'
-              WHEN p.insurance ILIKE 'PROASA%' THEN 'PROASA'
-              WHEN p.insurance = 'AMIL ASSISTÊNCIA MÉDICA INTERNACIONAL S.A.' THEN 'AMIL'
-              WHEN p.insurance ILIKE 'AMIL%' THEN 'AMIL'
-              WHEN p.insurance = 'NOTRE DAME INTERMÉDICA SAÚDE S.A.' THEN 'NOTRE DAME'
-              WHEN p.insurance ILIKE 'NOTRE DAME%' THEN 'NOTRE DAME'
-              WHEN p.insurance = 'CAIXA ECONÔMICA FEDERAL' THEN 'CAIXA'
-              WHEN p.insurance ILIKE 'UNIMED%' THEN 'UNIMED'
-              ELSE COALESCE(p.insurance, 'Particular')
+              WHEN hip.name ILIKE 'BRADESCO%' THEN 'BRADESCO'
+              WHEN hip.name ILIKE 'SUL AM%RICA%' THEN 'SUL AMERICA'
+              WHEN hip.name ILIKE 'SULAM%RICA%' THEN 'SUL AMERICA'
+              WHEN hip.name ILIKE 'PETROBR%S%' THEN 'PETROBRAS'
+              WHEN hip.name ILIKE 'PROASA%' THEN 'PROASA'
+              WHEN hip.name ILIKE 'AMIL%' THEN 'AMIL'
+              WHEN hip.name ILIKE 'NOTRE DAME%' THEN 'NOTRE DAME'
+              WHEN hip.name ILIKE 'INTERM%DICA%' THEN 'NOTRE DAME'
+              WHEN hip.name ILIKE 'CAIXA%' THEN 'CAIXA'
+              WHEN hip.name ILIKE 'UNIMED%' THEN 'UNIMED'
+              WHEN hip.name ILIKE 'PORTO SEGURO%' THEN 'PORTO SEGURO'
+              ELSE COALESCE(hip.name, 'Particular')
             END
           ORDER BY 
             count DESC

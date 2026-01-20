@@ -182,8 +182,8 @@ export const queryClient = new QueryClient({
 
 // Configuração especial para endpoints de relatórios - sempre buscar dados frescos
 export const getReportsQueryConfig = () => ({
-  staleTime: 0,
+  staleTime: 60000, // Dados ficam válidos por 1 minuto
   refetchOnMount: true,
   refetchOnWindowFocus: true,
-  refetchInterval: 5000, // Atualizar a cada 5 segundos
+  refetchInterval: false, // Sem polling automático - dados só atualizam ao recarregar a página ou aplicar filtros
 });

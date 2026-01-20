@@ -22,6 +22,7 @@ import Profile from "@/pages/profile";
 import AuthPage from "@/pages/auth-page";
 import Notifications from "@/pages/notifications";
 import ContactPage from "@/pages/contact-page";
+import LgpdPage from "@/pages/lgpd";
 import ContactMessages from "@/pages/admin/contact-messages";
 import ManufacturerDemo from "@/pages/manufacturer-demo";
 import FontDemo from "@/pages/font-demo";
@@ -96,6 +97,7 @@ function Router() {
 
       <Route path="/auth" component={AuthPage} />
       <Route path="/contact" component={ContactPage} />
+      <Route path="/lgpd" component={LgpdPage} />
       <Route component={NotFound} />
     </Switch>
   );
