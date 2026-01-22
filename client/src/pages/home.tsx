@@ -449,12 +449,12 @@ export default function Home() {
                                 />
                         )}
 
-                        <main className="flex-grow bg-muted/30 overflow-visible">
-                                <div className="container mx-auto px-4 py-4 max-w-8xl overflow-visible">
+                        <main className="flex-grow bg-muted/30 overflow-auto">
+                                <div className="container mx-auto px-4 py-4 max-w-8xl">
                                         {/* Cabeçalho do Dashboard */}
-                                        <div className="mb-8 overflow-visible">
+                                        <div className="mb-8">
                                                 <div 
-                                                        className="relative flex flex-col lg:flex-row items-center justify-between mb-8 rounded-xl overflow-visible bg-cover bg-center min-h-[150px] md:min-h-[225px] lg:min-h-[300px]"
+                                                        className="relative flex flex-col lg:flex-row items-center justify-between mb-8 rounded-xl bg-cover bg-center min-h-[150px] md:min-h-[225px] lg:min-h-[300px]"
                                                         style={{
                                                                 backgroundImage: `url(${CentroCirurgicoImage})`,
                                                                 backgroundBlendMode: 'overlay'

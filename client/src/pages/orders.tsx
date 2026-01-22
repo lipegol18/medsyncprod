@@ -1200,6 +1200,19 @@ export default function Orders() {
             </div>
           </div>
           
+          {/* Botão Novo Pedido - Acima dos filtros */}
+          {!isLoading && !isError && (
+            <div className="flex justify-center sm:justify-end mb-4">
+              <Button
+                onClick={() => navigate("/create-order")}
+                className="bg-medsync-blue hover:bg-medsync-blue-dark text-white font-semibold h-10 w-full sm:w-auto sm:px-6"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Pedido
+              </Button>
+            </div>
+          )}
+          
           {/* Seção de Filtros Moderna */}
           {!isLoading && !isError && ordersData.length > 0 && (
             <Card className="border-gray-200 bg-gradient-to-r from-sky-50 to-sky-100/50 shadow-sm mb-6">
@@ -1214,20 +1227,11 @@ export default function Orders() {
                       <p className="text-sm text-sky-700/80">Encontre pedidos específicos</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {hasActiveFilters && (
-                      <div className="px-3 py-1 bg-sky-200/70 rounded-full text-xs font-medium text-sky-800">
-                        {filteredOrdersData.length} de {ordersData.length} resultados
-                      </div>
-                    )}
-                    <Button
-                      onClick={() => navigate("/create-order")}
-                      className="bg-medsync-blue hover:bg-medsync-blue-dark text-white font-semibold"
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Novo Pedido
-                    </Button>
-                  </div>
+                  {hasActiveFilters && (
+                    <div className="px-3 py-1 bg-sky-200/70 rounded-full text-xs font-medium text-sky-800">
+                      {filteredOrdersData.length} de {ordersData.length} resultados
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1468,7 +1472,7 @@ export default function Orders() {
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
-                                <div className={`p-2 rounded-lg ${getStatusColorClasses(order).iconBg}`}>
+                                <div className={`hidden sm:block p-2 rounded-lg ${getStatusColorClasses(order).iconBg}`}>
                                   <FileText className={`h-5 w-5 ${getStatusColorClasses(order).iconText}`} />
                                 </div>
                                 <div className="flex-1">
@@ -1548,54 +1552,51 @@ export default function Orders() {
                           </div>
                         </div>
                         
-                        {/* Informações organizadas em linhas */}
-                        <div className="px-4 py-3 border-t border-gray-200/30 space-y-2">
-                          {/* Primeira linha */}
-                          <div className="grid grid-cols-2 gap-8 text-sm">
-                            <div>
-                              <span className="text-muted-foreground font-medium">Data da cirurgia:</span>
-                              <span className="ml-2 text-foreground">{formatProcedureDate(order)}</span>
+                        {/* Informações organizadas em linhas - Mobile otimizado */}
+                        <div className="px-3 sm:px-4 py-3 border-t border-gray-200/30 space-y-3">
+                          {/* Grid responsivo: 1 coluna mobile, 2 colunas desktop */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-sm">
+                            <div className="flex flex-col">
+                              <span className="text-muted-foreground font-medium text-xs sm:text-sm">Data da cirurgia</span>
+                              <span className="text-foreground font-semibold">{formatProcedureDate(order)}</span>
                             </div>
-                            <div>
-                              <span className="text-muted-foreground font-medium">Médico Responsável:</span>
-                              <span className="ml-2 text-foreground">
+                            <div className="flex flex-col">
+                              <span className="text-muted-foreground font-medium text-xs sm:text-sm">Médico Responsável</span>
+                              <span className="text-foreground font-semibold">
                                 {order.userName ? `Dr(a). ${order.userName}` : 'Não informado'}
                               </span>
                             </div>
-                          </div>
-                          
-                          {/* Segunda linha */}
-                          <div className="grid grid-cols-2 gap-8 text-sm">
-                            <div>
-                              <span className="text-muted-foreground font-medium">Caráter da Cirurgia:</span>
-                              <span className="ml-2 text-foreground">
+                            <div className="flex flex-col">
+                              <span className="text-muted-foreground font-medium text-xs sm:text-sm">Caráter da Cirurgia</span>
+                              <span className="text-foreground font-semibold">
                                 {order.procedureType === 'eletiva' ? 'Eletiva' :
                                  order.procedureType === 'urgencia' ? 'Urgência' :
                                  order.procedureType === 'emergencia' ? 'Emergência' :
                                  'Não definido'}
                               </span>
                             </div>
-                            <div>
-                              <span className="text-muted-foreground font-medium">Hospital:</span>
-                              <span className="ml-2 text-foreground">{order.hospitalName || 'Não informado'}</span>
+                            <div className="flex flex-col">
+                              <span className="text-muted-foreground font-medium text-xs sm:text-sm">Hospital</span>
+                              <span className="text-foreground font-semibold">{order.hospitalName || 'Não informado'}</span>
                             </div>
                           </div>
                           
-                          {/* Terceira linha */}
-                          <div className="text-sm">
-                            <span className="text-muted-foreground font-medium">Valor Recebido:</span>
-                            <span className="ml-2 font-semibold text-emerald-600">{formatCurrency(order.receivedValue)}</span>
+                          {/* Valor Recebido - destacado */}
+                          <div className="flex flex-col pt-1 border-t border-gray-100">
+                            <span className="text-muted-foreground font-medium text-xs sm:text-sm">Valor Recebido</span>
+                            <span className="font-bold text-emerald-600 text-base">{formatCurrency(order.receivedValue)}</span>
                           </div>
                         </div>
                         
-                        {/* Seção de Ações Modernizada */}
-                        <div className="bg-gradient-to-r from-slate-50 to-slate-100/30 p-4">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            {/* Botão WhatsApp destacado à esquerda */}
+                        {/* Seção de Ações - Mobile otimizado */}
+                        <div className="bg-gradient-to-r from-slate-50 to-slate-100/30 p-3 sm:p-4">
+                          {/* Grid de botões: 2 colunas no mobile, flex no desktop */}
+                          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+                            {/* Botão WhatsApp */}
                             <Button
                               variant="outline"
                               size="sm"
-                              className={`border-green-200 text-green-700 hover:bg-green-50 h-9 font-medium ${
+                              className={`border-green-200 text-green-700 hover:bg-green-50 h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center ${
                                 order.patientPhone === null || order.patientPhone === undefined || order.patientPhone === ""
                                   ? "opacity-50 cursor-not-allowed"
                                   : "hover:shadow-sm"
@@ -1604,113 +1605,114 @@ export default function Orders() {
                               disabled={order.patientPhone === null || order.patientPhone === undefined || order.patientPhone === ""}
                               title={order.patientPhone ? `Enviar mensagem para ${order.patientName}` : "Paciente sem telefone cadastrado"}
                             >
-                              <FaWhatsapp className="h-4 w-4 mr-2" />
-                              WhatsApp
+                              <FaWhatsapp className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                              <span className="hidden sm:inline">WhatsApp</span>
+                              <span className="sm:hidden">Zap</span>
                             </Button>
                             
-                            {/* Grupo de botões principais */}
-                            <div className="flex flex-wrap gap-2">
-                              {/* Botão de agendamento - aparece para status "aceito" e "autorizado_parcial" */}
-                              {(order.status === "aceito" || order.status === "autorizado_parcial") && (
-                                <Button
-                                  size="sm"
-                                  className="bg-blue-600 hover:bg-blue-700 text-white h-9 font-medium hover:shadow-sm"
-                                  onClick={() => {
-                                    setSelectedOrderForAppointment(order.id);
-                                    setShowAppointmentModal(true);
-                                  }}
-                                >
-                                  <CalendarDays className="h-4 w-4 mr-2" />
-                                  {(appointmentsByOrder[order.id] && appointmentsByOrder[order.id].scheduledDate) ||
-                                   (order.procedureDate && 
-                                    order.procedureDate !== null && 
-                                    order.procedureDate !== 'null' && 
-                                    order.procedureDate !== 'undefined' &&
-                                    order.procedureDate !== 'Data não agendada') ? 
-                                    "Reagendar" : "Agendar"}
-                                </Button>
-                              )}
-                              
-                              {/* Botão de recurso */}
-                              {(order.status === "recusado" || order.status === "pendencia" || order.status === "autorizado_parcial") && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="border-amber-200 text-amber-700 hover:bg-amber-50 h-9 font-medium hover:shadow-sm"
-                                  onClick={() => {
-                                    setSelectedOrderForAppeal(order.id);
-                                    setAppealJustification("");
-                                    setShowAppealDialog(true);
-                                  }}
-                                >
-                                  <FileText className="h-4 w-4 mr-2" />
-                                  Gerar Recurso
-                                </Button>
-                              )}
-                              
-                              {/* Botão de deletar */}
-                              {order.status === "em_preenchimento" && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="border-red-200 text-red-700 hover:bg-red-50 h-9 font-medium hover:shadow-sm"
-                                  onClick={() => handleDeleteOrder(order.id)}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Apagar
-                                </Button>
-                              )}
-                              
-                              {/* Botão de editar */}
-                              {['em_preenchimento', 'aguardando_envio', 'em_avaliacao'].includes(order.status) && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="border-sky-200 text-sky-700 hover:bg-sky-50 h-9 font-medium hover:shadow-sm"
-                                  onClick={() => handleEditOrder(order)}
-                                  title="Editar pedido"
-                                >
-                                  <Edit2 className="h-4 w-4 mr-2" />
-                                  Editar
-                                </Button>
-                              )}
-                              
-                              {/* Botão de download PDF */}
-                              {order.status !== 'em_preenchimento' && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="border-purple-200 text-purple-700 hover:bg-purple-50 h-9 font-medium hover:shadow-sm"
-                                  onClick={() => handleDownloadPdf(order.id, order.patientName)}
-                                >
-                                  <Download className="h-4 w-4 mr-2" />
-                                  Baixar PDF
-                                </Button>
-                              )}
-                              
-                              {/* Botão de visualizar */}
+                            {/* Botão de agendamento */}
+                            {(order.status === "aceito" || order.status === "autorizado_parcial") && (
+                              <Button
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 text-white h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm"
+                                onClick={() => {
+                                  setSelectedOrderForAppointment(order.id);
+                                  setShowAppointmentModal(true);
+                                }}
+                              >
+                                <CalendarDays className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                {(appointmentsByOrder[order.id] && appointmentsByOrder[order.id].scheduledDate) ||
+                                 (order.procedureDate && 
+                                  order.procedureDate !== null && 
+                                  order.procedureDate !== 'null' && 
+                                  order.procedureDate !== 'undefined' &&
+                                  order.procedureDate !== 'Data não agendada') ? 
+                                  "Reagendar" : "Agendar"}
+                              </Button>
+                            )}
+                            
+                            {/* Botão de recurso */}
+                            {(order.status === "recusado" || order.status === "pendencia" || order.status === "autorizado_parcial") && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="border-slate-200 text-slate-700 hover:bg-slate-50 h-9 font-medium hover:shadow-sm"
-                                onClick={() => handleViewOrder(order.id)}
+                                className="border-amber-200 text-amber-700 hover:bg-amber-50 h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm"
+                                onClick={() => {
+                                  setSelectedOrderForAppeal(order.id);
+                                  setAppealJustification("");
+                                  setShowAppealDialog(true);
+                                }}
                               >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Visualizar
+                                <FileText className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                <span className="hidden sm:inline">Gerar Recurso</span>
+                                <span className="sm:hidden">Recurso</span>
                               </Button>
-                              
-                              {/* Botão "Próxima Etapa" destacado */}
-                              {order.status !== 'recebido' && order.status !== 'cancelado' && (
-                                <Button
-                                  size="sm"
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white h-9 font-medium hover:shadow-sm"
-                                  onClick={() => handleOpenStatusChangeModal(order, order.status, orderStatus[order.status as keyof typeof orderStatus]?.label || order.status)}
-                                >
-                                  <ArrowRight className="h-4 w-4 mr-2" />
-                                  Próxima Etapa
-                                </Button>
-                              )}
-                            </div>
+                            )}
+                            
+                            {/* Botão de deletar */}
+                            {order.status === "em_preenchimento" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-red-200 text-red-700 hover:bg-red-50 h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm"
+                                onClick={() => handleDeleteOrder(order.id)}
+                              >
+                                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                Apagar
+                              </Button>
+                            )}
+                            
+                            {/* Botão de editar */}
+                            {['em_preenchimento', 'aguardando_envio', 'em_avaliacao'].includes(order.status) && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-sky-200 text-sky-700 hover:bg-sky-50 h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm"
+                                onClick={() => handleEditOrder(order)}
+                                title="Editar pedido"
+                              >
+                                <Edit2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                Editar
+                              </Button>
+                            )}
+                            
+                            {/* Botão de download PDF */}
+                            {order.status !== 'em_preenchimento' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-purple-200 text-purple-700 hover:bg-purple-50 h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm"
+                                onClick={() => handleDownloadPdf(order.id, order.patientName)}
+                              >
+                                <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                <span className="hidden sm:inline">Baixar PDF</span>
+                                <span className="sm:hidden">PDF</span>
+                              </Button>
+                            )}
+                            
+                            {/* Botão de visualizar */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-slate-200 text-slate-700 hover:bg-slate-50 h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm"
+                              onClick={() => handleViewOrder(order.id)}
+                            >
+                              <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                              <span className="hidden sm:inline">Visualizar</span>
+                              <span className="sm:hidden">Ver</span>
+                            </Button>
+                            
+                            {/* Botão "Próxima Etapa" destacado - ocupa linha inteira no mobile */}
+                            {order.status !== 'recebido' && order.status !== 'cancelado' && (
+                              <Button
+                                size="sm"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm col-span-2 sm:col-span-1"
+                                onClick={() => handleOpenStatusChangeModal(order, order.status, orderStatus[order.status as keyof typeof orderStatus]?.label || order.status)}
+                              >
+                                <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                Próxima Etapa
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardContent>

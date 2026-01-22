@@ -476,6 +476,38 @@
     font-family: 'Proxima Nova', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   }
 
+  /* Previne layout shift quando modais/dropdowns abrem e manipulam scroll */
+  html {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+  }
+  
+  /* Força remover qualquer padding/margin adicionado por bibliotecas de UI quando modais abrem */
+  html, body {
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  /* Quando o Radix scroll-lock está ativo */
+  html[data-scroll-locked] {
+    overflow-y: scroll !important;
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  html[data-scroll-locked] body {
+    overflow: visible !important;
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  /* Previne que estilos inline do body afetem o layout */
+  body[style*="padding-right"],
+  body[style*="margin-right"] {
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+  }
+
   /* Estilos para a página de autenticação que respondem ao tema */
   .auth-page-container {
     @apply bg-background;

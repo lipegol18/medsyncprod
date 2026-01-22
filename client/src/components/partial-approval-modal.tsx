@@ -241,21 +241,21 @@ export function PartialApprovalModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-      <div className="bg-card border border-border rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[85vh] overflow-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-2 sm:p-4">
+      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 max-w-4xl w-full max-h-[90vh] overflow-auto">
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h3 className="text-xl font-bold text-foreground mb-2">
-              Aprovação Parcial de Procedimentos
+        <div className="flex items-start justify-between gap-2 mb-4 sm:mb-6">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg sm:text-xl font-bold text-foreground mb-1 sm:mb-2">
+              Aprovação Parcial
             </h3>
-            <p className="text-muted-foreground text-sm">
-              Indique quais procedimentos foram autorizados e as quantidades aprovadas pela seguradora.
+            <p className="text-muted-foreground text-xs sm:text-sm">
+              Indique o status de cada procedimento.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground transition-colors p-1"
+            className="text-muted-foreground hover:text-foreground transition-colors p-1 flex-shrink-0"
           >
             <X className="h-5 w-5" />
           </button>
@@ -266,47 +266,69 @@ export function PartialApprovalModal({
             <div className="text-muted-foreground">Carregando procedimentos...</div>
           </div>
         ) : (
-          <div className="space-y-4 mb-6">
+          <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
             {procedureApprovals.map((procedure) => (
               <div
                 key={procedure.id}
-                className="border border-border rounded-lg p-4 bg-muted/50"
+                className="border border-border rounded-lg p-3 sm:p-4 bg-muted/50"
               >
-                <div className="flex items-start justify-between gap-6">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-6">
                   {/* Informações do Procedimento */}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Hash className="h-4 w-4 text-accent" />
-                      <span className="text-sm font-bold text-accent">
-                        {procedure.code}
-                      </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <div className="flex items-center gap-1">
+                        <Hash className="h-3 w-3 sm:h-4 sm:w-4 text-accent" />
+                        <span className="text-xs sm:text-sm font-bold text-accent">
+                          {procedure.code}
+                        </span>
+                      </div>
                       {procedure.isMain && (
-                        <span className="inline-block px-2 py-1 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 text-xs rounded-full">
+                        <span className="inline-block px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 text-xs rounded-full">
                           Principal
                         </span>
                       )}
+                      {/* Status Visual - Mobile inline */}
+                      <div className="sm:hidden ml-auto">
+                        {procedure.status && (
+                          <div className="flex items-center gap-1">
+                            {getStatusIcon(procedure.status)}
+                            <span className={`text-xs font-medium ${
+                              procedure.status === 'aprovado' ? 'text-green-600 dark:text-green-400' : 'text-destructive'
+                            }`}>
+                              {procedure.status === 'aprovado' 
+                                ? `${procedure.quantityApproved}/${procedure.quantityRequested}` 
+                                : 'Negado'}
+                            </span>
+                          </div>
+                        )}
+                        {!procedure.status && (
+                          <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">
+                            Pendente
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <h4 className="font-medium text-foreground mb-2">
+                    <h4 className="font-medium text-foreground text-sm sm:text-base mb-1 sm:mb-2 line-clamp-2">
                       {procedure.name}
                     </h4>
-                    <div className="text-sm text-muted-foreground">
-                      Quantidade solicitada: <span className="font-medium">{procedure.quantityRequested}</span>
+                    <div className="text-xs sm:text-sm text-muted-foreground">
+                      Qtd. solicitada: <span className="font-medium">{procedure.quantityRequested}</span>
                     </div>
                   </div>
 
                   {/* Controles de Aprovação */}
-                  <div className="flex flex-col gap-4 min-w-[280px]">
+                  <div className="flex flex-col gap-3 sm:gap-4 sm:min-w-[280px]">
                     {/* Botões de Status */}
                     <div>
-                      <Label className="text-sm text-foreground mb-2 block">Status da Aprovação</Label>
+                      <Label className="text-xs sm:text-sm text-foreground mb-1.5 sm:mb-2 block">Status</Label>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => handleStatusChange(procedure.id, 'aprovado')}
                           className={`
-                            px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 border-2
+                            px-2 sm:px-3 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 border-2
                             ${procedure.status === 'aprovado'
-                              ? "bg-emerald-600 border-emerald-500 text-primary-foreground shadow-lg"
+                              ? "bg-emerald-600 border-emerald-500 text-destructive-foreground shadow-lg"
                               : "bg-muted border-border text-muted-foreground hover:bg-muted/80 hover:border-border"
                             }
                           `}
@@ -318,7 +340,7 @@ export function PartialApprovalModal({
                           type="button"
                           onClick={() => handleStatusChange(procedure.id, 'negado')}
                           className={`
-                            px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 border-2
+                            px-2 sm:px-3 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 border-2
                             ${procedure.status === 'negado'
                               ? "bg-destructive border-destructive text-destructive-foreground shadow-lg shadow-destructive/30"
                               : "bg-muted border-border text-muted-foreground hover:bg-muted/80 hover:border-border"
@@ -333,8 +355,8 @@ export function PartialApprovalModal({
                     {/* Campo de Quantidade (só aparece se aprovado) */}
                     {procedure.status === 'aprovado' && (
                       <div>
-                        <Label className="text-sm text-foreground mb-2 block">
-                          Quantidade Aprovada
+                        <Label className="text-xs sm:text-sm text-foreground mb-1.5 sm:mb-2 block">
+                          Qtd. Aprovada
                         </Label>
                         <Input
                           type="number"
@@ -344,16 +366,16 @@ export function PartialApprovalModal({
                           onChange={(e) => 
                             handleQuantityChange(procedure.id, parseInt(e.target.value) || 1)
                           }
-                          className="bg-input text-foreground border-border focus:border-accent"
+                          className="bg-input text-foreground border-border focus:border-accent h-9"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Mínimo: 1 | Máximo: {procedure.quantityRequested}
+                          Máx: {procedure.quantityRequested}
                         </p>
                       </div>
                     )}
 
-                    {/* Status Visual */}
-                    <div className="flex items-center">
+                    {/* Status Visual - Desktop only */}
+                    <div className="hidden sm:flex items-center">
                       {procedure.status && (
                         <div className="flex items-center gap-2">
                           {getStatusIcon(procedure.status)}
@@ -383,19 +405,21 @@ export function PartialApprovalModal({
         )}
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-border">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-4 border-t border-border">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-muted border border-border text-muted-foreground rounded-lg hover:bg-muted/80 hover:border-border transition-colors"
+            className="btn-medsync-light w-full sm:w-auto"
           >
             Cancelar
           </button>
           <button
+            type="button"
             onClick={handleSave}
             disabled={saveApprovalsMutation.isPending || !canSave}
-            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-medsync-blue hover:bg-medsync-blue-dark text-white font-semibold px-4 py-2 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
           >
-            {saveApprovalsMutation.isPending ? "Salvando..." : "Salvar Aprovações"}
+            {saveApprovalsMutation.isPending ? "Salvando..." : "Salvar"}
           </button>
         </div>
       </div>

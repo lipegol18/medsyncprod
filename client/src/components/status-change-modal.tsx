@@ -389,14 +389,14 @@ export function StatusChangeModal({
           })}
         </div>
         
-        <div className="flex justify-end pt-4 border-t border-blue-800/30">
-          <Button 
-            variant="outline" 
+        <div className="flex justify-end pt-4 border-t border-border">
+          <button 
+            type="button"
             onClick={onClose}
-            className="border-blue-600 text-blue-400 hover:bg-blue-900/30"
+            className="btn-medsync-light"
           >
             Cancelar
-          </Button>
+          </button>
         </div>
       </DialogContent>
     </Dialog>

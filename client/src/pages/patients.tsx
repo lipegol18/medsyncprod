@@ -583,9 +583,9 @@ export default function Patients() {
                             <td className="py-3 px-4 text-foreground">{formatDate(patient.birthDate)}</td>
                             <td className="py-3 px-4 text-foreground">{calculateAge(patient.birthDate)} anos</td>
                             <td className="py-3 px-4">
-                              {patient.insurance ? (
+                              {patient.insuranceProviderName ? (
                                 <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100 border-sky-200">
-                                  {patient.insurance}
+                                  {patient.insuranceProviderName}
                                 </Badge>
                               ) : (
                                 <span className="text-muted-foreground text-sm">Não informado</span>

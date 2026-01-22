@@ -1510,15 +1510,39 @@ export class DatabaseStorage implements IStorage {
     return patient || undefined;
   }
 
-  async getPatients(): Promise<Patient[]> {
-    return await db
-      .select()
+  async getPatients(): Promise<(Patient & { insuranceProviderName?: string | null })[]> {
+    const result = await db
+      .select({
+        id: patients.id,
+        fullName: patients.fullName,
+        cpf: patients.cpf,
+        birthDate: patients.birthDate,
+        gender: patients.gender,
+        phone: patients.phone,
+        phone2: patients.phone2,
+        email: patients.email,
+        insuranceProviderId: patients.insuranceProviderId,
+        insuranceNumber: patients.insuranceNumber,
+        plan: patients.plan,
+        notes: patients.notes,
+        isActive: patients.isActive,
+        isDeleted: patients.isDeleted,
+        deletedAt: patients.deletedAt,
+        deletedBy: patients.deletedBy,
+        createdAt: patients.createdAt,
+        createdBy: patients.createdBy,
+        updatedAt: patients.updatedAt,
+        updatedBy: patients.updatedBy,
+        insuranceProviderName: healthInsuranceProviders.name,
+      })
       .from(patients)
-      .where(eq(patients.isDeleted, false)) // Filtrar pacientes não excluídos
-      .orderBy(patients.fullName); // Ordenar por nome alfabeticamente
+      .leftJoin(healthInsuranceProviders, eq(patients.insuranceProviderId, healthInsuranceProviders.id))
+      .where(eq(patients.isDeleted, false))
+      .orderBy(patients.fullName);
+    return result;
   }
 
-  async getPatientsByDoctor(doctorId: number): Promise<Patient[]> {
+  async getPatientsByDoctor(doctorId: number): Promise<(Patient & { insuranceProviderName?: string | null })[]> {
     return await db
       .select({
         id: patients.id,
@@ -1541,9 +1565,11 @@ export class DatabaseStorage implements IStorage {
         createdBy: patients.createdBy,
         updatedAt: patients.updatedAt,
         updatedBy: patients.updatedBy,
+        insuranceProviderName: healthInsuranceProviders.name,
       })
       .from(patients)
       .innerJoin(doctorPatients, eq(patients.id, doctorPatients.patientId))
+      .leftJoin(healthInsuranceProviders, eq(patients.insuranceProviderId, healthInsuranceProviders.id))
       .where(
         and(
           eq(doctorPatients.doctorId, doctorId),
