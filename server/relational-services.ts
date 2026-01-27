@@ -99,23 +99,51 @@ export class RelationalOrderService {
     console.log('Itens OPME recebidos:', JSON.stringify(opmeItems, null, 2));
     
     try {
+      // Buscar status existentes dos itens OPME ANTES de deletar
+      const existingItems = await db
+        .select({
+          opmeItemId: medicalOrderOpmeItems.opmeItemId,
+          surgicalApproachId: medicalOrderOpmeItems.surgicalApproachId,
+          surgicalProcedureId: medicalOrderOpmeItems.surgicalProcedureId,
+          status: medicalOrderOpmeItems.status,
+          quantityApproved: medicalOrderOpmeItems.quantityApproved
+        })
+        .from(medicalOrderOpmeItems)
+        .where(eq(medicalOrderOpmeItems.orderId, orderId));
+      
+      // Criar mapa de status existentes por chave única (opmeItemId + surgicalApproachId + surgicalProcedureId)
+      const existingStatusMap = new Map<string, { status: string | null; quantityApproved: number | null }>();
+      existingItems.forEach(item => {
+        const key = `${item.opmeItemId}-${item.surgicalApproachId || 'null'}-${item.surgicalProcedureId || 'null'}`;
+        existingStatusMap.set(key, { status: item.status, quantityApproved: item.quantityApproved });
+      });
+      console.log('Status existentes preservados:', Object.fromEntries(existingStatusMap));
+      
       // Remover itens OPME existentes
       await db.delete(medicalOrderOpmeItems).where(eq(medicalOrderOpmeItems.orderId, orderId));
       console.log('Itens OPME existentes removidos com sucesso');
       
-      // Inserir novos itens OPME
+      // Inserir novos itens OPME preservando status existentes
       if (opmeItems.length > 0) {
-        const itemsToInsert: InsertMedicalOrderOpmeItem[] = opmeItems.map(item => ({
-          orderId,
-          procedureId: item.procedureId || null, // Tornar procedureId opcional
-          opmeItemId: item.opmeItemId,
-          quantity: item.quantity,
-          surgicalApproachId: item.surgicalApproachId || null,
-          surgicalProcedureId: item.surgicalProcedureId || null
-        }));
+        const itemsToInsert: InsertMedicalOrderOpmeItem[] = opmeItems.map(item => {
+          const key = `${item.opmeItemId}-${item.surgicalApproachId || 'null'}-${item.surgicalProcedureId || 'null'}`;
+          const existingStatus = existingStatusMap.get(key);
+          
+          return {
+            orderId,
+            procedureId: item.procedureId || null,
+            opmeItemId: item.opmeItemId,
+            quantity: item.quantity,
+            surgicalApproachId: item.surgicalApproachId || null,
+            surgicalProcedureId: item.surgicalProcedureId || null,
+            // Preservar status e quantityApproved se já existiam
+            status: existingStatus?.status || null,
+            quantityApproved: existingStatus?.quantityApproved || null
+          };
+        });
         console.log('Itens OPME preparados para inserção:', JSON.stringify(itemsToInsert, null, 2));
         await db.insert(medicalOrderOpmeItems).values(itemsToInsert);
-        console.log(`Inseridos ${itemsToInsert.length} itens OPME com sucesso`);
+        console.log(`Inseridos ${itemsToInsert.length} itens OPME com sucesso (status preservados)`);
       }
     } catch (error) {
       console.error('Erro ao atualizar itens OPME:', error);
@@ -184,6 +212,26 @@ export class RelationalOrderService {
   }>): Promise<void> {
     console.log(`=== Atualizando procedimentos para pedido ${orderId} ===`);
     
+    // Buscar status existentes dos procedimentos ANTES de deletar
+    const existingProcs = await db
+      .select({
+        procedureId: medicalOrderProcedures.procedureId,
+        surgicalApproachId: medicalOrderProcedures.surgicalApproachId,
+        surgicalProcedureId: medicalOrderProcedures.surgicalProcedureId,
+        status: medicalOrderProcedures.status,
+        quantityApproved: medicalOrderProcedures.quantityApproved
+      })
+      .from(medicalOrderProcedures)
+      .where(eq(medicalOrderProcedures.orderId, orderId));
+    
+    // Criar mapa de status existentes por chave única (procedureId + surgicalApproachId + surgicalProcedureId)
+    const existingStatusMap = new Map<string, { status: string | null; quantityApproved: number | null }>();
+    existingProcs.forEach(proc => {
+      const key = `${proc.procedureId}-${proc.surgicalApproachId || 'null'}-${proc.surgicalProcedureId || 'null'}`;
+      existingStatusMap.set(key, { status: proc.status, quantityApproved: proc.quantityApproved });
+    });
+    console.log('Status existentes de procedimentos preservados:', Object.fromEntries(existingStatusMap));
+    
     // Remover procedimentos existentes
     await db.delete(medicalOrderProcedures).where(eq(medicalOrderProcedures.orderId, orderId));
     
@@ -237,18 +285,26 @@ export class RelationalOrderService {
       console.log(`Procedimento principal determinado pelo maior porte: índice ${mainProcedureIndex} (porte valor: ${maxPorteValue})`);
       
       // Criar procedimentos com marcação correta do principal e associações cirúrgicas
-      const proceduresToInsert: InsertMedicalOrderProcedure[] = proceduresWithPorte.map((proc, index) => ({
-        orderId,
-        procedureId: proc.procedureId,
-        quantityRequested: proc.quantityRequested,
-        isMain: index === mainProcedureIndex, // Procedimento com maior porte é o principal
-        status: 'em_analise',
-        surgicalApproachId: proc.surgicalApproachId || null,
-        surgicalProcedureId: proc.surgicalProcedureId || null
-      }));
+      // Preservando status existentes quando disponíveis
+      const proceduresToInsert: InsertMedicalOrderProcedure[] = proceduresWithPorte.map((proc, index) => {
+        const key = `${proc.procedureId}-${proc.surgicalApproachId || 'null'}-${proc.surgicalProcedureId || 'null'}`;
+        const existingStatus = existingStatusMap.get(key);
+        
+        return {
+          orderId,
+          procedureId: proc.procedureId,
+          quantityRequested: proc.quantityRequested,
+          isMain: index === mainProcedureIndex,
+          // Preservar status e quantityApproved se já existiam, senão usar default
+          status: existingStatus?.status || 'em_analise',
+          quantityApproved: existingStatus?.quantityApproved || null,
+          surgicalApproachId: proc.surgicalApproachId || null,
+          surgicalProcedureId: proc.surgicalProcedureId || null
+        };
+      });
       
       await db.insert(medicalOrderProcedures).values(proceduresToInsert);
-      console.log(`Inseridos ${proceduresToInsert.length} procedimentos - Principal: ID ${proceduresWithPorte[mainProcedureIndex].procedureId}`);
+      console.log(`Inseridos ${proceduresToInsert.length} procedimentos (status preservados) - Principal: ID ${proceduresWithPorte[mainProcedureIndex].procedureId}`);
     }
   }
 

@@ -120,6 +120,8 @@ import {
   inArray,
   notInArray,
   exists,
+  asc,
+  desc,
 } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 import session from "express-session";
@@ -614,7 +616,17 @@ export interface IStorage {
 
   // Medical order operations
   getMedicalOrder(id: number): Promise<MedicalOrder | undefined>;
-  getMedicalOrders(): Promise<MedicalOrder[]>;
+  getMedicalOrders(filters?: {
+    userId?: number;
+    patientId?: number;
+    hospitalId?: number;
+    statusCode?: string;
+    statusId?: number;
+    limit?: number;
+    offset?: number;
+    sortBy?: 'createdAt' | 'updatedAt';
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{ orders: MedicalOrder[]; total: number }>;
   createMedicalOrder(order: InsertMedicalOrder): Promise<MedicalOrder>;
   updateMedicalOrder(
     id: number,
@@ -2221,7 +2233,12 @@ export class DatabaseStorage implements IStorage {
     hospitalId?: number;
     statusCode?: string;
     statusId?: number;
-  }): Promise<MedicalOrder[]> {
+    // Parâmetros de paginação e ordenação
+    limit?: number;
+    offset?: number;
+    sortBy?: 'createdAt' | 'updatedAt';
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{ orders: MedicalOrder[]; total: number }> {
     try {
       console.log("Buscando pedidos médicos com filtros:", filters);
 
@@ -2244,6 +2261,23 @@ export class DatabaseStorage implements IStorage {
         conditions.push(eq(medicalOrders.statusId, filters.statusId));
       }
 
+      // Primeiro, buscar o total count (sem limit/offset)
+      let countQuery = db
+        .select({ count: sql<number>`count(*)` })
+        .from(medicalOrders);
+      
+      if (conditions.length > 0) {
+        countQuery = countQuery.where(and(...conditions));
+      }
+      
+      const countResult = await countQuery;
+      const total = Number(countResult[0]?.count || 0);
+      console.log(`Total de pedidos médicos encontrados: ${total}`);
+
+      // Determinar ordenação
+      const sortField = filters?.sortBy === 'updatedAt' ? medicalOrders.updatedAt : medicalOrders.createdAt;
+      const sortDirection = filters?.sortOrder === 'asc' ? asc(sortField) : desc(sortField);
+
       // Usar Drizzle com campos básicos primeiro
       let query = db
         .select({
@@ -2261,7 +2295,6 @@ export class DatabaseStorage implements IStorage {
           createdAt: medicalOrders.createdAt,
           updatedAt: medicalOrders.updatedAt,
           statusId: medicalOrders.statusId,
-          previousStatusId: medicalOrders.previousStatusId,
           receivedValue: medicalOrders.receivedValue,
           attachments: medicalOrders.attachments,
         })
@@ -2270,9 +2303,20 @@ export class DatabaseStorage implements IStorage {
       if (conditions.length > 0) {
         query = query.where(and(...conditions));
       }
+      
+      // Aplicar ordenação
+      query = query.orderBy(sortDirection);
+      
+      // Aplicar paginação se especificada
+      if (filters?.limit) {
+        query = query.limit(filters.limit);
+        if (filters?.offset) {
+          query = query.offset(filters.offset);
+        }
+      }
 
       const orders = await query;
-      console.log(`Encontrados ${orders.length} pedidos médicos`);
+      console.log(`Retornando ${orders.length} pedidos médicos (limit: ${filters?.limit || 'sem'}, offset: ${filters?.offset || 0})`);
 
       // Buscar informações de status da tabela order_statuses
       const statusInfos = await db.select().from(orderStatuses);
@@ -2337,10 +2381,10 @@ export class DatabaseStorage implements IStorage {
         };
       });
 
-      return ordersWithStatus;
+      return { orders: ordersWithStatus, total };
     } catch (error) {
       console.error("Erro ao buscar pedidos médicos:", error);
-      return [];
+      return { orders: [], total: 0 };
     }
   }
 

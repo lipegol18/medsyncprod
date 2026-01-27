@@ -84,7 +84,8 @@ export const ORDER_STATUS_IDS = {
   CANCELADO: 7,             // "Cancelada"
   AGUARDANDO_ENVIO: 8,      // "Aguardando Envio"
   RECEBIDO: 9,              // "Recebido"
-  AGUARDANDO_RECURSO: 10    // "Aguardando Recurso"
+  AGUARDANDO_RECURSO: 10,   // "Aguardando Recurso"
+  AUTORIZACAO_POS: 11       // "Autorização Pós" (urgência)
 };
 
 // Caráter do procedimento para exibição

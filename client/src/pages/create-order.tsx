@@ -37,6 +37,8 @@ import {
   Download,
   Mail,
   MessageCircle,
+  GripVertical,
+  RotateCcw,
 } from "lucide-react";
 import {
   type Hospital,
@@ -125,6 +127,10 @@ import { FileManager } from "@/lib/file-manager";
 import { SupplierDisplay } from "@/components/supplier-display";
 import { LoadingLogo } from "@/components/loading-logo";
 import { MarkdownViewer } from "@/components/markdown-editor";
+import { OrderPreview } from "@/components/order-preview";
+import { OrderPreviewV2 } from "@/components/order-preview_v2";
+
+const USE_PAGINATED_PREVIEW = true;
 
 const steps = [
   { number: 1, label: "Paciente e Hospital" },
@@ -183,6 +189,24 @@ export default function CreateOrder() {
   // Detectar se estamos em modo de edição
   const urlParams = new URLSearchParams(window.location.search);
   const editOrderId = urlParams.get('edit');
+
+  // Estados para marcadores de quebra de página ajustáveis (Step 4 - Visualização)
+  interface PageBreakInfo {
+    originalPosition: number;
+    adjustedPosition: number;
+  }
+  const orderPreviewRef = useRef<HTMLDivElement>(null);
+  const orderContainerRef = useRef<HTMLDivElement>(null);
+  const [orderPageBreaks, setOrderPageBreaks] = useState<PageBreakInfo[]>([]);
+  const [draggingBreakIndex, setDraggingBreakIndex] = useState<number | null>(null);
+  const [breakDragStartY, setBreakDragStartY] = useState<number>(0);
+  const [breakDragStartPosition, setBreakDragStartPosition] = useState<number>(0);
+  
+  // Altura útil por página A4 em pixels (sincronizado com PDF)
+  // PDF: A4 = 842pt, paddingTop=80pt, paddingBottom=60pt → altura útil = 702pt
+  // Convertendo para pixels de tela (96 DPI): 702 * (96/72) ≈ 936px
+  const PAGE_HEIGHT_PX = 936;
+  const MIN_PAGE_CONTENT = 200; // Mínimo de conteúdo por página
 
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(
@@ -274,6 +298,9 @@ export default function CreateOrder() {
     SecondaryProcedure[]
   >([]);
   const [orderId, setOrderId] = useState<number | null>(null);
+  
+  // Estado para quebras de página forçadas do preview (IDs dos blocos que devem iniciar nova página)
+  const [forcedPageBreaks, setForcedPageBreaks] = useState<Set<string>>(new Set());
   // Estados para os itens OPME e fornecedores
   const [selectedOpmeItems, setSelectedOpmeItems] = useState<OpmeItemWithAssociation[]>([]);
   // Estados para fornecedores - usando formato compatível com SurgeryData
@@ -969,19 +996,24 @@ export default function CreateOrder() {
         
         // Carregar TODOS os procedimentos como lista unificada (convertendo associações para formato esperado)
         const allProceduresData = procedures.map((p: any) => {
-          // Converter formato backend (surgicalApproach/surgicalProcedure) para formato frontend (sourceApproachId/etc)
+          // Converter formato backend para formato frontend
+          // Backend retorna: surgicalApproachId, surgicalApproachName, surgicalProcedureId, surgicalProcedureName (campos separados)
+          // OU: surgicalApproach: { id, name }, surgicalProcedure: { id, name } (objetos aninhados)
           const procedureWithAssociations = {
             ...p.procedure,
             // Adicionar campos de associação no formato esperado pelo frontend
-            sourceApproachId: p.surgicalApproach?.id || null,
-            sourceApproachName: p.surgicalApproach?.name || null,
-            sourceProcedureId: p.surgicalProcedure?.id || null,
-            sourceProcedureName: p.surgicalProcedure?.name || null
+            sourceApproachId: p.surgicalApproach?.id || p.surgicalApproachId || null,
+            sourceApproachName: p.surgicalApproach?.name || p.surgicalApproachName || null,
+            sourceProcedureId: p.surgicalProcedure?.id || p.surgicalProcedureId || null,
+            sourceProcedureName: p.surgicalProcedure?.name || p.surgicalProcedureName || null
           };
           
           return {
             procedure: procedureWithAssociations,
-            quantity: p.quantity || 1
+            quantity: p.quantity || 1,
+            // Também adicionar objetos no nível do item para compatibilidade com PDF
+            surgicalApproach: p.surgicalApproach || (p.surgicalApproachId ? { id: p.surgicalApproachId, name: p.surgicalApproachName } : null),
+            surgicalProcedure: p.surgicalProcedure || (p.surgicalProcedureId ? { id: p.surgicalProcedureId, name: p.surgicalProcedureName } : null)
           };
         });
         
@@ -2553,23 +2585,21 @@ export default function CreateOrder() {
         return;
       }
 
-      // Carregar CIDs atualizados do banco de dados antes de gerar o PDF
-      // IMPORTANTE: O backend /api/orders/:id/cids já retorna as associações de surgicalApproach e surgicalProcedure para cada CID
-      console.log("🔄 Carregando CIDs atualizados do banco para o PDF...");
-      const freshCidData = await apiRequest(`/api/orders/${orderId}/cids`, "GET");
+      // ✅ OTIMIZAÇÃO: Usar dados já carregados no estado (visualizador do pedido)
+      // Isso garante que o PDF tenha EXATAMENTE os mesmos dados que o usuário viu no preview
+      console.log("📋 Usando dados do visualizador (já carregados no estado)...");
       
-      // Usar os dados do backend diretamente - eles já contêm as associações corretas de cada CID
-      let freshMultipleCids: any[] = [];
-      if (freshCidData && freshCidData.length > 0) {
-        // Formato do backend: { cid: {...}, surgicalApproach: {...} | null, surgicalProcedure: {...} | null }
-        freshMultipleCids = freshCidData.map((cidItem: any) => ({
-          cid: cidItem.cid,
-          surgicalApproach: cidItem.surgicalApproach,
-          surgicalProcedure: cidItem.surgicalProcedure
-        }));
-        console.log("✅ CIDs carregados para PDF:", freshMultipleCids.length, "CIDs com associações cirúrgicas:", 
-          freshMultipleCids.map((c: any) => `${c.cid?.code} → ${c.surgicalProcedure?.name || 'sem proc'} → ${c.surgicalApproach?.name || 'sem conduta'}`));
-      }
+      // Usar CIDs do estado local - inclui tanto objetos surgicalApproach/surgicalProcedure quanto IDs diretos
+      const localCids = multipleCids.map((cidItem: CidItemWithAssociation) => ({
+        cid: cidItem.cid,
+        surgicalApproach: cidItem.surgicalApproach || null,
+        surgicalProcedure: cidItem.surgicalProcedure || null,
+        // Incluir IDs diretos para fallback quando objetos não estão disponíveis
+        sourceApproachId: cidItem.sourceApproachId || cidItem.surgicalApproach?.id || null,
+        sourceProcedureId: cidItem.sourceProcedureId || cidItem.surgicalProcedure?.id || null,
+      }));
+      console.log("✅ CIDs do estado local:", localCids.length, "CIDs com associações:", 
+        localCids.map((c: any) => `${c.cid?.code} → proc:${c.surgicalProcedure?.id || c.sourceProcedureId || 'sem'} → approach:${c.surgicalApproach?.id || c.sourceApproachId || 'sem'}`));
 
       toast({
         title: "Gerando PDF",
@@ -2581,87 +2611,165 @@ export default function CreateOrder() {
         (window as any).Buffer = Buffer;
       }
       
-      // Importar dinamicamente o react-pdf
+      // Importar dinamicamente o react-pdf e o novo componente V2
       const { pdf } = await import('@react-pdf/renderer');
-      const { OrderPDFDocument } = await import('@/components/order-pdf-document');
+      const { OrderPDFDocumentV2 } = await import('@/components/order-pdf-document-v2');
 
-      // Preparar fornecedores com associações de conduta cirúrgica para o PDF
-      // IMPORTANTE: Usar rota /api/orders/:id/suppliers que retorna surgicalApproach e surgicalProcedure
-      let suppliersArray: any[] = [];
-      try {
-        const suppliersResponse = await apiRequest(`/api/orders/${orderId}/suppliers`, "GET");
-        console.log("🏭 PDF - Fornecedores com associações cirúrgicas:", suppliersResponse);
-        
-        if (suppliersResponse && suppliersResponse.length > 0) {
-          // Formato do backend: { supplier: {...}, surgicalApproach: {...} | null, surgicalProcedure: {...} | null }
-          suppliersArray = suppliersResponse.map((item: any) => ({
-            supplierId: item.supplier?.id,
-            supplierName: item.supplier?.tradeName || item.supplier?.name,
-            cnpj: item.supplier?.cnpj,
-            surgicalApproach: item.surgicalApproach,
-            surgicalProcedure: item.surgicalProcedure,
-            isApproved: item.isApproved,
-            // Adicionar campos de compatibilidade para o agrupamento no PDF
-            sourceApproachId: item.surgicalApproach?.id || null,
-            sourceApproachName: item.surgicalApproach?.name || null,
-            sourceProcedureId: item.surgicalProcedure?.id || null,
-            sourceProcedureName: item.surgicalProcedure?.name || null
-          }));
-          console.log("✅ Fornecedores carregados para PDF:", suppliersArray.length, "fornecedores com associações:",
-            suppliersArray.map((s: any) => `${s.supplierName} → ${s.surgicalProcedure?.name || 'sem proc'} → ${s.surgicalApproach?.name || 'sem conduta'}`));
-        }
-      } catch (error) {
-        console.error("🏭 PDF - Erro ao carregar fornecedores:", error);
-      }
-
-      // Preparar dados para o PDF com quebra automática
-      const pdfData = {
-        orderData: {
-          ...currentOrderData,
-          id: orderId,
-          clinicalJustification: currentOrderData?.clinical_justification || currentOrderData?.clinicalJustification,
-          procedureLaterality: currentOrderData?.procedureLaterality,
-          secondaryProcedureQuantities: currentOrderData?.secondaryProcedureQuantities,
-          opmeItemQuantities: currentOrderData?.opmeItemQuantities,
-          cbhpmAdditionalNotes: cbhpmAdditionalNotes ?? currentOrderData?.cbhpmAdditionalNotes ?? currentOrderData?.cbhpm_additional_notes,
-          opmeAdditionalNotes: opmeAdditionalNotes ?? currentOrderData?.opmeAdditionalNotes ?? currentOrderData?.opme_additional_notes,
-          supplierAdditionalNotes: supplierAdditionalNotes ?? currentOrderData?.supplierAdditionalNotes ?? currentOrderData?.supplier_additional_notes,
-          doctorName: user?.name || "Dr. Médico Responsável",
-          doctorCRM: user?.crm || "CRM XXXX",
-          doctorLogoUrl: user?.logoUrl, // Logo do médico do campo logo_url
-          doctorSignature: user?.signatureUrl, // Assinatura do médico do campo signature_url
-        },
-        patientData: selectedPatient,
-        hospitalData: selectedHospital,
-        procedureData: secondaryProcedures?.[0] || null, // ✅ CORRIGIDO: Usa primeiro procedimento da lista (principal determinado por porte)
-        cidData: freshMultipleCids && freshMultipleCids.length > 0 ? freshMultipleCids : [{ cid: { code: cidCode, description: cidDescription } }],
-        secondaryProcedures: secondaryProcedures || [],
-        opmeItems: selectedOpmeItems || [],
-        suppliers: suppliersArray,
+      console.log("📄 Usando OrderPDFDocumentV2 com mesmos dados do Preview V2...");
+      
+      // Preparar dados no formato IDÊNTICO ao Preview V2
+      // IMPORTANTE: Usar exatamente os mesmos estados que são passados para OrderPreviewV2
+      const pdfV2Data = {
+        orderId,
+        selectedPatient,
+        selectedHospital,
+        user,
+        clinicalJustification,
+        procedureType,
+        procedureLaterality,
+        multipleCids,  // ✅ Usar multipleCids diretamente (igual ao Preview V2)
+        secondaryProcedures,
+        selectedOpmeItems,
+        supplierDetails,
+        cbhpmAdditionalNotes,
+        opmeAdditionalNotes,
+        supplierAdditionalNotes,
       };
 
-      console.log("📄 Gerando PDF com react-pdf/renderer (quebra automática)...");
-      console.log("Dados enviados para PDF:", {
-        orderId: pdfData.orderData.id,
-        patientName: pdfData.patientData?.fullName,
-        hospitalName: pdfData.hospitalData?.name,
-        procedureName: pdfData.procedureData?.procedure?.name || 'N/A', // ✅ CORRIGIDO: Estrutura do SecondaryProcedure
-        justificationLength: pdfData.orderData?.clinicalJustification?.length || 0,
-        secondaryProceduresCount: pdfData.secondaryProcedures?.length || 0,
-        opmeItemsCount: pdfData.opmeItems?.length || 0,
+      console.log("📄 Gerando PDF V2 com react-pdf/renderer...");
+      console.log("Dados enviados para PDF V2:", {
+        orderId: pdfV2Data.orderId,
+        patientName: pdfV2Data.selectedPatient?.fullName,
+        hospitalName: pdfV2Data.selectedHospital?.name,
+        justificationLength: pdfV2Data.clinicalJustification?.length || 0,
+        secondaryProceduresCount: pdfV2Data.secondaryProcedures?.length || 0,
+        opmeItemsCount: pdfV2Data.selectedOpmeItems?.length || 0,
+        cidsCount: pdfV2Data.multipleCids?.length || 0,
+        suppliersCount: pdfV2Data.supplierDetails?.length || 0,
       });
 
       // Preparar anexos de imagem para incluir no PDF
-      const imageAttachments = (currentOrderData?.attachments || []).filter((attachment: any) => 
+      const rawImageAttachments = (currentOrderData?.attachments || []).filter((attachment: any) => 
         attachment.type === 'image' || 
         (attachment.type && ['jpeg', 'jpg', 'png', 'gif', 'webp'].includes(attachment.type.toLowerCase())) ||
         (attachment.filename && /\.(jpeg|jpg|png|gif|webp)$/i.test(attachment.filename))
       );
 
+      // Função para calcular se a imagem tem proporção de documento A4
+      const calculateIsDocumentRatio = (width: number, height: number): boolean => {
+        const aspectRatio = Math.min(width, height) / Math.max(width, height);
+        return aspectRatio >= 0.6 && aspectRatio <= 0.85;
+      };
+
+      // Função para obter dimensões de uma imagem via URL
+      const getImageDimensionsFromUrl = (url: string): Promise<{ width: number; height: number }> => {
+        return new Promise((resolve) => {
+          const img = new window.Image();
+          img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+          img.onerror = () => resolve({ width: 0, height: 0 });
+          img.src = url;
+        });
+      };
+
+      // Processar anexos para detectar proporção
+      const imageAttachments = await Promise.all(
+        rawImageAttachments.map(async (attachment: any) => {
+          try {
+            const dimensions = await getImageDimensionsFromUrl(attachment.url);
+            const isDocumentRatio = dimensions.width > 0 && dimensions.height > 0 
+              ? calculateIsDocumentRatio(dimensions.width, dimensions.height)
+              : false;
+            console.log(`📐 Anexo "${attachment.filename}": ${dimensions.width}x${dimensions.height}, proporção documento: ${isDocumentRatio}`);
+            return { ...attachment, isDocumentRatio };
+          } catch {
+            return { ...attachment, isDocumentRatio: false };
+          }
+        })
+      );
+
       console.log(`📎 Encontradas ${imageAttachments.length} imagens para adicionar ao PDF:`, imageAttachments.map(a => a.filename));
 
-      // Gerar PDF principal usando react-pdf com quebra automática de páginas
-      const mainPdfBlob = await pdf(<OrderPDFDocument {...pdfData} attachments={imageAttachments} />).toBlob();
+      // Calcular quebras de página manuais baseadas nas posições ajustadas
+      interface PageBreakConfig {
+        sectionIndex?: number;
+        justificationLineIndex?: number;
+      }
+      const pageBreakConfigs: PageBreakConfig[] = [];
+      
+      if (orderPageBreaks.length > 0) {
+        // Obter texto da justificativa para calcular linhas
+        const justificationText = currentOrderData?.clinical_justification || currentOrderData?.clinicalJustification || '';
+        // Usar parseMarkdownToPdf para obter o mesmo número de linhas que o PDF
+        const { parseMarkdownToPdf } = await import('@/components/order-pdf-document');
+        const pdfLines = parseMarkdownToPdf(justificationText);
+        const totalPdfLines = pdfLines.length;
+        
+        // Obter posição real da justificativa no DOM
+        const justificationBox = document.getElementById('justification-preview-box');
+        const documentoCompleto = document.getElementById('documento-completo');
+        
+        if (justificationBox && documentoCompleto) {
+          const docRect = documentoCompleto.getBoundingClientRect();
+          const justRect = justificationBox.getBoundingClientRect();
+          
+          // Posições relativas ao documento
+          const justificationStart = justRect.top - docRect.top;
+          const justificationEnd = justRect.bottom - docRect.top;
+          const justificationHeight = justRect.height;
+          
+          console.log('📄 Posições reais do DOM:', {
+            justificationStart,
+            justificationEnd,
+            justificationHeight,
+            totalPdfLines
+          });
+          
+          orderPageBreaks.forEach((breakInfo, breakIndex) => {
+            // Só processar se a quebra foi ajustada
+            if (breakInfo.adjustedPosition !== breakInfo.originalPosition) {
+              const breakPos = breakInfo.adjustedPosition;
+              
+              // Verificar se a quebra está dentro da justificativa
+              if (breakPos >= justificationStart && breakPos < justificationEnd) {
+                // Calcular posição relativa dentro da justificativa (0 a 1)
+                const relativePosition = (breakPos - justificationStart) / justificationHeight;
+                
+                // Aplicar proporção ao número de linhas do PDF
+                const lineIndex = Math.floor(relativePosition * totalPdfLines);
+                
+                // Adicionar quebra antes dessa linha (índice limitado ao número de linhas)
+                const safeLineIndex = Math.max(1, Math.min(lineIndex, totalPdfLines - 1));
+                pageBreakConfigs.push({ justificationLineIndex: safeLineIndex });
+                console.log(`📄 Quebra na justificativa: posição relativa ${(relativePosition * 100).toFixed(1)}% → linha ${safeLineIndex} de ${totalPdfLines}`);
+              } else if (breakPos < justificationStart) {
+                // Quebra antes da justificativa (seção 2)
+                pageBreakConfigs.push({ sectionIndex: 2 });
+                console.log(`📄 Quebra antes da justificativa (seção 2)`);
+              } else if (breakPos >= justificationEnd) {
+                // Quebra nas seções após a justificativa
+                pageBreakConfigs.push({ sectionIndex: 3 });
+                console.log(`📄 Quebra após a justificativa (seção 3)`);
+              }
+            }
+          });
+        } else {
+          console.warn('⚠️ Elementos DOM não encontrados para cálculo de quebras');
+        }
+
+        console.log('📄 Configurações de quebras de página:', pageBreakConfigs);
+      }
+
+      // Converter Set de quebras forçadas para array para passar ao PDF
+      const forcedPageBreaksArray = Array.from(forcedPageBreaks);
+      console.log('📄 Quebras de página forçadas do preview:', forcedPageBreaksArray);
+      
+      // Gerar PDF V2 principal usando react-pdf (mesma estrutura do Preview V2)
+      const mainPdfBlob = await pdf(
+        <OrderPDFDocumentV2 
+          {...pdfV2Data} 
+          forcedPageBreaks={forcedPageBreaksArray} 
+        />
+      ).toBlob();
 
       console.log("✅ PDF vetorial principal gerado! Tamanho:", mainPdfBlob.size, "bytes");
 
@@ -3279,14 +3387,22 @@ export default function CreateOrder() {
         console.error("Erro ao buscar attachments atuais:", error);
       }
       
-      // 2. Apenas mudar o status para "Aguardando Envio" com attachments preservados
+      // 2. Definir status baseado no tipo de procedimento (eletivo vs urgência)
+      // - Eletivo: vai para "Aguardando Envio" (ID 8)
+      // - Urgência: vai para "Autorização Pós" (ID 11)
+      const isUrgency = procedureType === PROCEDURE_TYPE_VALUES.URGENCIA;
+      const targetStatusId = isUrgency 
+        ? ORDER_STATUS_IDS.AUTORIZACAO_POS 
+        : ORDER_STATUS_IDS.AGUARDANDO_ENVIO;
+      const targetStatusLabel = isUrgency ? 'Autorização Pós' : 'Aguardando Envio';
+      
       const statusUpdateData = {
-        statusId: ORDER_STATUS_IDS.AGUARDANDO_ENVIO,
+        statusId: targetStatusId,
         // **PRESERVAR ATTACHMENTS**
         attachments: currentAttachments,
       };
 
-      console.log("🔄 Atualizando status do pedido para 'Aguardando Envio' (preservando attachments)...");
+      console.log(`🔄 Atualizando status do pedido para '${targetStatusLabel}' (preservando attachments)...`);
 
       // Utilizar o endpoint de update apenas para status
       const data = await apiRequest(
@@ -3451,6 +3567,116 @@ export default function CreateOrder() {
     setCurrentStep(stepNumber);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // === QUEBRAS DE PÁGINA AJUSTÁVEIS (Step 4 - Visualização) ===
+  
+  // Calcular posições das quebras de página quando o preview é renderizado
+  useEffect(() => {
+    console.log('[PageBreaks] useEffect triggered, currentStep:', currentStep);
+    if (currentStep !== 4) {
+      console.log('[PageBreaks] Not step 4, skipping');
+      return;
+    }
+    if (!orderPreviewRef.current) {
+      console.log('[PageBreaks] orderPreviewRef.current is null');
+      return;
+    }
+    
+    // Pequeno delay para garantir que o conteúdo está renderizado
+    const timer = setTimeout(() => {
+      const previewHeight = orderPreviewRef.current?.scrollHeight || 0;
+      const numPages = Math.ceil(previewHeight / PAGE_HEIGHT_PX);
+      
+      console.log('[PageBreaks] previewHeight:', previewHeight, 'PAGE_HEIGHT_PX:', PAGE_HEIGHT_PX, 'numPages:', numPages);
+      
+      if (numPages <= 1) {
+        console.log('[PageBreaks] Only 1 page, no breaks needed');
+        setOrderPageBreaks([]);
+        return;
+      }
+      
+      const breaks: PageBreakInfo[] = [];
+      for (let i = 1; i < numPages; i++) {
+        const position = i * PAGE_HEIGHT_PX;
+        breaks.push({
+          originalPosition: position,
+          adjustedPosition: position
+        });
+      }
+      console.log('[PageBreaks] Setting breaks:', breaks);
+      setOrderPageBreaks(breaks);
+    }, 500); // Aumentado delay para garantir renderização
+    
+    return () => clearTimeout(timer);
+  }, [currentStep, selectedPatient, selectedHospital, clinicalIndication, clinicalJustification, secondaryProcedures]);
+
+  // Handlers para arrastar marcadores de quebra de página
+  const handleBreakDragStart = useCallback((e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    setDraggingBreakIndex(index);
+    setBreakDragStartY(e.clientY);
+    setBreakDragStartPosition(orderPageBreaks[index]?.adjustedPosition || 0);
+  }, [orderPageBreaks]);
+
+  const handleBreakDrag = useCallback((e: MouseEvent) => {
+    if (draggingBreakIndex === null) return;
+    
+    const deltaY = e.clientY - breakDragStartY;
+    const newPosition = breakDragStartPosition + deltaY;
+    const breakInfo = orderPageBreaks[draggingBreakIndex];
+    
+    if (!breakInfo) return;
+    
+    // Limite superior: posição da quebra anterior + MIN_PAGE_CONTENT
+    const previousBreakPosition = draggingBreakIndex > 0 
+      ? orderPageBreaks[draggingBreakIndex - 1].adjustedPosition 
+      : 0;
+    const minPosition = previousBreakPosition + MIN_PAGE_CONTENT;
+    
+    // Limite inferior: posição original (não pode passar do limite da página)
+    const maxPosition = breakInfo.originalPosition;
+    
+    // Aplicar limites
+    const clampedPosition = Math.max(minPosition, Math.min(maxPosition, newPosition));
+    
+    setOrderPageBreaks(prev => {
+      const updated = [...prev];
+      updated[draggingBreakIndex] = {
+        ...updated[draggingBreakIndex],
+        adjustedPosition: clampedPosition,
+      };
+      return updated;
+    });
+  }, [draggingBreakIndex, breakDragStartY, breakDragStartPosition, orderPageBreaks]);
+
+  const handleBreakDragEnd = useCallback(() => {
+    setDraggingBreakIndex(null);
+  }, []);
+
+  // Adicionar listeners globais para drag
+  useEffect(() => {
+    if (draggingBreakIndex !== null) {
+      document.addEventListener('mousemove', handleBreakDrag);
+      document.addEventListener('mouseup', handleBreakDragEnd);
+      document.body.style.cursor = 'ns-resize';
+      document.body.style.userSelect = 'none';
+      
+      return () => {
+        document.removeEventListener('mousemove', handleBreakDrag);
+        document.removeEventListener('mouseup', handleBreakDragEnd);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [draggingBreakIndex, handleBreakDrag, handleBreakDragEnd]);
+
+  // Resetar quebras de página para posições originais
+  const resetOrderPageBreaks = useCallback(() => {
+    setOrderPageBreaks(prev => prev.map(b => ({
+      ...b,
+      adjustedPosition: b.originalPosition
+    })));
+  }, []);
 
   // Função para navegar para o próximo passo
   const goToNextStep = async () => {
@@ -3942,600 +4168,40 @@ export default function CreateOrder() {
 
             {currentStep === 4 && (
               <div className="p-3 sm:p-6" data-testid="order-step-4">
-                <div className="mb-6 text-foreground">
-                  <h3 className="text-lg font-medium text-foreground">
-                    Visualização do Pedido
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Revise os dados do pedido antes de finalizar
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Prévia A4 (210 x 297 mm)
-                  </p>
-
-                  {/* Div principal que conterá o documento para exportação futura em PDF */}
-                  <div className="flex justify-center mb-10">
-                    <div id="documento-completo" className="bg-white shadow-xl" style={{ width: '210mm', minHeight: '297mm' }}>
-                      
-                      {/* Área de conteúdo com margens A4 */}
-                      <div style={{ marginTop: '20px', marginBottom: '20px', marginLeft: '30px', marginRight: '30px' }}>
-                        <div id="documento-pedido" className="w-full bg-white text-black p-2">
-                          {/* Cabeçalho com logos do hospital e médico */}
-                          <div className="mb-2">
-                            <div className="flex items-start justify-between">
-                              {/* Logo do hospital - lado esquerdo */}
-                              <div className="w-40 h-16 flex items-center justify-center overflow-hidden">
-                                {selectedHospital?.logoUrl ? (
-                                  <img 
-                                    src={selectedHospital.logoUrl} 
-                                    alt={`Logo do ${selectedHospital.name}`} 
-                                    className="max-h-full object-contain"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
-                                ) : (
-                                  <div className="text-xs text-muted-foreground text-center">
-                                    {selectedHospital?.name || 'Hospital'}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Logo do médico - lado direito */}
-                              <div className="w-48 h-20 flex items-center justify-center overflow-hidden">
-                                {user?.logoUrl && (
-                                  <img 
-                                    src={user.logoUrl} 
-                                    alt="Logo do Médico" 
-                                    className="max-h-full object-contain"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Dados do Paciente */}
-                          {selectedPatient && (
-                            <div className="mb-5 p-2 bg-white rounded-lg">
-                              <h3 className="text-sm font-semibold mb-1 border-b pb-1">Dados do Paciente</h3>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="text-xs">
-                                  <p><span className="font-medium">Nome:</span> {selectedPatient.fullName}</p>
-                                  <p><span className="font-medium">Data de Nascimento:</span> {formatDateBR(selectedPatient.birthDate)}</p>
-                                  <p><span className="font-medium">Idade:</span> {new Date().getFullYear() - new Date(selectedPatient.birthDate).getFullYear()} anos</p>
-                                </div>
-                                <div className="text-xs">
-                                  <p><span className="font-medium">Plano de Saúde:</span> {selectedPatient.insurance || 'Não informado'}</p>
-                                  <p><span className="font-medium">Número da Carteirinha:</span> {selectedPatient.insuranceNumber || 'Não informado'}</p>
-                                  <p><span className="font-medium">Tipo do Plano:</span> {selectedPatient.plan || 'Não informado'}</p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Título do documento */}
-                          <div className="pb-1 mb-4">
-                            <h2 className="text-base font-bold text-center text-foreground">
-                              SOLICITAÇÃO DE PROCEDIMENTO CIRÚRGICO
-                            </h2>
-                            
-                            {/* Justificativa clínica */}
-                            <div className="mt-2 text-xs text-justify bg-white p-2 rounded-md" style={{ 
-                              minHeight: '72px',  // Altura mínima (equivale a ~3 linhas)
-                              height: 'auto'      // Altura automática baseada no conteúdo
-                            }}>
-                              {clinicalJustification ? (
-                                <MarkdownViewer content={clinicalJustification} className="prose-xs" />
-                              ) : (
-                                <p className="text-muted-foreground italic">Justificativa clínica será exibida aqui</p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Procedimentos e dados clínicos */}
-                          <div className="space-y-4 mt-10">
-                            <div className="pb-2">
-                              <div className="space-y-2">
-
-                                {/* Informações do procedimento - Caráter e Lateralidade */}
-                                <div className="flex text-xs">
-                                  <div className="w-1/2">
-                                    <p className="font-bold text-foreground">Caráter do Procedimento:</p>
-                                    <p className="text-muted-foreground pl-4">
-                                      {procedureType === 'eletiva' ? 'Eletivo' : 
-                                       procedureType === 'urgencia' ? 'Urgência' : 
-                                       procedureType === 'emergencia' ? 'Emergência' : 'Não especificado'}
-                                    </p>
-                                  </div>
-                                  <div className="w-1/2">
-                                    <p className="font-bold text-foreground">Lateralidade do Procedimento:</p>
-                                    <p className="text-muted-foreground pl-4">
-                                      {procedureLaterality === 'direito' ? 'Direito' :
-                                       procedureLaterality === 'esquerdo' ? 'Esquerdo' :
-                                       procedureLaterality === 'bilateral' ? 'Bilateral' : 'Não especificado'}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {/* Agrupamento por Procedimento/Conduta */}
-                                {(() => {
-                                  // Função para agrupar itens por procedimento/conduta (usando IDs para unicidade)
-                                  const groupItemsByApproach = () => {
-                                    const groups: Map<string, {
-                                      procedureId: number | null;
-                                      procedureName: string;
-                                      approachId: number | null;
-                                      approachName: string;
-                                      cids: any[];
-                                      cbhpmProcedures: any[];
-                                      opmeItems: any[];
-                                      suppliers: any[];
-                                    }> = new Map();
-
-                                    // Agrupar CIDs - verificar surgicalApproach E sourceApproachId (na raiz e em cid)
-                                    if (multipleCids && multipleCids.length > 0) {
-                                      multipleCids.forEach((cidItem: any) => {
-                                        // Priorizar surgicalApproach (objeto), depois sourceApproachId (ID direto na raiz ou em cid)
-                                        const approach = cidItem.surgicalApproach || cidItem.cid?.surgicalApproach;
-                                        const approachId = approach?.id || cidItem.sourceApproachId || cidItem.cid?.sourceApproachId || null;
-                                        const approachName = approach?.name || cidItem.sourceApproachName || cidItem.cid?.sourceApproachName || 'Itens Gerais';
-                                        // Buscar procedimento cirúrgico (objeto ou ID direto)
-                                        const procedure = cidItem.surgicalProcedure || cidItem.cid?.surgicalProcedure;
-                                        const procedureId = procedure?.id || cidItem.sourceProcedureId || cidItem.cid?.sourceProcedureId || null;
-                                        const procedureName = procedure?.name || cidItem.sourceProcedureName || cidItem.cid?.sourceProcedureName || '';
-                                        // Chave baseada em IDs para unicidade
-                                        const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
-                                        
-                                        if (!groups.has(key)) {
-                                          groups.set(key, {
-                                            procedureId,
-                                            procedureName,
-                                            approachId,
-                                            approachName,
-                                            cids: [],
-                                            cbhpmProcedures: [],
-                                            opmeItems: [],
-                                            suppliers: []
-                                          });
-                                        }
-                                        groups.get(key)!.cids.push(cidItem);
-                                      });
-                                    }
-
-                                    // Agrupar procedimentos CBHPM
-                                    if (secondaryProcedures && secondaryProcedures.length > 0) {
-                                      secondaryProcedures.forEach((proc: any) => {
-                                        // Priorizar surgicalApproach (dados do backend), depois sourceApproachId (dados manuais)
-                                        const approach = proc.surgicalApproach || proc.procedure?.surgicalApproach;
-                                        const approachId = approach?.id || proc.procedure?.sourceApproachId || null;
-                                        const approachName = approach?.name || proc.procedure?.sourceApproachName || 'Itens Gerais';
-                                        // Buscar procedimento cirúrgico
-                                        const procedure = proc.surgicalProcedure || proc.procedure?.surgicalProcedure;
-                                        const procedureId = procedure?.id || proc.procedure?.sourceProcedureId || null;
-                                        const procedureName = procedure?.name || proc.procedure?.sourceProcedureName || '';
-                                        // Chave baseada em IDs para unicidade
-                                        const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
-                                        
-                                        if (!groups.has(key)) {
-                                          groups.set(key, {
-                                            procedureId,
-                                            procedureName,
-                                            approachId,
-                                            approachName,
-                                            cids: [],
-                                            cbhpmProcedures: [],
-                                            opmeItems: [],
-                                            suppliers: []
-                                          });
-                                        }
-                                        groups.get(key)!.cbhpmProcedures.push(proc);
-                                      });
-                                    }
-
-                                    // Agrupar itens OPME
-                                    if (selectedOpmeItems && selectedOpmeItems.length > 0) {
-                                      selectedOpmeItems.forEach((opmeItem: any) => {
-                                        const item = opmeItem.item || opmeItem;
-                                        // Priorizar surgicalApproach (dados do backend), depois sourceApproachId (dados manuais)
-                                        const approach = opmeItem.surgicalApproach || item?.surgicalApproach;
-                                        const approachId = approach?.id || item?.sourceApproachId || null;
-                                        const approachName = approach?.name || item?.sourceApproachName || 'Itens Gerais';
-                                        // Buscar procedimento cirúrgico
-                                        const procedure = opmeItem.surgicalProcedure || item?.surgicalProcedure;
-                                        const procedureId = procedure?.id || item?.sourceProcedureId || null;
-                                        const procedureName = procedure?.name || item?.sourceProcedureName || '';
-                                        // Chave baseada em IDs para unicidade
-                                        const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
-                                        
-                                        if (!groups.has(key)) {
-                                          groups.set(key, {
-                                            procedureId,
-                                            procedureName,
-                                            approachId,
-                                            approachName,
-                                            cids: [],
-                                            cbhpmProcedures: [],
-                                            opmeItems: [],
-                                            suppliers: []
-                                          });
-                                        }
-                                        groups.get(key)!.opmeItems.push(opmeItem);
-                                      });
-                                    }
-
-                                    // Agrupar fornecedores
-                                    if (supplierDetails && supplierDetails.length > 0) {
-                                      supplierDetails.forEach((supplier: any) => {
-                                        const approachId = supplier.sourceApproachId || null;
-                                        const approachName = supplier.sourceApproachName || 'Itens Gerais';
-                                        const procedureId = supplier.sourceProcedureId || null;
-                                        const procedureName = supplier.sourceProcedureName || '';
-                                        // Chave baseada em IDs para unicidade
-                                        const key = (procedureId && approachId) ? `${procedureId}|${approachId}` : 'general';
-                                        
-                                        if (!groups.has(key)) {
-                                          groups.set(key, {
-                                            procedureId,
-                                            procedureName,
-                                            approachId,
-                                            approachName,
-                                            cids: [],
-                                            cbhpmProcedures: [],
-                                            opmeItems: [],
-                                            suppliers: []
-                                          });
-                                        }
-                                        groups.get(key)!.suppliers.push(supplier);
-                                      });
-                                    }
-
-                                    // Converter para array - PRESERVAR ORDEM DE ADIÇÃO DOS BLOCOS
-                                    // Apenas colocar 'general' (itens sem conduta) no final
-                                    const entries = Array.from(groups.entries());
-                                    const generalEntry = entries.find(([key]) => key === 'general');
-                                    const otherEntries = entries.filter(([key]) => key !== 'general');
-                                    
-                                    // Retorna outros na ordem original de adição, com 'general' no final
-                                    return generalEntry ? [...otherEntries, generalEntry] : otherEntries;
-                                  };
-
-                                  const groupedItems = groupItemsByApproach();
-                                  const hasMultipleGroups = groupedItems.length > 1 || (groupedItems.length === 1 && groupedItems[0][0] !== 'general');
-
-                                  // 📝 Função para parsear notas por subtítulos de conduta
-                                  // Formato atual: ### [Procedimento] → [Conduta]
-                                  // Formato legado (compatibilidade): ### [Procedimento] → [Conduta] [PID:x][AID:y]
-                                  // IMPORTANTE: Ambos os formatos são normalizados para chave baseada em nomes
-                                  // Se houver múltiplas seções com a mesma chave, o conteúdo é mesclado
-                                  const parseNotesBySubtitle = (notes: string) => {
-                                    if (!notes) return { general: '', sections: new Map<string, string>() };
-                                    
-                                    const sections = new Map<string, string>();
-                                    const lines = notes.split('\n');
-                                    let currentKey: string | null = null;
-                                    let currentContent: string[] = [];
-                                    let generalContent: string[] = [];
-                                    
-                                    // Função auxiliar para salvar conteúdo (com merge se chave já existe)
-                                    const saveContent = (key: string, content: string) => {
-                                      if (!content) return;
-                                      const existing = sections.get(key);
-                                      if (existing) {
-                                        // Merge: concatenar conteúdo existente com novo
-                                        sections.set(key, `${existing}\n\n${content}`);
-                                      } else {
-                                        sections.set(key, content);
-                                      }
-                                    };
-                                    
-                                    lines.forEach(line => {
-                                      // Detectar subtítulo - suporta formato atual e legado
-                                      // Atual: ### [Procedimento] → [Conduta]
-                                      // Legado: ### [Procedimento] → [Conduta] [PID:x][AID:y]
-                                      const subtitleWithIdsMatch = line.match(/^###\s*(.+?)\s*→\s*(.+?)\s*\[PID:(\d+)\]\[AID:(\d+)\]\s*$/);
-                                      const subtitleMatch = line.match(/^###\s*(.+?)\s*→\s*(.+?)\s*$/);
-                                      
-                                      if (subtitleWithIdsMatch || subtitleMatch) {
-                                        // Salvar conteúdo anterior
-                                        if (currentKey) {
-                                          const content = currentContent.join('\n').trim();
-                                          saveContent(currentKey, content);
-                                        } else if (currentContent.length > 0) {
-                                          generalContent = [...generalContent, ...currentContent];
-                                        }
-                                        
-                                        // Extrair nomes do procedimento e conduta (ambos os formatos)
-                                        const procedureName = (subtitleWithIdsMatch || subtitleMatch)![1].trim();
-                                        const approachName = (subtitleWithIdsMatch || subtitleMatch)![2].trim();
-                                        
-                                        // Sempre usar chave baseada em nomes (canônica)
-                                        currentKey = `name:${procedureName}-${approachName}`;
-                                        currentContent = [];
-                                      } else {
-                                        currentContent.push(line);
-                                      }
-                                    });
-                                    
-                                    // Salvar última seção
-                                    if (currentKey) {
-                                      const content = currentContent.join('\n').trim();
-                                      saveContent(currentKey, content);
-                                    } else if (currentContent.length > 0) {
-                                      generalContent = [...generalContent, ...currentContent];
-                                    }
-                                    
-                                    return { general: generalContent.join('\n').trim(), sections };
-                                  };
-
-                                  // Parsear as 3 caixas de notas
-                                  const cbhpmNotes = parseNotesBySubtitle(cbhpmAdditionalNotes);
-                                  const opmeNotes = parseNotesBySubtitle(opmeAdditionalNotes);
-                                  const supplierNotes = parseNotesBySubtitle(supplierAdditionalNotes);
-
-                                  // Função helper para buscar nota por nome (chave única)
-                                  // Todas as seções são normalizadas para chave baseada em nomes
-                                  const findNote = (
-                                    sections: Map<string, string>,
-                                    procedureId: number | null,
-                                    approachId: number | null,
-                                    procedureName: string,
-                                    approachName: string
-                                  ): string | undefined => {
-                                    // Busca por nome (chave canônica)
-                                    const nameKey = `name:${procedureName}-${approachName}`;
-                                    return sections.get(nameKey);
-                                  };
-
-                                  // Função para ordenar procedimentos CBHPM por porte
-                                  const parsePorteValue = (porte: string | null | undefined): number => {
-                                    if (!porte) return 0;
-                                    const match = porte.match(/^(\d+)([A-Za-z]?)$/);
-                                    if (!match) return 0;
-                                    const numero = parseInt(match[1], 10);
-                                    const letra = match[2]?.toUpperCase() || 'A';
-                                    const valorLetra = letra.charCodeAt(0) - 'A'.charCodeAt(0) + 1;
-                                    return (numero * 100) + valorLetra;
-                                  };
-
-                                  return groupedItems.map(([key, group], groupIndex) => (
-                                    <div key={key} className={`${groupIndex > 0 ? 'mt-4 pt-4 border-t border-gray-200' : ''}`}>
-                                      {/* Subtítulo do grupo - Procedimento Cirúrgico → Conduta */}
-                                      {hasMultipleGroups && group.approachId && (
-                                        <div className="mb-3">
-                                          <p className="font-bold text-base text-medsync-blue">
-                                            {group.procedureName} → {group.approachName}
-                                          </p>
-                                        </div>
-                                      )}
-
-                                      {/* Códigos CID-10 do grupo */}
-                                      {group.cids.length > 0 && (
-                                        <div className="mb-2">
-                                          <p className="font-bold text-xs text-foreground">Códigos CID-10:</p>
-                                          <div className="text-xs text-muted-foreground pl-4 space-y-0.5">
-                                            {group.cids.map((cidItem, index) => {
-                                              const code = cidItem.cid?.code;
-                                              const description = cidItem.cid?.description;
-                                              const id = cidItem.cid?.id;
-                                              return (
-                                                <p key={id || index}>
-                                                  {code} - {description}
-                                                </p>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Procedimentos CBHPM do grupo + Observações específicas */}
-                                      {group.cbhpmProcedures.length > 0 && (
-                                        <div className="mb-2">
-                                          <p className="font-bold text-xs text-foreground">Procedimentos Cirúrgicos Necessários:</p>
-                                          <div className="text-xs text-muted-foreground pl-4 space-y-0.5">
-                                            {(() => {
-                                              const sortedProcs = [...group.cbhpmProcedures].sort(
-                                                (a, b) => parsePorteValue(b.procedure?.porte) - parsePorteValue(a.procedure?.porte)
-                                              );
-                                              return sortedProcs.map((proc, index) => (
-                                                <p key={index}>
-                                                  {proc.quantity} x {proc.procedure?.code} - {proc.procedure?.name}
-                                                  {index === 0 && sortedProcs.length > 1 ? ' (Principal)' : ''}
-                                                </p>
-                                              ));
-                                            })()}
-                                          </div>
-                                          {/* Observação específica CBHPM - logo abaixo da lista */}
-                                          {(() => {
-                                            const cbhpmNote = findNote(cbhpmNotes.sections, group.procedureId, group.approachId, group.procedureName, group.approachName);
-                                            if (!cbhpmNote) return null;
-                                            return (
-                                              <div className="mt-1">
-                                                <p className="font-bold text-xs text-foreground">Observações:</p>
-                                                <div className="text-xs text-muted-foreground pl-4">
-                                                  <MarkdownViewer content={cbhpmNote} className="prose-xs" />
-                                                </div>
-                                              </div>
-                                            );
-                                          })()}
-                                        </div>
-                                      )}
-
-                                      {/* Materiais OPME do grupo + Observações específicas */}
-                                      {group.opmeItems.length > 0 && (
-                                        <div className="mb-2">
-                                          <p className="font-bold text-xs text-foreground">Lista de Materiais Necessários:</p>
-                                          <div className="flex flex-col text-xs text-muted-foreground pl-4 gap-0.5">
-                                            {group.opmeItems.map((item, index) => (
-                                              <p key={index}>
-                                                {item.quantity} x {item.technicalName || item.item?.technicalName || 'Material não especificado'}
-                                              </p>
-                                            ))}
-                                          </div>
-                                          {/* Observação específica OPME - logo abaixo da lista */}
-                                          {(() => {
-                                            const opmeNote = findNote(opmeNotes.sections, group.procedureId, group.approachId, group.procedureName, group.approachName);
-                                            if (!opmeNote) return null;
-                                            return (
-                                              <div className="mt-1">
-                                                <p className="font-bold text-xs text-foreground">Observações:</p>
-                                                <div className="text-xs text-muted-foreground pl-4">
-                                                  <MarkdownViewer content={opmeNote} className="prose-xs" />
-                                                </div>
-                                              </div>
-                                            );
-                                          })()}
-                                        </div>
-                                      )}
-
-                                      {/* Fornecedores do grupo + Observações específicas */}
-                                      {group.suppliers.length > 0 && (
-                                        <div className="mb-2">
-                                          <p className="font-bold text-xs text-foreground">Fornecedores:</p>
-                                          <div className="flex flex-col text-xs text-muted-foreground pl-4 gap-0.5">
-                                            {group.suppliers.map((supplier, index) => (
-                                              <p key={supplier.id || index}>
-                                                {index + 1}. {supplier.tradeName || supplier.companyName}
-                                              </p>
-                                            ))}
-                                          </div>
-                                          {/* Observação específica Fornecedores - logo abaixo da lista */}
-                                          {(() => {
-                                            const supplierNote = findNote(supplierNotes.sections, group.procedureId, group.approachId, group.procedureName, group.approachName);
-                                            if (!supplierNote) return null;
-                                            return (
-                                              <div className="mt-1">
-                                                <p className="font-bold text-xs text-foreground">Observações:</p>
-                                                <div className="text-xs text-muted-foreground pl-4">
-                                                  <MarkdownViewer content={supplierNote} className="prose-xs" />
-                                                </div>
-                                              </div>
-                                            );
-                                          })()}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ));
-                                })()}
-
-                                {/* Observações gerais (não associadas a nenhuma conduta específica) */}
-                                {(() => {
-                                  // Função para parsear notas por subtítulos
-                                  const parseGeneralNotes = (notes: string | undefined | null) => {
-                                    if (!notes) return '';
-                                    const lines = notes.split('\n');
-                                    let currentKey: string | null = null;
-                                    let generalContent: string[] = [];
-                                    
-                                    lines.forEach(line => {
-                                      const subtitleMatch = line.match(/^###\s*(.+?)\s*→\s*(.+?)\s*$/);
-                                      if (subtitleMatch) {
-                                        currentKey = 'has_subtitle';
-                                      } else if (!currentKey) {
-                                        generalContent.push(line);
-                                      }
-                                    });
-                                    
-                                    return generalContent.join('\n').trim();
-                                  };
-
-                                  const cbhpmGeneral = parseGeneralNotes(cbhpmAdditionalNotes);
-                                  const opmeGeneral = parseGeneralNotes(opmeAdditionalNotes);
-                                  const supplierGeneral = parseGeneralNotes(supplierAdditionalNotes);
-
-                                  return (
-                                    <>
-                                      {cbhpmGeneral && (
-                                        <div className="mb-2">
-                                          <p className="font-bold text-xs text-foreground">Observações Gerais sobre Procedimentos:</p>
-                                          <div className="text-xs text-muted-foreground pl-4">
-                                            <MarkdownViewer content={cbhpmGeneral} className="prose-xs" />
-                                          </div>
-                                        </div>
-                                      )}
-                                      {opmeGeneral && (
-                                        <div className="mb-2">
-                                          <p className="font-bold text-xs text-foreground">Observações Gerais sobre Materiais:</p>
-                                          <div className="text-xs text-muted-foreground pl-4">
-                                            <MarkdownViewer content={opmeGeneral} className="prose-xs" />
-                                          </div>
-                                        </div>
-                                      )}
-                                      {supplierGeneral && (
-                                        <div className="mb-2">
-                                          <p className="font-bold text-xs text-foreground">Observações Gerais sobre Fornecedores:</p>
-                                          <div className="text-xs text-muted-foreground pl-4">
-                                            <MarkdownViewer content={supplierGeneral} className="prose-xs" />
-                                          </div>
-                                        </div>
-                                      )}
-                                    </>
-                                  );
-                                })()}
-
-                                {/* Seção de assinatura - agora com posicionamento relativo */}
-                                <div className="mt-8 mb-4">
-                                  {/* Data */}
-                                  <div className="text-right mb-6">
-                                    <p className="text-xs text-muted-foreground">
-                                      {selectedHospital?.name?.includes('Niterói') ? 'Niterói' : 'Rio de Janeiro'}, {new Date().toLocaleDateString('pt-BR')}
-                                    </p>
-                                  </div>
-
-                                  {/* Assinatura do médico */}
-                                  <div className="flex justify-center relative mb-0">
-                                    {user?.signatureUrl && (
-                                      <img 
-                                        src={user.signatureUrl} 
-                                        alt="Assinatura do Médico" 
-                                        className="object-contain relative z-0"
-                                        style={{ maxWidth: '240px', maxHeight: '120px', marginBottom: '-10px' }}
-                                        onError={(e) => {
-                                          // Fallback para área vazia se a imagem falhar ao carregar
-                                          e.currentTarget.style.display = 'none';
-                                        }}
-                                      />
-                                    )}
-                                  </div>
-
-                                  {/* Dados do médico */}
-                                  {user && (
-                                    <div className="flex flex-col items-center mb-6 relative z-10">
-                                      <div className="border-t border-border w-48 mb-1"></div>
-                                      <p className="text-xs font-bold text-foreground">{user.name?.toUpperCase()}</p>
-                                      <div className="text-xs text-muted-foreground text-center">
-                                        {user.signatureNote ? (
-                                          user.signatureNote.split('\n').map((line, index) => (
-                                            <p key={index}>{line}</p>
-                                          ))
-                                        ) : (
-                                          <p>ORTOPEDIA E TRAUMATOLOGIA</p>
-                                        )}
-                                      </div>
-                                      <p className="text-xs text-muted-foreground">CRM {user.crm}</p>
-                                    </div>
-                                  )}
-
-                                  {/* Rodapé */}
-                                  <div className="pt-1 border-t border-border flex flex-row items-center justify-center">
-                                    <img 
-                                      src={MedSyncLogo} 
-                                      alt="Logo MedSync" 
-                                      className="h-5 mr-2"
-                                    />
-                                    <p className="text-xs text-muted-foreground">Documento gerado por MedSync v2.5.3</p>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                {USE_PAGINATED_PREVIEW ? (
+                  <OrderPreviewV2
+                    selectedPatient={selectedPatient}
+                    selectedHospital={selectedHospital}
+                    user={user}
+                    clinicalJustification={clinicalJustification}
+                    procedureType={procedureType}
+                    procedureLaterality={procedureLaterality}
+                    multipleCids={multipleCids}
+                    secondaryProcedures={secondaryProcedures}
+                    selectedOpmeItems={selectedOpmeItems}
+                    supplierDetails={supplierDetails}
+                    cbhpmAdditionalNotes={cbhpmAdditionalNotes}
+                    opmeAdditionalNotes={opmeAdditionalNotes}
+                    supplierAdditionalNotes={supplierAdditionalNotes}
+                    onForcedPageBreaksChange={setForcedPageBreaks}
+                  />
+                ) : (
+                  <OrderPreview
+                    selectedPatient={selectedPatient}
+                    selectedHospital={selectedHospital}
+                    user={user}
+                    clinicalJustification={clinicalJustification}
+                    procedureType={procedureType}
+                    procedureLaterality={procedureLaterality}
+                    multipleCids={multipleCids}
+                    secondaryProcedures={secondaryProcedures}
+                    selectedOpmeItems={selectedOpmeItems}
+                    supplierDetails={supplierDetails}
+                    cbhpmAdditionalNotes={cbhpmAdditionalNotes}
+                    opmeAdditionalNotes={opmeAdditionalNotes}
+                    supplierAdditionalNotes={supplierAdditionalNotes}
+                  />
+                )}
               </div>
             )}
 

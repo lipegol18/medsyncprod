@@ -307,8 +307,6 @@ export function SupplierApprovalModal({
                               className={`cursor-pointer transition-all duration-200 ${
                                 isSelected 
                                   ? 'border-green-500 bg-green-100/20 dark:bg-green-900/20 shadow-lg' 
-                                  : isAlreadyApproved
-                                  ? 'border-green-400 dark:border-green-700 bg-green-50/20 dark:bg-green-900/10'
                                   : 'border-border bg-muted/50 hover:bg-muted/80'
                               }`}
                               onClick={() => handleSupplierSelect(supplier.id)}
@@ -321,11 +319,9 @@ export function SupplierApprovalModal({
                                     <div className={`flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center mt-1 ${
                                       isSelected 
                                         ? 'border-green-500 bg-green-500' 
-                                        : isAlreadyApproved
-                                        ? 'border-green-400 bg-green-400'
                                         : 'border-muted-foreground'
                                     }`}>
-                                      {(isSelected || isAlreadyApproved) && (
+                                      {isSelected && (
                                         <Check className="h-4 w-4 text-white" />
                                       )}
                                     </div>
@@ -337,6 +333,11 @@ export function SupplierApprovalModal({
                                         <div>
                                           <h3 className="font-semibold text-foreground text-lg">{supplier.name}</h3>
                                           <p className="text-sm text-muted-foreground">CNPJ: {supplier.cnpj}</p>
+                                          {isAlreadyApproved && !isSelected && (
+                                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                                              (foi aprovado anteriormente)
+                                            </p>
+                                          )}
                                         </div>
                                       </div>
                                     </div>
@@ -350,7 +351,7 @@ export function SupplierApprovalModal({
                                       </Badge>
                                     ) : isAlreadyApproved ? (
                                       <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400">
-                                        Aprovado Anteriormente
+                                        Clique para selecionar
                                       </Badge>
                                     ) : (
                                       <Badge variant="outline" className="border-border text-muted-foreground">

@@ -162,3 +162,22 @@ Preferred communication style: Simple, everyday language.
     - `client/src/steps/surgery-data.tsx`: Subtitle insertion on conduct selection, automatic cleanup on removal
     - `client/src/pages/create-order.tsx`: Preview parsing and display (Step 4)
     - `client/src/components/order-pdf-document.tsx`: PDF generation with observations
+
+### Draggable Page Break Markers (Jan 2026)
+- **Feature**: Visual draggable markers for adjusting page breaks in PDF previews
+- **Implemented In**: Both surgical order preview (Step 4) and appeal preview
+- **Technical Details**:
+    - `PageBreakInfo` interface: Stores `originalPosition` and `adjustedPosition` for each break
+    - `PAGE_HEIGHT_PX`: 970px (usable A4 page height in pixels)
+    - `MIN_PAGE_CONTENT`: 200px (minimum content per page to prevent breaks too close together)
+    - Markers are color-coded: gray (default), amber (adjusted), primary (dragging)
+    - Global mouse event listeners for smooth drag experience
+    - Reset button to restore original positions
+- **Implementation Files**:
+    - `client/src/pages/create-order.tsx`: Order preview page breaks (Step 4)
+    - `client/src/components/appeal-preview.tsx`: Appeal preview page breaks
+- **UI Elements**:
+    - Dashed line with page number indicator
+    - GripVertical icon for drag affordance
+    - "Arraste as linhas para ajustar as quebras de página" instruction text
+    - "Resetar" button with RotateCcw icon

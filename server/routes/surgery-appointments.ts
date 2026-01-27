@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db';
-import { surgeryAppointments, medicalOrders, patients, users, hospitals, medicalOrderProcedures, procedures, surgicalProcedures, medicalOrderSurgicalProcedures, surgicalApproaches, medicalOrderSurgicalApproaches } from '@shared/schema';
+import { surgeryAppointments, medicalOrders, patients, users, hospitals, medicalOrderProcedures, procedures, surgicalProcedures, medicalOrderSurgicalProcedures, surgicalApproaches, medicalOrderSurgicalApproaches, medicalOrderStatusHistory } from '@shared/schema';
 import { insertSurgeryAppointmentSchema } from '@shared/schema';
 import { eq, and, desc, asc, inArray, isNull, gte, sql } from 'drizzle-orm';
 import { isAuthenticated } from '../auth';
@@ -378,6 +378,22 @@ router.post('/', isAuthenticated, async (req, res) => {
       })
       .returning();
 
+    // Registrar agendamento no histórico do pedido
+    const scheduledDate = new Date(validatedData.scheduledDate);
+    const formattedDate = scheduledDate.toLocaleDateString('pt-BR');
+    const formattedTime = validatedData.scheduledTime || '';
+    
+    await db.insert(medicalOrderStatusHistory).values({
+      orderId: validatedData.medicalOrderId,
+      statusId: null, // Não muda o status
+      changedBy: userId,
+      changedAt: new Date(),
+      notes: `Cirurgia agendada para ${formattedDate}${formattedTime ? ` às ${formattedTime}` : ''}`,
+      recordType: 'scheduling'
+    });
+
+    console.log('📅 Agendamento registrado no histórico do pedido:', validatedData.medicalOrderId);
+
     res.status(201).json(newAppointment);
   } catch (error) {
     console.error('Erro ao criar agendamento:', error);
@@ -399,7 +415,12 @@ router.put('/:id', isAuthenticated, async (req, res) => {
 
     // Verificar se o agendamento existe e pertence ao médico
     const existingAppointment = await db
-      .select({ id: surgeryAppointments.id })
+      .select({ 
+        id: surgeryAppointments.id,
+        medicalOrderId: surgeryAppointments.medicalOrderId,
+        scheduledDate: surgeryAppointments.scheduledDate,
+        scheduledTime: surgeryAppointments.scheduledTime
+      })
       .from(surgeryAppointments)
       .where(and(
         eq(surgeryAppointments.id, appointmentId),
@@ -413,6 +434,8 @@ router.put('/:id', isAuthenticated, async (req, res) => {
       console.log('❌ Agendamento não encontrado');
       return res.status(404).json({ error: 'Agendamento não encontrado' });
     }
+
+    const previousAppointment = existingAppointment[0];
 
     // Validar e atualizar dados
     const validatedData = insertSurgeryAppointmentSchema.partial().parse({
@@ -429,6 +452,30 @@ router.put('/:id', isAuthenticated, async (req, res) => {
       .returning();
 
     console.log('✅ Agendamento atualizado com sucesso:', updatedAppointment);
+
+    // Registrar reagendamento no histórico do pedido (se a data ou hora mudou)
+    const newScheduledDate = validatedData.scheduledDate ? new Date(validatedData.scheduledDate) : null;
+    const newScheduledTime = validatedData.scheduledTime || null;
+    const dateChanged = newScheduledDate && newScheduledDate.toISOString().split('T')[0] !== new Date(previousAppointment.scheduledDate!).toISOString().split('T')[0];
+    const timeChanged = newScheduledTime && newScheduledTime !== previousAppointment.scheduledTime;
+    
+    if (dateChanged || timeChanged) {
+      const formattedNewDate = newScheduledDate ? newScheduledDate.toLocaleDateString('pt-BR') : '';
+      const formattedNewTime = newScheduledTime || '';
+      const formattedPrevDate = previousAppointment.scheduledDate ? new Date(previousAppointment.scheduledDate).toLocaleDateString('pt-BR') : '';
+      const formattedPrevTime = previousAppointment.scheduledTime || '';
+      
+      await db.insert(medicalOrderStatusHistory).values({
+        orderId: previousAppointment.medicalOrderId,
+        statusId: null, // Não muda o status
+        changedBy: userId,
+        changedAt: new Date(),
+        notes: `Cirurgia reagendada de ${formattedPrevDate}${formattedPrevTime ? ` às ${formattedPrevTime}` : ''} para ${formattedNewDate}${formattedNewTime ? ` às ${formattedNewTime}` : ''}`,
+        recordType: 'scheduling'
+      });
+
+      console.log('📅 Reagendamento registrado no histórico do pedido:', previousAppointment.medicalOrderId);
+    }
 
     res.json(updatedAppointment);
   } catch (error) {

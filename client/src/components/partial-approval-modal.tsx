@@ -7,6 +7,7 @@ import { CheckCircle, XCircle, Hash, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PostApprovalDecisionModal } from "@/components/post-approval-decision-modal";
+import { OpmeApprovalModal } from "@/components/opme-approval-modal";
 
 interface ProcedureApproval {
   id: number;
@@ -39,7 +40,11 @@ export function PartialApprovalModal({
   const queryClient = useQueryClient();
   
   const [procedureApprovals, setProcedureApprovals] = useState<ProcedureApproval[]>([]);
+  const [showOpmeModal, setShowOpmeModal] = useState(false);
   const [showDecisionModal, setShowDecisionModal] = useState(false);
+  const [opmeApprovedCount, setOpmeApprovedCount] = useState(0);
+  const [opmeDeniedCount, setOpmeDeniedCount] = useState(0);
+  const [deniedOpmeItems, setDeniedOpmeItems] = useState<Array<{name: string, quantity: number}>>([]);
 
   // Buscar procedimentos do pedido
   const { data: procedures, isLoading } = useQuery({
@@ -88,13 +93,13 @@ export function PartialApprovalModal({
     },
     onSuccess: () => {
       toast({
-        title: "Aprovações salvas",
-        description: "As aprovações dos procedimentos foram atualizadas com sucesso.",
+        title: "Aprovações de procedimentos salvas",
+        description: "Agora vamos verificar os itens OPME.",
       });
       queryClient.invalidateQueries({ queryKey: ['/api/medical-orders', orderId, 'procedures'] });
       
-      // Mostrar modal de decisão (não fechar o modal principal ainda)
-      setShowDecisionModal(true);
+      // Mostrar modal de OPME antes do modal de decisão
+      setShowOpmeModal(true);
     },
     onError: (error) => {
       console.error('Erro ao salvar aprovações:', error);
@@ -182,9 +187,21 @@ export function PartialApprovalModal({
     }
   };
 
-  // Calcular estatísticas para o modal de decisão
-  const approvedItems = procedureApprovals.filter(proc => proc.status === 'aprovado').length;
-  const deniedItems = procedureApprovals.filter(proc => proc.status === 'negado').length;
+  // Calcular estatísticas para o modal de decisão (procedimentos + OPME)
+  const approvedItems = procedureApprovals.filter(proc => proc.status === 'aprovado').length + opmeApprovedCount;
+  const deniedItems = procedureApprovals.filter(proc => proc.status === 'negado').length + opmeDeniedCount;
+
+  // Função para lidar com a conclusão do modal OPME
+  const handleOpmeApprovalComplete = (opmeApproved: number, opmeDenied: number, deniedItems?: Array<{name: string, quantity: number}>) => {
+    setOpmeApprovedCount(opmeApproved);
+    setOpmeDeniedCount(opmeDenied);
+    if (deniedItems) {
+      setDeniedOpmeItems(deniedItems);
+    }
+    setShowOpmeModal(false);
+    // Agora mostrar o modal de decisão final
+    setShowDecisionModal(true);
+  };
 
   // Funções para lidar com as decisões do segundo modal
   const handleGenerateAppeal = async () => {
@@ -238,6 +255,89 @@ export function PartialApprovalModal({
     }
   };
 
+  // Função para lidar com "Decidir Depois" - muda status para pendencia com histórico detalhado
+  const handleDecideLater = async (deniedItemsList: Array<{type: 'cbhpm' | 'opme', code?: string, name: string, quantityRequested: number}>) => {
+    try {
+      // Construir nota com lista de itens negados
+      let notesContent = 'Decisão pendente sobre itens negados pela operadora.\n\n';
+      
+      const cbhpmDenied = deniedItemsList.filter(item => item.type === 'cbhpm');
+      const opmeDenied = deniedItemsList.filter(item => item.type === 'opme');
+      
+      if (cbhpmDenied.length > 0) {
+        notesContent += '**Procedimentos CBHPM negados:**\n';
+        cbhpmDenied.forEach(item => {
+          notesContent += `- ${item.code ? `[${item.code}] ` : ''}${item.name} (Qtd: ${item.quantityRequested})\n`;
+        });
+        notesContent += '\n';
+      }
+      
+      if (opmeDenied.length > 0) {
+        notesContent += '**Itens OPME negados:**\n';
+        opmeDenied.forEach(item => {
+          notesContent += `- ${item.name} (Qtd: ${item.quantityRequested})\n`;
+        });
+      }
+
+      // Alterar status para pendencia com as notas dos itens negados
+      const response = await fetch(`/api/medical-orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          status: 'pendencia',
+          notes: notesContent.trim()
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao atualizar status do pedido');
+      }
+
+      console.log(`Status do pedido ${orderId} alterado para: pendencia (itens negados registrados)`);
+      
+      // Invalidar queries para atualizar dados do cache
+      await queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+      
+      toast({
+        title: "Pendência registrada",
+        description: "O pedido foi movido para pendência. Você pode decidir sobre os itens negados posteriormente.",
+      });
+      
+      setShowDecisionModal(false);
+      onApprovalComplete();
+      onClose();
+      
+    } catch (error) {
+      console.error('Erro ao registrar pendência:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível registrar a pendência.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Construir lista de itens negados para o modal de decisão
+  const deniedItemsList = [
+    ...procedureApprovals
+      .filter(proc => proc.status === 'negado')
+      .map(proc => ({
+        type: 'cbhpm' as const,
+        code: proc.code,
+        name: proc.name,
+        quantityRequested: proc.quantityRequested
+      })),
+    ...deniedOpmeItems.map(item => ({
+      type: 'opme' as const,
+      name: item.name,
+      quantityRequested: item.quantity
+    }))
+  ];
+
   if (!isOpen) return null;
 
   return (
@@ -247,10 +347,10 @@ export function PartialApprovalModal({
         <div className="flex items-start justify-between gap-2 mb-4 sm:mb-6">
           <div className="flex-1 min-w-0">
             <h3 className="text-lg sm:text-xl font-bold text-foreground mb-1 sm:mb-2">
-              Aprovação Parcial
+              Aprovação de procedimentos CBHPM
             </h3>
             <p className="text-muted-foreground text-xs sm:text-sm">
-              Indique o status de cada procedimento.
+              Indique quais procedimentos CBHPM foram autorizados pela operadora.
             </p>
           </div>
           <button
@@ -260,6 +360,26 @@ export function PartialApprovalModal({
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {/* Botão para marcar todos como aprovados */}
+        {!isLoading && procedureApprovals.length > 0 && (
+          <div className="flex justify-end mb-3">
+            <button
+              type="button"
+              onClick={() => {
+                setProcedureApprovals(prev => prev.map(proc => ({
+                  ...proc,
+                  status: 'aprovado',
+                  quantityApproved: proc.quantityRequested
+                })));
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs sm:text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+            >
+              <CheckCircle className="h-3.5 w-3.5" />
+              Marcar todos como Aprovado
+            </button>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex justify-center py-12">
@@ -424,6 +544,18 @@ export function PartialApprovalModal({
         </div>
       </div>
 
+      {/* Modal de Aprovação OPME */}
+      <OpmeApprovalModal
+        isOpen={showOpmeModal}
+        onClose={() => {
+          // Se o usuário fechar sem salvar OPME, ir direto para decisão
+          setShowOpmeModal(false);
+          setShowDecisionModal(true);
+        }}
+        orderId={orderId}
+        onApprovalComplete={handleOpmeApprovalComplete}
+      />
+
       {/* Modal de Decisão Pós-Aprovação */}
       <PostApprovalDecisionModal
         isOpen={showDecisionModal}
@@ -435,8 +567,10 @@ export function PartialApprovalModal({
         orderId={orderId}
         approvedItems={approvedItems}
         deniedItems={deniedItems}
+        deniedItemsList={deniedItemsList}
         onGenerateAppeal={handleGenerateAppeal}
         onAcceptGloss={handleAcceptGloss}
+        onDecideLater={handleDecideLater}
       />
     </div>
   );

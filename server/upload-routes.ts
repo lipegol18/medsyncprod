@@ -324,7 +324,7 @@ export function setupUploadRoutes(app: any) {
             
             const { db } = await import('./db');
             const { medicalOrders } = await import('../shared/schema');
-            const { eq } = await import('drizzle-orm');
+            const { eq, and } = await import('drizzle-orm');
             
             // Buscar attachments atuais
             const currentOrder = await db.select({ attachments: medicalOrders.attachments })
@@ -347,6 +347,7 @@ export function setupUploadRoutes(app: any) {
             // **CORREÇÃO CRÍTICA**: NÃO remover PDFs existentes, apenas identificar se é PDF gerado pelo sistema
             const filename = req.file.originalname || fileName;
             const isSystemGeneratedPdf = filename.includes(`pedido_${orderId}_`) || filename.includes(`order_${orderId}_`);
+            const isAppealPdf = filename.includes('recurso_') || req.body.type === 'appeal';
             
 
             
@@ -377,6 +378,46 @@ export function setupUploadRoutes(app: any) {
               
             console.log(`✅ Pedido ${orderId} atualizado com PDF nos attachments`);
             console.log(`📊 PDF attachment adicionado:`, pdfAttachment);
+            
+            // Registrar nova versão do PDF no histórico do pedido
+            if (isSystemGeneratedPdf || isAppealPdf) {
+              try {
+                const { medicalOrderStatusHistory } = await import('../shared/schema');
+                const userId = req.user?.id || null;
+                
+                // Determinar tipo de registro baseado no tipo de PDF
+                const recordType = isAppealPdf ? 'appeal_pdf_version' : 'pdf_version';
+                
+                // Contar versões pelo histórico (não pelos attachments) para sequência correta
+                const existingVersions = await db.select()
+                  .from(medicalOrderStatusHistory)
+                  .where(
+                    and(
+                      eq(medicalOrderStatusHistory.orderId, orderId),
+                      eq(medicalOrderStatusHistory.recordType, recordType)
+                    )
+                  );
+                const versionNumber = existingVersions.length + 1;
+                
+                // Mensagem diferente para recurso vs pedido
+                const noteMessage = isAppealPdf 
+                  ? `Nova versão do recurso gerada (v${versionNumber}). Arquivo: ${fileName}`
+                  : `Nova versão do pedido gerada (v${versionNumber}). Arquivo: ${fileName}`;
+                
+                await db.insert(medicalOrderStatusHistory).values({
+                  orderId: orderId,
+                  statusId: null, // Não é mudança de status
+                  notes: noteMessage,
+                  recordType: recordType,
+                  changedBy: userId,
+                  changedAt: new Date()
+                });
+                
+                console.log(`📝 Histórico registrado: Nova versão ${isAppealPdf ? 'RECURSO' : 'PDF'} v${versionNumber} para pedido ${orderId}`);
+              } catch (historyError) {
+                console.error(`❌ Erro ao registrar histórico de versão PDF:`, historyError);
+              }
+            }
           } catch (dbError) {
             console.error(`❌ Erro ao atualizar attachments do pedido ${orderId}:`, dbError);
           }

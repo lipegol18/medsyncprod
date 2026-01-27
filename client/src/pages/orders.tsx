@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ChevronLeft, FileText, Eye, FileCheck, AlertCircle, Clock, Phone, Search, Filter, X, ChevronDown, Check, Edit2, Plus, Trash2, Loader2, Download, CheckCircle, ArrowRight, Undo2, Building2, Calendar, CalendarDays, Users, TrendingUp, CheckCircle2, ChevronsUpDown } from "lucide-react";
+import { ChevronLeft, FileText, Eye, FileCheck, AlertCircle, Clock, Phone, Search, Filter, X, ChevronDown, Check, Edit2, Plus, Trash2, Loader2, Download, CheckCircle, ArrowRight, Undo2, Building2, Calendar, CalendarDays, Users, TrendingUp, CheckCircle2, ChevronsUpDown, History } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { useAuth } from "@/hooks/use-auth";
 import { format } from "date-fns";
@@ -31,13 +31,14 @@ import { addOrdersTranslations } from "@/lib/translations/orders";
 import { useToast } from "@/hooks/use-toast";
 import { openWhatsAppChat } from "@/lib/whatsapp";
 import { LoadingLogo } from "@/components/loading-logo";
-import { AppealPreview } from "@/components/appeal-preview";
+import { AppealGenerator } from "@/components/appeal-generator";
+import { OrderHistoryTimeline } from "@/components/order-history-timeline";
 
 // Adicionar traduções
 addOrdersTranslations();
 
-// Status dos pedidos
-const orderStatus = {
+// Status dos pedidos - fallback estático (será substituído pelos dados dinâmicos)
+const defaultOrderStatus: Record<string, { label: string; color: string }> = {
   "em_preenchimento": { label: "Incompleta", color: "bg-muted/50 text-muted-foreground" },
   "em_avaliacao": { label: "Em análise", color: "bg-accent/50 text-foreground" },
   "aceito": { label: "Autorizado", color: "bg-accent/50 text-foreground" },
@@ -48,9 +49,20 @@ const orderStatus = {
   "recebido": { label: "Recebido", color: "bg-accent/50 text-foreground" },
   "pendencia": { label: "Pendência", color: "bg-amber-100/80 text-amber-700" },
   "aguardando_recurso": { label: "Aguardando Recurso", color: "bg-rose-100/80 text-rose-700" },
+  "autorizacao_pos": { label: "Autorização Pós", color: "bg-sky-100/80 text-sky-700" },
   "needs_scheduling": { label: "Aguardando Agendamento", color: "bg-orange-100/80 text-orange-700" },
   "authorized_orders": { label: "Pedidos Autorizados", color: "bg-green-100/80 text-green-700" }
 };
+
+// Interface para os dados do banco de dados
+interface OrderStatusFromDB {
+  id: number;
+  code: string;
+  name: string;
+  display_order: number;
+  color: string | null;
+  icon: string | null;
+}
 
 // Locale para formatação de datas
 const dateLocales = {
@@ -83,13 +95,56 @@ export default function Orders() {
   
   // Estados para controlar carregamento e erros
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isError, setIsError] = useState(false);
+  
+  // Estados para paginação
+  const [hasMore, setHasMore] = useState(true);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const ORDERS_PER_PAGE = 10;
+  
+  // Estado para ordenação: 'createdAt' (padrão) ou 'updatedAt'
+  const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt'>('createdAt');
   
   // Estado para lista de hospitais (para o filtro)
   const [hospitalsList, setHospitalsList] = useState<any[]>([]);
   
   // Estado para armazenar agendamentos cirúrgicos por pedido médico
   const [appointmentsByOrder, setAppointmentsByOrder] = useState<{[key: number]: any}>({});
+
+  // Query para buscar status de pedidos do banco de dados
+  const { data: statusesFromDB = [] } = useQuery<OrderStatusFromDB[]>({
+    queryKey: ['/api/order-statuses'],
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos - status não mudam frequentemente
+  });
+
+  // Mapeamento dinâmico: combina dados do banco com fallback estático
+  const orderStatus = useMemo(() => {
+    if (statusesFromDB.length === 0) {
+      return defaultOrderStatus;
+    }
+
+    const dynamicStatus: Record<string, { label: string; color: string }> = {};
+    
+    statusesFromDB.forEach((status) => {
+      // Usar cor do banco se disponível, senão usar fallback
+      const fallback = defaultOrderStatus[status.code];
+      dynamicStatus[status.code] = {
+        label: status.name,
+        color: status.color || fallback?.color || 'bg-muted/50 text-muted-foreground'
+      };
+    });
+
+    // Manter status especiais que podem não estar no banco
+    if (!dynamicStatus['needs_scheduling']) {
+      dynamicStatus['needs_scheduling'] = defaultOrderStatus['needs_scheduling'];
+    }
+    if (!dynamicStatus['authorized_orders']) {
+      dynamicStatus['authorized_orders'] = defaultOrderStatus['authorized_orders'];
+    }
+
+    return dynamicStatus;
+  }, [statusesFromDB]);
 
   // Função para buscar agendamento cirúrgico de um pedido específico
   const fetchAppointmentForOrder = async (orderId: number) => {
@@ -143,20 +198,15 @@ export default function Orders() {
   // Estados para modal de valores recebidos
   const [showReceivedValuesModal, setShowReceivedValuesModal] = useState(false);
   const [receivedValuesOrderId, setReceivedValuesOrderId] = useState<number | null>(null);
-  const [pendingStatusChange, setPendingStatusChange] = useState<{ orderId: number; status: string } | null>(null);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{ orderId: number; status: string; notes?: string } | null>(null);
+  
+  // Estados para histórico de status
+  const [showHistoryTimeline, setShowHistoryTimeline] = useState(false);
+  const [selectedOrderForHistory, setSelectedOrderForHistory] = useState<number | null>(null);
   
   // Estados para recursos (appeals)
   const [showAppealDialog, setShowAppealDialog] = useState<boolean>(false);
   const [selectedOrderForAppeal, setSelectedOrderForAppeal] = useState<number | null>(null);
-  const [appealJustification, setAppealJustification] = useState<string>("");
-  const [rejectionReason, setRejectionReason] = useState<string>("");
-  const [isCreatingAppeal, setIsCreatingAppeal] = useState<boolean>(false);
-  const [appealStep, setAppealStep] = useState<number>(1);
-  const [isGeneratingAppealAI, setIsGeneratingAppealAI] = useState<boolean>(false);
-  const [appealOrderData, setAppealOrderData] = useState<any>(null);
-  const [isLoadingAppealOrder, setIsLoadingAppealOrder] = useState<boolean>(false);
-  const [generatedAppealPdfUrl, setGeneratedAppealPdfUrl] = useState<string>("");
-  const [isFinalizingAppeal, setIsFinalizingAppeal] = useState<boolean>(false);
 
   // Estados para modal de agendamento cirúrgico
   const [showAppointmentModal, setShowAppointmentModal] = useState<boolean>(false);
@@ -172,6 +222,11 @@ export default function Orders() {
 
   // Estados para confirmação de exclusão
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState<boolean>(false);
+  
+  // Estados para modal de confirmação de desfazer status
+  const [showUndoStatusModal, setShowUndoStatusModal] = useState<boolean>(false);
+  const [undoStatusOrderId, setUndoStatusOrderId] = useState<number | null>(null);
+  const [undoStatusNote, setUndoStatusNote] = useState<string>("");
   const [orderToDelete, setOrderToDelete] = useState<number | null>(null);
   const [isDeletingOrder, setIsDeletingOrder] = useState<boolean>(false);
 
@@ -227,8 +282,6 @@ export default function Orders() {
       const orderId = parseInt(appealParam);
       if (!isNaN(orderId)) {
         setSelectedOrderForAppeal(orderId);
-        setAppealJustification("");
-        setRejectionReason("");
         setShowAppealDialog(true);
         
         // Limpar o parâmetro da URL para não reabrir se navegar de volta
@@ -240,18 +293,31 @@ export default function Orders() {
     }
   }, []);
   
-  // Função para buscar pedidos reais do banco de dados
-  const fetchOrders = async () => {
+  // Função para buscar pedidos reais do banco de dados com paginação
+  const fetchOrders = async (loadMore = false) => {
     if (!user) return;
     
     try {
-      setIsLoading(true);
+      if (loadMore) {
+        setIsLoadingMore(true);
+      } else {
+        setIsLoading(true);
+        setOrdersData([]); // Limpar ao recarregar
+      }
       setIsError(false);
       
-      // URL da API que implementamos com filtro por usuário
-      const url = isAdmin 
-        ? '/api/medical-orders' 
-        : `/api/medical-orders?userId=${user.id}`;
+      // Calcular offset para paginação
+      const currentOffset = loadMore ? ordersData.length : 0;
+      
+      // Construir URL com parâmetros de paginação e ordenação
+      const params = new URLSearchParams();
+      if (!isAdmin) params.append('userId', user.id.toString());
+      params.append('limit', ORDERS_PER_PAGE.toString());
+      params.append('offset', currentOffset.toString());
+      params.append('sortBy', sortBy);
+      params.append('sortOrder', 'desc');
+      
+      const url = `/api/medical-orders?${params.toString()}`;
         
       const response = await fetch(url);
       
@@ -261,38 +327,51 @@ export default function Orders() {
       
       const data = await response.json();
       
-      // Converter statusId para statusCode se necessário e ordenar pedidos
-      const processedData = Array.isArray(data) ? data.map(order => ({
+      // A API retorna { orders, pagination } quando há limit, ou array simples caso contrário
+      const ordersArray = Array.isArray(data) ? data : (data.orders || []);
+      const pagination = Array.isArray(data) 
+        ? { total: data.length, hasMore: false } 
+        : (data.pagination || { total: 0, hasMore: false });
+      
+      // Converter statusId para statusCode se necessário
+      const processedData = ordersArray.map((order: any) => ({
         ...order,
-        // Se o status não está presente ou é um ID numérico, converter usando statusIdToCode
         status: order.status && typeof order.status === 'string' ? order.status : 
                 statusIdToCode[order.statusId as keyof typeof statusIdToCode] || 'nao_especificado'
-      })).sort((a, b) => {
-        const dateA = new Date(a.createdAt || a.created_at || 0);
-        const dateB = new Date(b.createdAt || b.created_at || 0);
-        return dateB.getTime() - dateA.getTime(); // Mais recente primeiro
-      }) : [];
+      }));
       
-      setOrdersData(processedData);
-      setFilteredOrdersData(processedData);
+      // Atualizar estado de paginação
+      setHasMore(pagination.hasMore);
+      setTotalOrders(pagination.total);
       
-      // Extrair lista única de hospitais para o filtro
-      const uniqueHospitals = Array.from(
-        new Map(
-          data
-            .filter((order: any) => order.hospitalName)
-            .map((order: any) => [order.hospitalId, { id: order.hospitalId, name: order.hospitalName }])
-        ).values()
+      if (loadMore) {
+        // Adicionar aos existentes
+        setOrdersData(prev => [...prev, ...processedData]);
+      } else {
+        // Substituir
+        setOrdersData(processedData);
+      }
+      
+      // Extrair lista única de hospitais para o filtro (apenas no primeiro carregamento)
+      if (!loadMore) {
+        // Buscar todos os hospitais do usuário para o filtro
+        try {
+          const hospitalsResponse = await fetch('/api/hospitals');
+          if (hospitalsResponse.ok) {
+            const hospitalsData = await hospitalsResponse.json();
+            setHospitalsList(hospitalsData);
+          }
+        } catch (e) {
+          console.log('Erro ao buscar hospitais para filtro');
+        }
+      }
+      
+      // Buscar agendamentos para pedidos que podem ter agendamento
+      const ordersWithPossibleAppointments = processedData.filter((order: any) => 
+        ['aceito', 'autorizado_parcial', 'autorizacao_pos', 'cirurgia_realizada', 'recebido'].includes(order.status)
       );
-      setHospitalsList(uniqueHospitals);
       
-      // Buscar agendamentos para pedidos com status "aceito", "autorizado_parcial" ou outros que podem ter agendamento
-      const ordersWithPossibleAppointments = processedData.filter(order => 
-        ['aceito', 'autorizado_parcial', 'cirurgia_realizada', 'recebido'].includes(order.status)
-      );
-      
-      // Buscar agendamentos para esses pedidos
-      ordersWithPossibleAppointments.forEach(order => {
+      ordersWithPossibleAppointments.forEach((order: any) => {
         fetchAppointmentForOrder(order.id);
       });
       
@@ -301,13 +380,19 @@ export default function Orders() {
       setIsError(true);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   };
+  
+  // Função para carregar mais pedidos
+  const loadMoreOrders = () => {
+    fetchOrders(true);
+  };
 
-  // Buscar pedidos quando o componente carrega
+  // Buscar pedidos quando o componente carrega ou quando a ordenação muda
   useEffect(() => {
     fetchOrders();
-  }, [user, isAdmin]);
+  }, [user, isAdmin, sortBy]);
 
   // Função para buscar e atualizar apenas um pedido específico (otimização)
   const fetchOrder = async (orderId: number) => {
@@ -339,8 +424,15 @@ export default function Orders() {
       setFilteredOrdersData(prev => updateOrderInArray(prev));
       
       // Se este pedido pode ter agendamento, buscar o agendamento
-      if (['aceito', 'autorizado_parcial', 'cirurgia_realizada', 'recebido'].includes(processedOrder.status)) {
+      // Caso contrário, limpar o agendamento do estado local
+      if (['aceito', 'autorizado_parcial', 'autorizacao_pos', 'cirurgia_realizada', 'recebido'].includes(processedOrder.status)) {
         fetchAppointmentForOrder(orderId);
+      } else {
+        // Limpar agendamento do estado local para status que não têm agendamento
+        setAppointmentsByOrder(prev => ({
+          ...prev,
+          [orderId]: null
+        }));
       }
       
     } catch (error) {
@@ -440,156 +532,6 @@ export default function Orders() {
     [searchTerm, selectedHospital, selectedStatus]
   );
 
-  // Função para gerar PDF do recurso
-  const generateAppealPDF = async () => {
-    if (!selectedOrderForAppeal || !appealJustification.trim() || !appealOrderData) {
-      toast({
-        title: "Erro",
-        description: "Dados insuficientes para gerar o recurso",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setIsCreatingAppeal(true);
-      
-      toast({
-        title: "Gerando PDF do Recurso",
-        description: "Criando documento...",
-      });
-
-      // Importar dinamicamente o react-pdf
-      const { pdf } = await import('@react-pdf/renderer');
-      const { AppealPDFDocument } = await import('@/components/appeal-pdf-document');
-
-      // Configurar Buffer para @react-pdf/renderer
-      if (typeof window !== 'undefined' && !(window as any).Buffer) {
-        const { Buffer } = await import('buffer');
-        (window as any).Buffer = Buffer;
-      }
-
-      // Gerar PDF do recurso
-      const pdfBlob = await pdf(
-        <AppealPDFDocument 
-          patient={appealOrderData.patient}
-          hospital={appealOrderData.hospital}
-          appealJustification={appealJustification}
-          user={user ? {
-            name: user.name,
-            crm: user.crm?.toString() || undefined,
-            logoUrl: user.logoUrl || undefined, // Logo do médico para o cabeçalho
-            signatureUrl: user.signatureUrl || undefined, // Assinatura para o rodapé
-            signatureNote: user.signatureNote || undefined,
-          } : undefined}
-        />
-      ).toBlob();
-
-      console.log("✅ PDF do recurso gerado! Tamanho:", pdfBlob.size, "bytes");
-
-      // Gerar nome do arquivo
-      const fileName = `recurso_glosa_${selectedOrderForAppeal}_${appealOrderData.patient?.fullName?.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-      
-      // Criar FormData para enviar o arquivo
-      const formData = new FormData();
-      formData.append('pdf', pdfBlob, fileName);
-      formData.append('orderId', selectedOrderForAppeal.toString());
-      formData.append('patientName', appealOrderData.patient?.fullName || 'Paciente');
-      formData.append('type', 'appeal'); // Marcar como recurso
-      
-      console.log("📤 Enviando PDF do recurso para servidor...");
-      
-      // Enviar PDF para o servidor
-      const uploadResponse = await fetch('/api/uploads/order-pdf', {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-      
-      if (!uploadResponse.ok) {
-        throw new Error(`Erro no upload: ${uploadResponse.status}`);
-      }
-      
-      const uploadResult = await uploadResponse.json();
-      console.log("✅ Upload do PDF concluído:", uploadResult);
-      
-      // Criar registro do recurso no banco de dados
-      await apiRequest(`/api/medical-orders/${selectedOrderForAppeal}/appeals`, "POST", {
-        justification: appealJustification,
-        rejectionReason: rejectionReason || null,
-        pdfUrl: uploadResult.url // URL do PDF gerado
-      });
-      
-      // Salvar URL do PDF e ir para step 4 (tela de sucesso)
-      setGeneratedAppealPdfUrl(uploadResult.url);
-      setAppealStep(4);
-      
-      toast({
-        title: "✅ PDF do recurso gerado!",
-        description: "Agora você pode fazer o download e finalizar o processo.",
-        duration: 3000,
-      });
-      
-      // Invalidar cache para atualizar dados
-      if (selectedOrderForAppeal) {
-        queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${selectedOrderForAppeal}`] });
-        queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
-      }
-      
-    } catch (error) {
-      console.error("Erro ao criar recurso:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível criar o recurso",
-        variant: "destructive",
-      });
-    } finally {
-      setIsCreatingAppeal(false);
-    }
-  };
-
-  // Função para finalizar recurso e atualizar status
-  const finalizeAppeal = async () => {
-    if (!selectedOrderForAppeal) return;
-
-    try {
-      setIsFinalizingAppeal(true);
-
-      // Atualizar status do pedido para "aguardando_recurso"
-      await apiRequest(`/api/medical-orders/${selectedOrderForAppeal}/status`, "PATCH", {
-        status: "aguardando_recurso"
-      });
-
-      // Fechar modal e limpar estados
-      setShowAppealDialog(false);
-      setSelectedOrderForAppeal(null);
-      setAppealJustification("");
-      setRejectionReason("");
-      setAppealStep(1);
-      setAppealOrderData(null);
-      setGeneratedAppealPdfUrl("");
-
-      toast({
-        title: "✅ Recurso finalizado!",
-        description: "O pedido foi atualizado para 'Aguardando Recurso'.",
-        duration: 3000,
-      });
-
-      // Atualizar lista de pedidos
-      await fetchOrder(selectedOrderForAppeal);
-
-    } catch (error) {
-      console.error("Erro ao finalizar recurso:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível finalizar o recurso",
-        variant: "destructive",
-      });
-    } finally {
-      setIsFinalizingAppeal(false);
-    }
-  };
-
   // Função para agendar procedimento
   const scheduleProcedure = async (orderId: number, date: string) => {
     try {
@@ -632,7 +574,7 @@ export default function Orders() {
   };
 
   // Função para atualizar status do pedido
-  const updateOrderStatus = async (orderId: number, newStatus: string) => {
+  const updateOrderStatus = async (orderId: number, newStatus: string, notes?: string) => {
     try {
       
       // Se for autorizado parcial, abrir modal primeiro
@@ -656,7 +598,18 @@ export default function Orders() {
         }
       }
       
-      const response = await apiRequest(`/api/medical-orders/${orderId}/status`, "PATCH", { status: newStatus });
+      // Se for aceito (autorizado integralmente), abrir modal de fornecedores ANTES de alterar status
+      if (newStatus === 'aceito') {
+        setPendingStatusChange({ orderId, status: newStatus, notes });
+        setSupplierApprovalOrderId(orderId);
+        setShowSupplierApprovalModal(true);
+        return; // Não atualizar o status ainda - será atualizado após confirmar fornecedor
+      }
+      
+      const response = await apiRequest(`/api/medical-orders/${orderId}/status`, "PATCH", { 
+        status: newStatus,
+        notes: notes || undefined
+      });
       
       // Buscar apenas este pedido para obter o status e cores atualizadas (otimizado)
       await fetchOrder(orderId);
@@ -671,12 +624,6 @@ export default function Orders() {
         title: "Status atualizado",
         description: `Status do pedido alterado para "${orderStatus[newStatus as keyof typeof orderStatus]?.label || newStatus}"`,
       });
-
-      // Se o status mudou para "aceito" (autorizado), mostrar modal de seleção de fornecedor
-      if (newStatus === 'aceito') {
-        setSupplierApprovalOrderId(orderId);
-        setShowSupplierApprovalModal(true);
-      }
     } catch (error) {
       console.error("Erro ao atualizar status:", error);
       
@@ -969,6 +916,9 @@ export default function Orders() {
     // Usar a cor dinâmica do status se o order estiver disponível
     const buttonColor = order ? getStatusColorClasses(order).iconBg : statusInfo.color;
     const textColor = order ? getStatusColorClasses(order).iconText : 'text-foreground';
+    
+    // Priorizar statusName do banco de dados, fallback para mapeamento estático
+    const displayLabel = order?.statusName || statusInfo.label;
 
     return (
       <div className="flex items-center justify-center gap-2">
@@ -978,14 +928,14 @@ export default function Orders() {
           className={`${buttonColor} ${textColor} px-3 py-1 text-sm font-bold rounded-full cursor-default`}
           disabled
         >
-          {statusInfo.label}
+          {displayLabel}
         </Button>
         {hasPreviousStatus && (
           <Button
             variant="ghost"
             size="sm"
             className="h-6 w-6 p-0 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300"
-            onClick={() => handleUndoStatus(orderId)}
+            onClick={() => handleOpenUndoStatusModal(orderId)}
             title="Desfazer última alteração de status"
           >
             <Undo2 className="h-3 w-3" />
@@ -1005,8 +955,8 @@ export default function Orders() {
   };
 
   // Função para lidar com mudança de status via modal
-  const handleStatusChangeFromModal = (orderId: number, newStatus: string) => {
-    updateOrderStatus(orderId, newStatus);
+  const handleStatusChangeFromModal = (orderId: number, newStatus: string, notes?: string) => {
+    updateOrderStatus(orderId, newStatus, notes);
   };
 
   // Função para lidar com aprovação parcial via modal
@@ -1023,12 +973,26 @@ export default function Orders() {
     setShowReceivedValuesModal(true);
   };
 
-  // Função para desfazer última alteração de status
-  const handleUndoStatus = async (orderId: number) => {
+  // Função para abrir modal de confirmação de desfazer status
+  const handleOpenUndoStatusModal = (orderId: number) => {
+    setUndoStatusOrderId(orderId);
+    setUndoStatusNote("");
+    setShowUndoStatusModal(true);
+  };
+
+  // Função para confirmar e desfazer última alteração de status
+  const handleConfirmUndoStatus = async () => {
+    if (!undoStatusOrderId) return;
+    
+    // Guardar o ID antes de limpar o estado
+    const orderIdToUpdate = undoStatusOrderId;
+    
     try {
       setIsLoading(true);
       
-      const response = await apiRequest(`/api/medical-orders/${orderId}/undo-status`, 'PATCH');
+      const response = await apiRequest(`/api/medical-orders/${orderIdToUpdate}/undo-status`, 'PATCH', {
+        notes: undoStatusNote.trim() || undefined
+      });
       
       if (response) {
         toast({
@@ -1036,14 +1000,18 @@ export default function Orders() {
           description: "O status foi revertido para o estado anterior com sucesso.",
         });
         
-        // Buscar apenas este pedido para obter o status e cores atualizadas (otimizado)
-        await fetchOrder(orderId);
+        // Fechar modal e limpar estados
+        setShowUndoStatusModal(false);
+        setUndoStatusOrderId(null);
+        setUndoStatusNote("");
         
-        // Invalidar queries relacionadas para atualizar estatísticas
+        // Buscar o pedido atualizado usando o ID guardado
+        await fetchOrder(orderIdToUpdate);
+        
+        // Invalidar queries relacionadas para atualizar estatísticas e lista de pedidos
         queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
-        queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
         queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
       }
     } catch (error: any) {
       toast({
@@ -1060,8 +1028,6 @@ export default function Orders() {
   const handleGenerateAppeal = async (orderId: number) => {
     // Abrir dialog de recurso ao invés de mudar status diretamente
     setSelectedOrderForAppeal(orderId);
-    setAppealJustification("");
-    setRejectionReason("");
     setShowAppealDialog(true);
   };
 
@@ -1235,7 +1201,7 @@ export default function Orders() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   {/* Campo de busca por paciente ou ID */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-sky-600" />
@@ -1347,6 +1313,16 @@ export default function Orders() {
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  
+                  {/* Filtro de ordenação */}
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as 'createdAt' | 'updatedAt')}
+                    className="combobox-medsync w-full cursor-pointer"
+                  >
+                    <option value="createdAt">Ordenar por: Mais recentes</option>
+                    <option value="updatedAt">Ordenar por: Editados recentemente</option>
+                  </select>
                 </div>
                 
                 {/* Botão de limpar filtros quando há filtros ativos */}
@@ -1547,7 +1523,7 @@ export default function Orders() {
                               )}
                             </div>
                             <div className="flex items-center gap-2 order-3">
-                              {renderStatus(order.status, order.id, !!order.previousStatusId, order)}
+                              {renderStatus(order.status, order.id, order.canUndoStatus === true, order)}
                             </div>
                           </div>
                         </div>
@@ -1610,8 +1586,10 @@ export default function Orders() {
                               <span className="sm:hidden">Zap</span>
                             </Button>
                             
-                            {/* Botão de agendamento */}
-                            {(order.status === "aceito" || order.status === "autorizado_parcial") && (
+                            {/* Botão de agendamento - não mostrar para cirurgias de urgência/emergência quando autorizadas (já foram realizadas) */}
+                            {(order.status === "autorizacao_pos" || 
+                              ((order.status === "aceito" || order.status === "autorizado_parcial") && 
+                               order.procedureType !== "urgencia" && order.procedureType !== "emergencia")) && (
                               <Button
                                 size="sm"
                                 className="bg-blue-600 hover:bg-blue-700 text-white h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm"
@@ -1639,7 +1617,6 @@ export default function Orders() {
                                 className="border-amber-200 text-amber-700 hover:bg-amber-50 h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm"
                                 onClick={() => {
                                   setSelectedOrderForAppeal(order.id);
-                                  setAppealJustification("");
                                   setShowAppealDialog(true);
                                 }}
                               >
@@ -1702,6 +1679,23 @@ export default function Orders() {
                               <span className="sm:hidden">Ver</span>
                             </Button>
                             
+                            {/* Botão Ver Histórico */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-blue-200 text-blue-600 hover:bg-blue-50 h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm"
+                              onClick={() => {
+                                // Invalidar cache do histórico para garantir dados atualizados
+                                queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${order.id}/status-history`] });
+                                setSelectedOrderForHistory(order.id);
+                                setShowHistoryTimeline(true);
+                              }}
+                            >
+                              <History className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                              <span className="hidden sm:inline">Histórico</span>
+                              <span className="sm:hidden">Hist.</span>
+                            </Button>
+                            
                             {/* Botão "Próxima Etapa" destacado - ocupa linha inteira no mobile */}
                             {order.status !== 'recebido' && order.status !== 'cancelado' && (
                               <Button
@@ -1718,6 +1712,40 @@ export default function Orders() {
                       </CardContent>
                     </Card>
                   ))}
+                  
+                  {/* Botão Carregar Mais */}
+                  {hasMore && !isLoadingMore && (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={loadMoreOrders}
+                        className="border-sky-300 text-sky-700 hover:bg-sky-100 px-8"
+                      >
+                        <ChevronDown className="h-4 w-4 mr-2" />
+                        Carregar mais pedidos ({ordersData.length} de {totalOrders})
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Loading de carregar mais */}
+                  {isLoadingMore && (
+                    <div className="flex justify-center pt-4">
+                      <div className="flex items-center gap-2 text-sky-600">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span>Carregando mais pedidos...</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Mensagem quando todos foram carregados */}
+                  {!hasMore && ordersData.length > 0 && (
+                    <div className="flex justify-center pt-4">
+                      <p className="text-sm text-muted-foreground">
+                        Todos os {totalOrders} pedidos foram carregados
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -1779,321 +1807,27 @@ export default function Orders() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para criar recurso */}
-      <Dialog open={showAppealDialog} onOpenChange={(open) => {
-        setShowAppealDialog(open);
-        if (!open) {
-          // Reset ao fechar
-          setAppealStep(1);
+      {/* Componente Gerador de Recursos */}
+      <AppealGenerator
+        orderId={selectedOrderForAppeal}
+        isOpen={showAppealDialog}
+        onClose={() => {
+          setShowAppealDialog(false);
           setSelectedOrderForAppeal(null);
-          setAppealJustification("");
-          setRejectionReason("");
-        }
-      }}>
-        <DialogContent className="bg-card border-gray-200 text-foreground max-w-[70vw] p-0">
-          <div className="bg-destructive text-white py-4 px-6 rounded-t-lg">
-            <h2 className="text-xl font-semibold text-center">Gerar Recurso de Glosas</h2>
-          </div>
-          
-          <div className="space-y-4 p-6">
-            {/* Step 1: Motivo da Recusa */}
-            {appealStep === 1 && (
-              <div>
-                <Label htmlFor="rejectionReason" className="text-muted-foreground">
-                  Motivo da Recusa (Operadora)
-                </Label>
-                <Textarea
-                  id="rejectionReason"
-                  placeholder="Cole aqui a mensagem de recusa enviada pela operadora..."
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  className="bg-input border-gray-200 text-foreground mt-1 min-h-[200px]"
-                  rows={8}
-                />
-              </div>
-            )}
-
-            {/* Step 2: Justificativa Médica */}
-            {appealStep === 2 && (
-              <div>
-                <Label htmlFor="appealJustification" className="text-muted-foreground">
-                  Justificativa Médica *
-                </Label>
-                <Textarea
-                  id="appealJustification"
-                  placeholder="Descreva a justificativa médica para o recurso..."
-                  value={appealJustification}
-                  onChange={(e) => setAppealJustification(e.target.value)}
-                  className="bg-input border-gray-200 text-foreground mt-1 min-h-[200px]"
-                  rows={8}
-                />
-                
-                {/* Nota Informativa sobre a IA */}
-                <div className="mt-2">
-                  <p className="text-xs text-medsync-dark-blue dark:text-medsync-dark-blue">
-                    * Possuímos uma IA própria treinada por médicos especialistas. Porém poderá conter imprecisões. Sempre valide o recurso antes de submeter.
-                  </p>
-                </div>
-                
-                {/* Botão para gerar com IA */}
-                <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    disabled={isGeneratingAppealAI || !rejectionReason.trim()}
-                    className="btn-medsync-dark disabled:opacity-50"
-                    onClick={async () => {
-                      try {
-                        setIsGeneratingAppealAI(true);
-                        
-                        const response = await apiRequest(
-                          "/api/appeals/generate-with-ai",
-                          "POST",
-                          { rejectionReason: rejectionReason }
-                        );
-
-                        if (response.success && response.appealJustification) {
-                          setAppealJustification(response.appealJustification);
-                          toast({
-                            title: "✅ Recurso gerado com sucesso!",
-                            description: "A IA gerou o recurso de glosa com base no motivo da recusa.",
-                          });
-                        } else {
-                          throw new Error("Resposta inválida da API");
-                        }
-                      } catch (error) {
-                        console.error("Erro ao gerar recurso com IA:", error);
-                        toast({
-                          title: "❌ Erro ao gerar recurso",
-                          description: "Não foi possível gerar o recurso com IA. Tente novamente.",
-                          variant: "destructive"
-                        });
-                      } finally {
-                        setIsGeneratingAppealAI(false);
-                      }
-                    }}
-                    data-testid="button-generate-appeal-ai"
-                  >
-                    {isGeneratingAppealAI ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Gerando...
-                      </>
-                    ) : (
-                      <>
-                        <img src={RoboMedSyncIcon} alt="IA" className="w-5 h-5 mr-2 inline-block" />
-                        Gerar Recurso de Glosa com IA
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Visualização do Recurso */}
-            {appealStep === 3 && selectedOrderForAppeal && appealOrderData && (
-              <div className="max-h-[70vh] overflow-y-auto">
-                <div className="mb-4">
-                  <h3 className="text-lg font-medium text-foreground">
-                    Visualização do Recurso
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Revise os dados do recurso antes de enviar
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Prévia A4 (210 x 297 mm)
-                  </p>
-                </div>
-                
-                <AppealPreview 
-                  patient={appealOrderData.patient || {}}
-                  hospital={appealOrderData.hospital || {}}
-                  rejectionReason={rejectionReason}
-                  appealJustification={appealJustification}
-                />
-              </div>
-            )}
-
-            {/* Passo 4 - Sucesso e Ações */}
-            {appealStep === 4 && (
-              <div className="py-8">
-                <div className="text-center space-y-6">
-                  <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                    <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-xl font-semibold text-foreground mb-2">
-                      Recurso Gerado com Sucesso!
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      O PDF do recurso foi criado e salvo no servidor. Agora você pode:
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col gap-3 max-w-sm mx-auto">
-                    {/* Botão de Download */}
-                    <Button
-                      onClick={() => {
-                        if (generatedAppealPdfUrl) {
-                          window.open(generatedAppealPdfUrl, '_blank');
-                        }
-                      }}
-                      variant="outline"
-                      className="w-full border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/30"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Fazer Download do PDF
-                    </Button>
-
-                    {/* Botão Finalizar */}
-                    <Button
-                      onClick={finalizeAppeal}
-                      disabled={isFinalizingAppeal}
-                      className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                    >
-                      {isFinalizingAppeal ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Finalizando...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Finalizar Recurso
-                        </>
-                      )}
-                    </Button>
-
-                    <p className="text-xs text-muted-foreground">
-                      Ao finalizar, o status do pedido será atualizado para "Aguardando Recurso"
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Botões de navegação - esconder no step 4 */}
-            {appealStep !== 4 && (
-              <div className="flex justify-between gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowAppealDialog(false);
-                    setAppealStep(1);
-                    setSelectedOrderForAppeal(null);
-                    setAppealJustification("");
-                    setRejectionReason("");
-                    setAppealOrderData(null);
-                    setGeneratedAppealPdfUrl("");
-                  }}
-                  className="border-destructive text-destructive hover:bg-destructive/10"
-                >
-                  Cancelar
-                </Button>
-
-              <div className="flex gap-2">
-                {/* Botão Voltar - Passos 2 e 3 */}
-                {(appealStep === 2 || appealStep === 3) && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setAppealStep(appealStep - 1)}
-                    className="border-gray-200 text-muted-foreground hover:bg-muted"
-                  >
-                    Voltar
-                  </Button>
-                )}
-
-                {/* Botão Próximo - Passo 1 */}
-                {appealStep === 1 && (
-                  <Button
-                    onClick={() => setAppealStep(2)}
-                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                  >
-                    Próximo
-                  </Button>
-                )}
-
-                {/* Botão Visualizar Recurso - Passo 2 */}
-                {appealStep === 2 && (
-                  <Button
-                    onClick={async () => {
-                      if (!selectedOrderForAppeal) return;
-                      
-                      try {
-                        setIsLoadingAppealOrder(true);
-                        const response = await fetch(`/api/medical-orders/${selectedOrderForAppeal}`);
-                        
-                        if (!response.ok) {
-                          throw new Error('Erro ao buscar dados do pedido');
-                        }
-                        
-                        const orderData = await response.json();
-                        setAppealOrderData(orderData);
-                        setAppealStep(3);
-                      } catch (error) {
-                        console.error('Erro ao buscar dados do pedido:', error);
-                        toast({
-                          title: "❌ Erro ao carregar dados",
-                          description: "Não foi possível carregar os dados do pedido para visualização.",
-                          variant: "destructive"
-                        });
-                      } finally {
-                        setIsLoadingAppealOrder(false);
-                      }
-                    }}
-                    disabled={!appealJustification.trim() || isLoadingAppealOrder}
-                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                  >
-                    {isLoadingAppealOrder ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Carregando...
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="h-4 w-4 mr-2" />
-                        Visualizar Recurso
-                      </>
-                    )}
-                  </Button>
-                )}
-
-                {/* Botão Gerar Recurso - Passo 3 */}
-                {appealStep === 3 && (
-                  <Button
-                    onClick={generateAppealPDF}
-                    disabled={isCreatingAppeal}
-                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                  >
-                    {isCreatingAppeal ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Gerando PDF...
-                      </>
-                    ) : (
-                      <>
-                        <FileText className="h-4 w-4 mr-2" />
-                        Gerar Recurso
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-            </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Overlay de Loading da IA - Recurso de Glosa */}
-      {isGeneratingAppealAI && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150]" data-testid="ai-appeal-loading-overlay">
-          <LoadingLogo 
-            message="A IA está analisando o motivo da recusa e gerando o recurso de glosa..." 
-            size="lg"
-          />
-        </div>
-      )}
+        }}
+        onSuccess={() => {
+          if (selectedOrderForAppeal) {
+            fetchOrder(selectedOrderForAppeal);
+          }
+        }}
+        user={user ? {
+          name: user.name,
+          crm: user.crm?.toString() || undefined,
+          logoUrl: user.logoUrl || undefined,
+          signatureUrl: user.signatureUrl || undefined,
+          signatureNote: user.signatureNote || undefined,
+        } : undefined}
+      />
 
       {/* Modal de Aprovação Parcial */}
       {partialApprovalOrderId && (
@@ -2131,13 +1865,50 @@ export default function Orders() {
           onClose={() => {
             setShowSupplierApprovalModal(false);
             setSupplierApprovalOrderId(null);
+            // Limpar mudança pendente se cancelou o modal
+            if (pendingStatusChange?.status === 'aceito') {
+              setPendingStatusChange(null);
+            }
           }}
           orderId={supplierApprovalOrderId}
-          onApprovalComplete={() => {
+          onApprovalComplete={async () => {
+            // Se há mudança de status pendente (aceito), aplicar agora
+            if (pendingStatusChange?.status === 'aceito' && pendingStatusChange.orderId === supplierApprovalOrderId) {
+              try {
+                await apiRequest(`/api/medical-orders/${pendingStatusChange.orderId}/status`, "PATCH", { 
+                  status: 'aceito',
+                  notes: pendingStatusChange.notes || undefined
+                });
+                
+                toast({
+                  title: "Status atualizado",
+                  description: `Pedido #${pendingStatusChange.orderId} autorizado com sucesso`,
+                });
+                
+                // Invalidar queries
+                queryClient.invalidateQueries({ queryKey: ['/api/home/stats'] });
+                queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
+                queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${pendingStatusChange.orderId}`] });
+                queryClient.invalidateQueries({ queryKey: ['/api/reports/stats'] });
+              } catch (error) {
+                console.error("Erro ao alterar status para aceito:", error);
+                toast({
+                  title: "Erro",
+                  description: "Não foi possível autorizar o pedido",
+                  variant: "destructive",
+                });
+              }
+              setPendingStatusChange(null);
+            }
+            
             // Após aprovar fornecedor, perguntar se quer agendar o procedimento
+            // Não mostrar para cirurgias de urgência/emergência (já foram realizadas)
             if (supplierApprovalOrderId) {
-              setAuthorizedOrderForScheduling(supplierApprovalOrderId);
-              setShowSchedulingPrompt(true);
+              const order = ordersData.find(o => o.id === supplierApprovalOrderId);
+              if (order && order.procedureType !== 'urgencia' && order.procedureType !== 'emergencia') {
+                setAuthorizedOrderForScheduling(supplierApprovalOrderId);
+                setShowSchedulingPrompt(true);
+              }
             }
             // Atualizar dados do pedido
             if (supplierApprovalOrderId) {
@@ -2248,6 +2019,65 @@ export default function Orders() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Modal de Confirmação de Desfazer Status */}
+      <AlertDialog open={showUndoStatusModal} onOpenChange={(open) => {
+        if (!open) {
+          setShowUndoStatusModal(false);
+          setUndoStatusOrderId(null);
+          setUndoStatusNote("");
+        }
+      }}>
+        <AlertDialogContent className="bg-card border-blue-500/50">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-blue-600 dark:text-blue-400 flex items-center gap-2">
+              <Undo2 className="h-5 w-5" />
+              Confirmar Reversão de Status
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Você está prestes a reverter o status deste pedido para o estado anterior. 
+              Esta ação será registrada no histórico do pedido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="py-4">
+            <label className="text-sm font-medium text-foreground mb-2 block">
+              Motivo da reversão (opcional)
+            </label>
+            <textarea
+              className="w-full h-24 p-3 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Descreva o motivo para reverter o status..."
+              value={undoStatusNote}
+              onChange={(e) => setUndoStatusNote(e.target.value)}
+            />
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              className="bg-secondary border-gray-200 text-secondary-foreground hover:bg-secondary/80"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmUndoStatus}
+              disabled={isLoading}
+              className="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Revertendo...
+                </>
+              ) : (
+                <>
+                  <Undo2 className="mr-2 h-4 w-4" />
+                  Confirmar Reversão
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Modal de Mudança de Status */}
       <StatusChangeModal
         isOpen={showStatusChangeModal}
@@ -2265,8 +2095,24 @@ export default function Orders() {
         onPartialApproval={handlePartialApprovalFromModal}
         onReceivedValues={handleReceivedValuesFromModal}
         onEditOrder={handleEditOrder}
+        onAppeal={(orderId) => {
+          setSelectedOrderForAppeal(orderId);
+          setShowAppealDialog(true);
+        }}
         order={statusChangeOrder}
       />
+
+      {/* Modal de Histórico de Status */}
+      {selectedOrderForHistory && (
+        <OrderHistoryTimeline
+          orderId={selectedOrderForHistory}
+          isOpen={showHistoryTimeline}
+          onClose={() => {
+            setShowHistoryTimeline(false);
+            setSelectedOrderForHistory(null);
+          }}
+        />
+      )}
     </div>
   );
 }

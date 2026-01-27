@@ -641,7 +641,7 @@ export const medicalOrders = pgTable("medical_orders", {
   opmeAdditionalNotes: text("opme_additional_notes"), // Observações adicionais após itens OPME
   supplierAdditionalNotes: text("supplier_additional_notes"), // Observações adicionais após fornecedores
   statusId: integer("status_id").notNull().default(1).references(() => orderStatuses.id), // Status do pedido (FK para order_statuses)
-  previousStatusId: integer("previous_status_id").references(() => orderStatuses.id), // Status anterior para função desfazer
+  // previousStatusId removido - histórico agora é gerenciado via medical_order_status_history
   complexity: text("complexity"), // Complexidade/porte cirúrgico
   receivedValue: integer("received_value"), // Valor recebido pela cirurgia em centavos
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1536,6 +1536,8 @@ export const medicalOrderOpmeItems = pgTable("medical_order_opme_items", {
   procedureId: integer("procedure_id").references(() => procedures.id), // Tornar procedureId opcional
   opmeItemId: integer("opme_item_id").notNull().references(() => opmeItems.id),
   quantity: integer("quantity").notNull().default(1),
+  quantityApproved: integer("quantity_approved"),
+  status: text("status").default('em_analise'),
   surgicalApproachId: integer("surgical_approach_id").references(() => surgicalApproaches.id, { onDelete: 'set null' }), // Conduta cirúrgica associada
   surgicalProcedureId: integer("surgical_procedure_id").references(() => surgicalProcedures.id, { onDelete: 'set null' }), // Procedimento cirúrgico associado
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -2086,12 +2088,13 @@ export type InsertAppeal = z.infer<typeof insertAppealSchema>;
 export const medicalOrderStatusHistory = pgTable("medical_order_status_history", {
   id: serial("id").primaryKey(),
   orderId: integer("order_id").notNull().references(() => medicalOrders.id, { onDelete: 'cascade' }),
-  statusId: integer("status_id").notNull().references(() => orderStatuses.id),
+  statusId: integer("status_id").references(() => orderStatuses.id), // Nullable para notas que não mudam status
   changedBy: integer("changed_by").references(() => users.id), // Usuário que fez a mudança (opcional para mudanças automáticas)
   changedAt: timestamp("changed_at").notNull().defaultNow(),
   notes: text("notes"), // Motivos de cancelamento, comentários da operadora, observações gerais
   deadlineDate: timestamp("deadline_date"), // Para contagens regressivas (21 dias análise, 90 dias pós-cirurgia)
   nextNotificationAt: timestamp("next_notification_at"), // Próxima notificação agendada (ex: adiar por 1 hora)
+  recordType: text("record_type").notNull().default("status_change"), // 'status_change' ou 'note'
 });
 
 // Relações da tabela de histórico de status

@@ -154,7 +154,34 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#1f2937',
   },
+  fixedFooter: {
+    position: 'absolute',
+    bottom: 15,
+    left: 30,
+    right: 30,
+    height: 40,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 8,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 8,
+    color: '#64748b',
+  },
+  pageNumber: {
+    fontSize: 7,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
 });
+
+interface AppealAttachment {
+  id?: string;
+  filename: string;
+  url: string;
+  type: 'image' | 'pdf';
+}
 
 interface AppealPDFDocumentProps {
   patient: {
@@ -169,6 +196,7 @@ interface AppealPDFDocumentProps {
     logoUrl?: string;
   };
   appealJustification: string;
+  orderId?: number;
   user?: {
     name?: string;
     crm?: string;
@@ -176,6 +204,7 @@ interface AppealPDFDocumentProps {
     signatureUrl?: string; // Assinatura para o rodapé
     signatureNote?: string;
   };
+  attachments?: AppealAttachment[]; // Anexos de imagem para incluir no PDF
 }
 
 const formatDateBR = (dateString?: string) => {
@@ -196,7 +225,25 @@ const calculateAge = (birthDate?: string) => {
   return age;
 };
 
-export const AppealPDFDocument = ({ patient, hospital, appealJustification, user }: AppealPDFDocumentProps) => (
+const MEDSYNC_VERSION = '2.5.3';
+
+export const AppealPDFDocument = ({ patient, hospital, appealJustification, orderId, user, attachments = [] }: AppealPDFDocumentProps) => {
+  // Filtrar apenas anexos de imagem (PDFs são mesclados separadamente com pdf-lib)
+  const imageAttachments = attachments.filter(att => att.type === 'image');
+  
+  // Componente de rodapé reutilizável (fixo em todas as páginas)
+  const PageFooter = () => (
+    <View style={styles.fixedFooter} fixed>
+      <Text style={styles.footerText}>
+        Recurso de glosa do Pedido #{orderId || '---'} - Gerado em {new Date().toLocaleDateString('pt-BR')} através do MedSync v{MEDSYNC_VERSION}
+      </Text>
+      <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => 
+        `Página ${pageNumber} de ${totalPages}`
+      } />
+    </View>
+  );
+  
+  return (
   <Document>
     <Page size="A4" style={styles.page}>
       {/* Cabeçalho fixo - Logo do Hospital (esquerda) e Logo do Médico (direita) */}
@@ -300,6 +347,54 @@ export const AppealPDFDocument = ({ patient, hospital, appealJustification, user
           )}
         </View>
       </View>
+      
+      {/* Rodapé será adicionado via pdf-lib após merge para paginação correta */}
     </Page>
+    
+    {/* Páginas de anexos de imagem */}
+    {imageAttachments.map((attachment, index) => (
+      <Page key={attachment.id || index} size="A4" style={styles.page}>
+        {/* Cabeçalho fixo */}
+        <View style={styles.fixedHeader} fixed>
+          <View style={styles.headerRow}>
+            <View style={styles.headerLogoLeft}>
+              {hospital?.logoUrl && (
+                <Image src={hospital.logoUrl} style={styles.hospitalLogo} />
+              )}
+            </View>
+            <View style={styles.headerLogoRight}>
+              {user?.logoUrl && (
+                <Image src={user.logoUrl} style={styles.doctorLogo} />
+              )}
+            </View>
+          </View>
+        </View>
+        
+        {/* Conteúdo do anexo - ajuste inteligente baseado na proporção */}
+        <View style={{ 
+          flex: 1, 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          padding: 5
+        }}>
+          <Text style={{ fontSize: 10, marginBottom: 10, color: '#64748b' }}>
+            Anexo {index + 1} de {imageAttachments.length} - {attachment.filename}
+          </Text>
+          <Image 
+            src={attachment.url} 
+            style={{ 
+              width: (attachment as any).isDocumentRatio ? '100%' : undefined,
+              height: (attachment as any).isDocumentRatio ? '100%' : undefined,
+              maxWidth: '100%', 
+              maxHeight: '100%', 
+              objectFit: 'contain' 
+            }} 
+          />
+        </View>
+        
+        {/* Rodapé será adicionado via pdf-lib após merge para paginação correta */}
+      </Page>
+    ))}
   </Document>
-);
+  );
+};

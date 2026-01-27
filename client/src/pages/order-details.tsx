@@ -52,13 +52,16 @@ import {
   Truck,
   StickyNote,
   Upload,
-  X
+  X,
+  History
 } from "lucide-react";
 import { addOrderDetailsTranslations } from "@/lib/translations/order-details";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROCEDURE_TYPES, PROCEDURE_TYPE_VALUES } from "@shared/constants";
 import { PartialApprovalModal } from "@/components/partial-approval-modal";
+import { OpmeApprovalModal } from "@/components/opme-approval-modal";
+import { OrderHistoryTimeline } from "@/components/order-history-timeline";
 import { ReceivedValuesModal } from "@/components/received-values-modal";
 import { StatusChangeModal } from "@/components/status-change-modal";
 import { SupplierApprovalModal } from "@/components/supplier-approval-modal";
@@ -70,6 +73,8 @@ addOrderDetailsTranslations();
 interface OpmeItem {
   id: number;
   quantity: number;
+  status?: string;
+  quantityApproved?: number;
   opmeItem: {
     id: number;
     technicalName: string;
@@ -436,125 +441,50 @@ const ProceduresList = ({ orderId, orderStatus, cbhpmAdditionalNotes }: { orderI
     orderStatus 
   });
 
-  // Função para derivar status do procedimento baseado no status do pedido
+  // Função para derivar status do procedimento/OPME baseado apenas no status individual
+  // Estados possíveis: Aprovado, Negado, Pendente
   const getProcedureStatusFromOrder = (orderStatus: string, procedureStatus?: string) => {
-    switch (orderStatus) {
-      case 'em_preenchimento':
+    // Status do pedido onde não mostramos status individual (ainda em preenchimento/envio)
+    if (orderStatus === 'em_preenchimento' || orderStatus === 'aguardando_envio') {
+      return {
+        label: '',
+        color: '',
+        bgColor: '',
+        icon: Clock,
+        editable: false,
+        showStatus: false
+      };
+    }
+    
+    // Para todos os outros status de pedido, usar o status individual do item
+    // Estados possíveis: Aprovado, Negado, Pendente
+    switch (procedureStatus) {
+      case 'aprovado':
         return {
-          label: 'Incompleto',
-          color: 'text-amber-600',
-          bgColor: 'bg-amber-100 dark:bg-amber-900/20',
-          icon: Clock,
-          editable: false,
-          showStatus: true
-        };
-      case 'em_avaliacao':
-        return {
-          label: 'Em Análise',
-          color: 'text-accent-foreground',
-          bgColor: 'bg-accent',
-          icon: Clock,
-          editable: false,
-          showStatus: true
-        };
-      case 'aceito':
-        return {
-          label: 'Autorizado',
+          label: 'Aprovado',
           color: 'text-emerald-600',
           bgColor: 'bg-emerald-100 dark:bg-emerald-900/20',
           icon: CheckCircle,
-          editable: false,
+          editable: true,
           showStatus: true
         };
-      case 'autorizado_parcial':
-        // Para pedidos parciais, usar o status individual do procedimento
-        switch (procedureStatus) {
-          case 'aprovado':
-            return {
-              label: 'Autorizado',
-              color: 'text-emerald-600',
-              bgColor: 'bg-emerald-100 dark:bg-emerald-900/20',
-              icon: CheckCircle,
-              editable: true,
-              showStatus: true
-            };
-          case 'negado':
-            return {
-              label: 'Negado',
-              color: 'text-destructive',
-              bgColor: 'bg-destructive/10',
-              icon: XCircle,
-              editable: true,
-              showStatus: true
-            };
-          default:
-            return {
-              label: 'Pendente Avaliação',
-              color: 'text-amber-600',
-              bgColor: 'bg-amber-100 dark:bg-amber-900/20',
-              icon: AlertTriangle,
-              editable: true,
-              showStatus: true
-            };
-        }
-      case 'cirurgia_realizada':
+      case 'negado':
         return {
-          label: 'Finalizado',
-          color: 'text-emerald-600',
-          bgColor: 'bg-emerald-100 dark:bg-emerald-900/20',
-          icon: CheckCircle,
-          editable: false,
+          label: 'Negado',
+          color: 'text-destructive',
+          bgColor: 'bg-destructive/10',
+          icon: XCircle,
+          editable: true,
           showStatus: true
-        };
-      case 'recebido':
-        // Para pedidos recebidos, usar o status individual do procedimento
-        switch (procedureStatus) {
-          case 'aprovado':
-            return {
-              label: 'Recebido',
-              color: 'text-emerald-600',
-              bgColor: 'bg-emerald-100 dark:bg-emerald-900/20',
-              icon: CheckCircle,
-              editable: false,
-              showStatus: true
-            };
-          case 'negado':
-          case 'cancelado':
-            return {
-              label: 'Cancelado',
-              color: 'text-destructive',
-              bgColor: 'bg-destructive/10',
-              icon: XCircle,
-              editable: false,
-              showStatus: true
-            };
-          default:
-            return {
-              label: 'Pendente',
-              color: 'text-amber-600',
-              bgColor: 'bg-amber-100 dark:bg-amber-900/20',
-              icon: AlertTriangle,
-              editable: false,
-              showStatus: true
-            };
-        }
-      case 'cancelado':
-      case 'aguardando_envio':
-        return {
-          label: '',
-          color: '',
-          bgColor: '',
-          icon: Clock,
-          editable: false,
-          showStatus: false
         };
       default:
+        // Pendente (quando ainda não foi aprovado nem negado)
         return {
-          label: 'Status Indefinido',
-          color: 'text-muted-foreground',
-          bgColor: 'bg-muted',
+          label: 'Pendente',
+          color: 'text-amber-600',
+          bgColor: 'bg-amber-100 dark:bg-amber-900/20',
           icon: AlertTriangle,
-          editable: false,
+          editable: true,
           showStatus: true
         };
     }
@@ -797,7 +727,52 @@ const ProceduresList = ({ orderId, orderStatus, cbhpmAdditionalNotes }: { orderI
 };
 
 // Componente para exibir materiais OPME
-const OpmeItemsList = ({ orderId, opmeAdditionalNotes }: { orderId: number; opmeAdditionalNotes?: string }) => {
+const OpmeItemsList = ({ orderId, orderStatus, opmeAdditionalNotes }: { orderId: number; orderStatus?: string; opmeAdditionalNotes?: string }) => {
+  
+  // Função para derivar status do item OPME baseado apenas no status individual
+  // Estados possíveis: Aprovado, Negado, Pendente
+  const getOpmeStatusConfig = (orderStatus: string | undefined, itemStatus?: string) => {
+    // Status do pedido onde não mostramos status individual (ainda em preenchimento/envio)
+    if (orderStatus === 'em_preenchimento' || orderStatus === 'aguardando_envio') {
+      return {
+        label: '',
+        color: '',
+        bgColor: '',
+        icon: Clock,
+        showStatus: false
+      };
+    }
+    
+    // Para todos os outros status de pedido, usar o status individual do item
+    // Estados possíveis: Aprovado, Negado, Pendente
+    switch (itemStatus) {
+      case 'aprovado':
+        return {
+          label: 'Aprovado',
+          color: 'text-emerald-600',
+          bgColor: 'bg-emerald-100 dark:bg-emerald-900/20',
+          icon: CheckCircle,
+          showStatus: true
+        };
+      case 'negado':
+        return {
+          label: 'Negado',
+          color: 'text-destructive',
+          bgColor: 'bg-destructive/10',
+          icon: XCircle,
+          showStatus: true
+        };
+      default:
+        // Pendente (quando ainda não foi aprovado nem negado)
+        return {
+          label: 'Pendente',
+          color: 'text-amber-600',
+          bgColor: 'bg-amber-100 dark:bg-amber-900/20',
+          icon: AlertTriangle,
+          showStatus: true
+        };
+    }
+  };
   const { data: opmeItems, isLoading, isError } = useQuery<OpmeItem[]>({
     queryKey: [`/api/medical-orders/${orderId}/opme-items`],
     queryFn: async () => {
@@ -896,7 +871,11 @@ const OpmeItemsList = ({ orderId, opmeAdditionalNotes }: { orderId: number; opme
                   
                   {/* Itens OPME do grupo */}
                   <div className="space-y-2 pl-2">
-                    {group.items.map((item: OpmeItem, index: number) => (
+                    {group.items.map((item: OpmeItem, index: number) => {
+                      const statusConfig = getOpmeStatusConfig(orderStatus, item.status);
+                      const StatusIcon = statusConfig.icon;
+                      
+                      return (
                       <div key={item.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-sky-50'} border border-border rounded-md p-3`}>
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
@@ -904,9 +883,26 @@ const OpmeItemsList = ({ orderId, opmeAdditionalNotes }: { orderId: number; opme
                               {item.opmeItem.commercialName}
                             </h3>
                           </div>
-                          <Badge variant="secondary" className="bg-medsync-blue text-white">
-                            Qtd: {item.quantity}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            {/* Badge de status */}
+                            {statusConfig.showStatus && (
+                              <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${statusConfig.bgColor}`}>
+                                <StatusIcon className={`h-3 w-3 ${statusConfig.color}`} />
+                                <span className={`text-xs font-medium ${statusConfig.color}`}>
+                                  {statusConfig.label}
+                                </span>
+                              </div>
+                            )}
+                            {/* Badges de quantidade */}
+                            <Badge variant="secondary" className="bg-medsync-blue text-white">
+                              Qtd: {item.quantity}
+                            </Badge>
+                            {item.status === 'aprovado' && item.quantityApproved !== undefined && item.quantityApproved !== item.quantity && (
+                              <Badge variant="secondary" className="bg-emerald-600 text-white">
+                                Aprovado: {item.quantityApproved}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
@@ -963,7 +959,8 @@ const OpmeItemsList = ({ orderId, opmeAdditionalNotes }: { orderId: number; opme
                           </div>
                         )}
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                   
                   {/* Observações adicionais do grupo */}
@@ -1083,27 +1080,17 @@ const SuppliersList = ({ orderId, supplierAdditionalNotes }: { orderId: number; 
                             </p>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <Badge 
-                            variant={supplierItem.isApproved ? "default" : "secondary"} 
-                            className={supplierItem.isApproved 
-                              ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 border-emerald-600" 
-                              : "bg-amber-100 dark:bg-amber-900/20 text-amber-600 border-amber-600"
-                            }
-                          >
-                            {supplierItem.isApproved ? (
-                              <>
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Aprovado
-                              </>
-                            ) : (
-                              <>
-                                <Clock className="h-3 w-3 mr-1" />
-                                Pendente
-                              </>
-                            )}
-                          </Badge>
-                        </div>
+                        {supplierItem.isApproved && (
+                          <div className="flex flex-col items-end gap-2">
+                            <Badge 
+                              variant="default"
+                              className="bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 border-emerald-600"
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Aprovado
+                            </Badge>
+                          </div>
+                        )}
                       </div>
 
                       {supplierItem.approvedAt && (
@@ -1226,6 +1213,8 @@ export default function OrderDetails() {
   const [showPartialApprovalModal, setShowPartialApprovalModal] = useState(false);
   const [showReceivedValuesModal, setShowReceivedValuesModal] = useState(false);
   const [showSupplierApprovalModal, setShowSupplierApprovalModal] = useState(false);
+  const [showOpmeApprovalModal, setShowOpmeApprovalModal] = useState(false);
+  const [showHistoryTimeline, setShowHistoryTimeline] = useState(false);
   
   // Estados para StatusChangeModal
   const [showStatusChangeModal, setShowStatusChangeModal] = useState(false);
@@ -1708,7 +1697,7 @@ export default function OrderDetails() {
               </CardDescription>
             </div>
             <div className="flex flex-col gap-3">
-              {/* Botão Próxima Etapa (seguindo padrão da página orders) */}
+              {/* Botão Próxima Etapa e Ver Histórico */}
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -1718,6 +1707,15 @@ export default function OrderDetails() {
                 >
                   <ArrowRight className="mr-2 h-4 w-4" />
                   Próxima Etapa
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:text-blue-700 text-sm px-4 py-2"
+                  onClick={() => setShowHistoryTimeline(true)}
+                >
+                  <History className="mr-2 h-4 w-4" />
+                  Ver Histórico
                 </Button>
               </div>
               
@@ -1981,8 +1979,8 @@ export default function OrderDetails() {
                   <CardTitle className="text-lg text-foreground">Procedimentos CBHPM</CardTitle>
                   <CardDescription>Lista de procedimentos associados a este pedido médico</CardDescription>
                 </div>
-                {/* Botão Editar Aprovações só aparece para status autorizado parcial */}
-                {order.statusCode === 'autorizado_parcial' && (
+                {/* Botão Editar Aprovações aparece para status autorizado parcial ou pendência */}
+                {(order.statusCode === 'autorizado_parcial' || order.statusCode === 'pendencia') && (
                   <Button
                     onClick={() => setShowPartialApprovalModal(true)}
                     variant="outline"
@@ -2020,10 +2018,35 @@ export default function OrderDetails() {
         
         {/* Aba Materiais OPME */}
         <TabsContent value="materiais">
-          <OpmeItemsList 
-            orderId={order.id} 
-            opmeAdditionalNotes={order.opmeAdditionalNotes || ''}
-          />
+          <Card className="border border-border bg-card">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-lg text-foreground">Materiais OPME</CardTitle>
+                  <CardDescription>Materiais OPME associados ao pedido médico</CardDescription>
+                </div>
+                {/* Botão Editar Aprovações aparece para status autorizado parcial ou pendência */}
+                {(order.statusCode === 'autorizado_parcial' || order.statusCode === 'pendencia') && (
+                  <Button
+                    onClick={() => setShowOpmeApprovalModal(true)}
+                    variant="outline"
+                    size="sm"
+                    className="bg-accent border-border text-foreground hover:bg-accent hover:border-border"
+                  >
+                    <Edit3 className="h-4 w-4 mr-2" />
+                    Editar Aprovações OPME
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <OpmeItemsList 
+                orderId={order.id} 
+                orderStatus={order.statusCode}
+                opmeAdditionalNotes={order.opmeAdditionalNotes || ''}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
         
         {/* Aba Fornecedores */}
@@ -2035,8 +2058,8 @@ export default function OrderDetails() {
                   <CardTitle className="text-lg text-foreground">Fornecedores</CardTitle>
                   <CardDescription>Fornecedores aprovados para este pedido médico</CardDescription>
                 </div>
-                {/* Botão Editar Aprovações só aparece para status autorizado ou autorizado parcial */}
-                {(order.statusCode === 'aceito' || order.statusCode === 'autorizado_parcial') && (
+                {/* Botão Editar Aprovações aparece para status autorizado, autorizado parcial ou pendência */}
+                {(order.statusCode === 'aceito' || order.statusCode === 'autorizado_parcial' || order.statusCode === 'pendencia') && (
                   <Button
                     onClick={() => setShowSupplierApprovalModal(true)}
                     variant="outline"
@@ -2105,6 +2128,24 @@ export default function OrderDetails() {
         onApprovalComplete={handlePartialApprovalComplete}
         onGenerateAppeal={handleGenerateAppeal}
         onAcceptGloss={handleAcceptGloss}
+      />
+
+      {/* Modal de Aprovação OPME */}
+      <OpmeApprovalModal
+        isOpen={showOpmeApprovalModal}
+        onClose={() => setShowOpmeApprovalModal(false)}
+        orderId={orderId}
+        onApprovalComplete={() => {
+          setShowOpmeApprovalModal(false);
+          queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}/opme-items`] });
+        }}
+      />
+
+      {/* Modal de Histórico do Pedido */}
+      <OrderHistoryTimeline
+        isOpen={showHistoryTimeline}
+        onClose={() => setShowHistoryTimeline(false)}
+        orderId={orderId}
       />
 
       {/* Modal de Valores Recebidos */}

@@ -14,9 +14,7 @@ import {
   Edit,
   ExternalLink,
 } from "lucide-react";
-import { FaWhatsapp } from "react-icons/fa";
 import { SiInstagram } from "react-icons/si";
-import { useSupportContact } from "@/lib/support-contact";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -67,7 +65,6 @@ import { onlyNumbers } from "@/lib/utils";
 import { useValidation } from "@/hooks/use-validation";
 
 export default function AuthPage() {
-  const { openSupport } = useSupportContact();
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<
     "login" | "register" | "forgot-password"
@@ -124,6 +121,109 @@ export default function AuthPage() {
       htmlElement.classList.remove("auth-page-forced-light");
       htmlElement.style.removeProperty("color-scheme");
       console.log("Auth page: Restored original theme");
+    };
+  }, []);
+
+  // Carregar o chatbot n8n
+  useEffect(() => {
+    // Carregar CSS do n8n chat
+    const link = document.createElement('link');
+    link.href = 'https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+
+    // Adicionar estilos customizados do chat
+    const customStyles = document.createElement('style');
+    customStyles.textContent = `
+      :root {
+        --chat--color-primary: #37A5D7;
+        --chat--color-primary-shade-50: #2f90bd;
+        --chat--color-primary-shade-100: #287aa0;
+        --chat--color-secondary: #37A5D7;
+        --chat--color-secondary-shade-50: #2f90bd;
+        --chat--color-secondary-shade-100: #287aa0;
+        --chat--color-white: #ffffff;
+        --chat--color-light: #e7f6fd;
+        --chat--color-light-shade-50: #d1ecfa;
+        --chat--color-light-shade-100: #b3def4;
+        --chat--color-dark: #0f172a;
+        --chat--color-disabled: #9ca3af;
+        --chat--color-typing: #404040;
+        --chat--spacing: 1rem;
+        --chat--border-radius: 18px;
+        --chat--window--width: 400px;
+        --chat--window--height: 520px;
+        --chat--header--background: var(--chat--color-primary);
+        --chat--header--color: #ffffff;
+        --chat--header-height: 48px;
+        --chat--header--padding: 8px 14px;
+        --chat--heading--font-size: 1rem;
+        --chat--subtitle--font-size: 0.8rem;
+        --chat--body--background: #f5f9fc;
+        --chat--message--border-radius: 16px;
+        --chat--message--padding: 10px 12px;
+        --chat--message--font-size: 0.95rem;
+        --chat--message--bot--background: #ffffff;
+        --chat--message--bot--color: #111827;
+        --chat--message--user--background: var(--chat--color-primary);
+        --chat--message--user--color: #ffffff;
+        --chat--toggle--background: var(--chat--color-primary);
+        --chat--toggle--hover--background: var(--chat--color-primary-shade-50);
+        --chat--toggle--active--background: var(--chat--color-primary-shade-100);
+        --chat--toggle--color: #ffffff;
+        --chat--toggle--size: 60px;
+        --chat--toggle--border-radius: 999px;
+      }
+      .n8n-chat__toggle {
+        background-color: #37A5D7 !important;
+        color: #ffffff !important;
+      }
+      .n8n-chat__message-list .n8n-chat__message:nth-child(1) .n8n-chat__message-bubble {
+        background: #ffffff !important;
+        color: #111827 !important;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+      }
+    `;
+    document.head.appendChild(customStyles);
+
+    // Carregar script do n8n chat
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.textContent = `
+      import { createChat } from 'https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js';
+      createChat({
+        webhookUrl: 'https://hook-prod.iotninja.com.br/webhook/9c294984-76bd-43a1-b93f-7a10a390bbd5/chat',
+        target: '#n8n-chat',
+        mode: 'window',
+        defaultLanguage: 'pt',
+        initialMessages: [
+          'Olá! 👋 Sou o assistente Medsync.',
+          'Em que posso te ajudar hoje?'
+        ],
+        i18n: {
+          pt: {
+            title: 'Atendimento Medsync',
+            subtitle: '',
+            footer: '',
+            getStarted: 'Iniciar conversa',
+            inputPlaceholder: 'Digite sua pergunta...'
+          }
+        },
+        loadPreviousSession: true,
+        showWelcomeScreen: true,
+        enableStreaming: false
+      });
+    `;
+    document.body.appendChild(script);
+
+    // Cleanup
+    return () => {
+      link.remove();
+      customStyles.remove();
+      script.remove();
+      // Remover elementos do chat se existirem
+      const chatElements = document.querySelectorAll('[class*="n8n-chat"]');
+      chatElements.forEach(el => el.remove());
     };
   }, []);
 
@@ -713,23 +813,8 @@ export default function AuthPage() {
         </div>
       </footer>
 
-      {/* Botão flutuante do WhatsApp */}
-      <div
-        className="fixed bottom-6 right-6 z-50 transform transition-all duration-300 hover:scale-110"
-        onClick={() => {
-          openSupport("Olá! Gostaria de saber mais sobre o MedSync.");
-        }}
-      >
-        <div className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-full shadow-lg cursor-pointer transition-colors duration-200 group">
-          <FaWhatsapp className="h-6 w-6" />
-        </div>
-        {/* Tooltip */}
-        <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block">
-          <div className="bg-black text-white text-xs py-1 px-2 rounded whitespace-nowrap">
-            Entre em contato via WhatsApp
-          </div>
-        </div>
-      </div>
+      {/* Container para o chat n8n */}
+      <div id="n8n-chat"></div>
     </div>
   );
 }

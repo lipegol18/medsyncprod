@@ -3,14 +3,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Check, AlertTriangle } from "lucide-react";
 
+interface DeniedItem {
+  type: 'cbhpm' | 'opme';
+  code?: string;
+  name: string;
+  quantityRequested: number;
+}
+
 interface PostApprovalDecisionModalProps {
   isOpen: boolean;
   onClose: () => void;
   orderId: number;
   approvedItems: number;
   deniedItems: number;
+  deniedItemsList?: DeniedItem[];
   onGenerateAppeal: () => void;
   onAcceptGloss: () => void;
+  onDecideLater?: (deniedItemsList: DeniedItem[]) => void;
 }
 
 export function PostApprovalDecisionModal({
@@ -19,8 +28,10 @@ export function PostApprovalDecisionModal({
   orderId,
   approvedItems,
   deniedItems,
+  deniedItemsList = [],
   onGenerateAppeal,
-  onAcceptGloss
+  onAcceptGloss,
+  onDecideLater
 }: PostApprovalDecisionModalProps) {
 
   const handleGenerateAppeal = () => {
@@ -30,6 +41,13 @@ export function PostApprovalDecisionModal({
 
   const handleAcceptGloss = () => {
     onAcceptGloss();
+    onClose();
+  };
+
+  const handleDecideLater = () => {
+    if (onDecideLater) {
+      onDecideLater(deniedItemsList);
+    }
     onClose();
   };
 
@@ -124,7 +142,7 @@ export function PostApprovalDecisionModal({
         <div className="flex justify-end gap-3 pt-4 border-t border-border">
           <Button
             variant="outline"
-            onClick={onClose}
+            onClick={handleDecideLater}
             className="border-border text-muted-foreground hover:bg-muted/80"
           >
             Decidir Depois

@@ -196,7 +196,8 @@ function HospitalSurgeryList({ appliedFilters }: { appliedFilters: any }) {
                 const radius = Number(outerRadius) + 30;
                 const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
                 const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
-                const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                const formattedName = formatInsuranceName(name);
+                const truncatedName = formattedName.length > 25 ? formattedName.substring(0, 25) + "..." : formattedName;
                 return (
                   <Text
                     x={x}
@@ -433,7 +434,8 @@ function SupplierDistributionList({ appliedFilters }: { appliedFilters: any }) {
                 const radius = Number(outerRadius) + 30;
                 const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
                 const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
-                const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                const formattedName = formatInsuranceName(name);
+                const truncatedName = formattedName.length > 25 ? formattedName.substring(0, 25) + "..." : formattedName;
                 return (
                   <Text
                     x={x}
@@ -663,6 +665,49 @@ const getInsuranceColor = (name: string, fallbackIndex: number): string => {
   if (upperName.includes("SILVESTRE")) return "#0B2D4A";
   if (upperName.includes("PASA") || upperName.includes("VALE")) return "#007E7A";
   return DONUT_COLORS[fallbackIndex % DONUT_COLORS.length];
+};
+
+// Função para formatar nomes de convênios para exibição nos gráficos
+const formatInsuranceName = (name: string): string => {
+  const upperName = name.toUpperCase();
+  
+  // POSTAL SAÚDE CAIXA DE ASSISTÊNCIA... → POSTAL SAÚDE
+  if (upperName.includes("POSTAL SAÚDE") || upperName.includes("POSTAL SAUDE")) {
+    return "POSTAL SAÚDE";
+  }
+  
+  // AGROS - INSTITUTO UFV DE... → AGROS
+  if (upperName.includes("AGROS")) {
+    return "AGROS";
+  }
+  
+  // FUNDAÇÃO DE ASSISTÊNCIA E... → FUNDAÇÃO DE ASSISTÊNCIA
+  if (upperName.includes("FUNDAÇÃO DE ASSISTÊNCIA") || upperName.includes("FUNDACAO DE ASSISTENCIA")) {
+    return "FUNDAÇÃO DE ASSISTÊNCIA";
+  }
+  
+  // ASSOCIAÇÃO ADVENTISTA NOR... → ASSOCIAÇÃO ADVENTISTA NOR
+  if (upperName.includes("ASSOCIAÇÃO ADVENTISTA") || upperName.includes("ASSOCIACAO ADVENTISTA")) {
+    return "ASSOCIAÇÃO ADVENTISTA";
+  }
+  
+  // AIRES OPERADORA DE SAÚDE... → AIRES
+  if (upperName.includes("AIRES")) {
+    return "AIRES";
+  }
+  
+  // Particular → PARTICULAR (maiúsculas)
+  if (upperName === "PARTICULAR") {
+    return "PARTICULAR";
+  }
+  
+  // SUL AMERICA → SUL AMÉRICA (com acento)
+  if (upperName.includes("SUL AMERICA") && !upperName.includes("SUL AMÉRICA")) {
+    return name.toUpperCase().replace("SUL AMERICA", "SUL AMÉRICA");
+  }
+  
+  // Retornar em maiúsculas para padronização
+  return name.toUpperCase();
 };
 
 // Componente para a aba de Valores Recebidos
@@ -2624,10 +2669,23 @@ export default function Reports() {
           )}
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-            <TabsList className="grid grid-cols-3 mb-6">
-              <TabsTrigger value="volume">Volume de Cirurgias</TabsTrigger>
-              <TabsTrigger value="distribution">Distribuição</TabsTrigger>
-              <TabsTrigger value="received-values">
+            <TabsList className="grid grid-cols-3 mb-6 bg-medsync-blue p-1 h-auto">
+              <TabsTrigger 
+                value="volume" 
+                className="text-white/80 data-[state=active]:bg-white data-[state=active]:text-medsync-blue data-[state=inactive]:hover:text-white py-2"
+              >
+                Volume de Cirurgias
+              </TabsTrigger>
+              <TabsTrigger 
+                value="distribution"
+                className="text-white/80 data-[state=active]:bg-white data-[state=active]:text-medsync-blue data-[state=inactive]:hover:text-white py-2"
+              >
+                Distribuição
+              </TabsTrigger>
+              <TabsTrigger 
+                value="received-values"
+                className="text-white/80 data-[state=active]:bg-white data-[state=active]:text-medsync-blue data-[state=inactive]:hover:text-white py-2"
+              >
                 Valores Recebidos
               </TabsTrigger>
             </TabsList>
@@ -3257,7 +3315,8 @@ export default function Reports() {
                               const radius = Number(outerRadius) + 30;
                               const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
                               const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
-                              const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                              const formattedName = formatInsuranceName(name);
+                const truncatedName = formattedName.length > 25 ? formattedName.substring(0, 25) + "..." : formattedName;
                               return (
                                 <Text
                                   x={x}
@@ -3375,7 +3434,8 @@ export default function Reports() {
                               const radius = Number(outerRadius) + 30;
                               const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
                               const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
-                              const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                              const formattedName = formatInsuranceName(name);
+                const truncatedName = formattedName.length > 25 ? formattedName.substring(0, 25) + "..." : formattedName;
                               return (
                                 <Text
                                   x={x}
@@ -3454,8 +3514,8 @@ export default function Reports() {
                 </Card>
               </div>
 
-              {/* Cirurgias por Convênio - Empilhados verticalmente */}
-              <div className="grid grid-cols-1 gap-6">
+              {/* Cirurgias por Convênio - Lado a lado */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Cirurgias solicitadas por convênio */}
                 <Card className="border-border bg-card shadow-lg">
                   <CardHeader className="pb-2">
@@ -3496,7 +3556,8 @@ export default function Reports() {
                               const radius = Number(outerRadius) + 30;
                               const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
                               const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
-                              const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                              const formattedName = formatInsuranceName(name);
+                const truncatedName = formattedName.length > 25 ? formattedName.substring(0, 25) + "..." : formattedName;
                               return (
                                 <Text
                                   x={x}
@@ -3620,7 +3681,8 @@ export default function Reports() {
                               const radius = Number(outerRadius) + 30;
                               const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
                               const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
-                              const truncatedName = name.length > 25 ? name.substring(0, 25) + "..." : name;
+                              const formattedName = formatInsuranceName(name);
+                const truncatedName = formattedName.length > 25 ? formattedName.substring(0, 25) + "..." : formattedName;
                               return (
                                 <Text
                                   x={x}

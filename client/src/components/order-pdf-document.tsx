@@ -14,7 +14,7 @@ interface MarkdownLine {
   number?: number;
 }
 
-function parseMarkdownToPdf(markdown: string): MarkdownLine[] {
+export function parseMarkdownToPdf(markdown: string): MarkdownLine[] {
   if (!markdown) return [];
   
   const lines = markdown.split('\n');
@@ -584,6 +584,11 @@ const styles = StyleSheet.create({
   },
 });
 
+interface PageBreakConfig {
+  sectionIndex?: number;
+  justificationLineIndex?: number;
+}
+
 interface OrderPDFDocumentProps {
   orderData: any;
   patientData: any;
@@ -594,6 +599,9 @@ interface OrderPDFDocumentProps {
   opmeItems?: any[];
   suppliers?: any[];
   attachments?: any[];
+  pageBreakPositions?: number[];
+  pageBreakConfigs?: PageBreakConfig[];
+  forcedPageBreaks?: string[]; // IDs dos blocos que devem iniciar nova página
 }
 
 export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
@@ -606,7 +614,25 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
   opmeItems = [],
   suppliers = [],
   attachments = [],
+  pageBreakPositions = [],
+  pageBreakConfigs = [],
+  forcedPageBreaks = [],
 }) => {
+  const hasManualBreaks = pageBreakPositions.length > 0 || pageBreakConfigs.length > 0 || forcedPageBreaks.length > 0;
+  
+  const shouldBreakBefore = (sectionIndex: number): boolean => {
+    if (pageBreakPositions.includes(sectionIndex)) return true;
+    return pageBreakConfigs.some(c => c.sectionIndex === sectionIndex);
+  };
+  
+  // Verificar se um bloco deve iniciar nova página baseado no ID
+  const shouldBreakBeforeBlock = (blockId: string): boolean => {
+    return forcedPageBreaks.includes(blockId);
+  };
+  
+  const shouldBreakBeforeJustificationLine = (lineIndex: number): boolean => {
+    return pageBreakConfigs.some(c => c.justificationLineIndex === lineIndex);
+  };
   // Formatar data
   const formatDate = (date: string | Date) => {
     return new Date(date).toLocaleDateString('pt-BR');
@@ -661,9 +687,9 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
         <PageHeader />
         <PageFooter />
 
-        {/* Seção de Dados do Paciente */}
+        {/* Seção de Dados do Paciente - Bloco patient-data */}
         {patientData && (
-          <View style={styles.patientSection}>
+          <View style={styles.patientSection} break={shouldBreakBefore(0) || shouldBreakBeforeBlock('patient-data')}>
             {/* Título "Dados do Paciente" com linha separatória dentro da caixa */}
             <View style={styles.patientTitleSection}>
               <Text style={styles.patientTitle}>Dados do Paciente</Text>
@@ -679,46 +705,111 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
             <View style={styles.patientDetails}>
               <View style={styles.patientColumn}>
                 <Text style={styles.patientInfoText}>
-                  <Text style={styles.bold}>CPF:</Text> {patientData.cpf ? formatCPF(patientData.cpf) : 'Não informado'}
+                  <Text style={styles.bold}>CPF:</Text> {patientData.cpf ? formatCPF(patientData.cpf) : ''}
                 </Text>
                 <Text style={styles.patientInfoText}>
-                  <Text style={styles.bold}>Data de Nascimento:</Text> {patientData.birthDate ? formatDate(patientData.birthDate) : 'Não informado'}
+                  <Text style={styles.bold}>Data de Nascimento:</Text> {patientData.birthDate ? formatDate(patientData.birthDate) : ''}
                 </Text>
                 <Text style={styles.patientInfoText}>
-                  <Text style={styles.bold}>Idade:</Text> {patientData.birthDate ? new Date().getFullYear() - new Date(patientData.birthDate).getFullYear() : 'N/A'} anos
+                  <Text style={styles.bold}>Idade:</Text> {patientData.birthDate ? `${new Date().getFullYear() - new Date(patientData.birthDate).getFullYear()} anos` : ''}
                 </Text>
               </View>
               <View style={styles.patientColumn}>
                 <Text style={styles.patientInfoText}>
-                  <Text style={styles.bold}>Plano de Saúde:</Text> {patientData.insurance || 'Não informado'}
+                  <Text style={styles.bold}>Plano de Saúde:</Text> {patientData.insurance || ''}
                 </Text>
                 <Text style={styles.patientInfoText}>
-                  <Text style={styles.bold}>Número da Carteirinha:</Text> {patientData.insuranceNumber || 'Não informado'}
+                  <Text style={styles.bold}>Número da Carteirinha:</Text> {patientData.insuranceNumber || ''}
                 </Text>
                 <Text style={styles.patientInfoText}>
-                  <Text style={styles.bold}>Tipo do Plano:</Text> {patientData.plan || 'Não informado'}
+                  <Text style={styles.bold}>Tipo do Plano:</Text> {patientData.plan || ''}
                 </Text>
               </View>
             </View>
           </View>
         )}
 
-        {/* Título do documento */}
-        <Text style={styles.documentTitle}>
+        {/* Título do documento - Bloco title */}
+        <Text style={styles.documentTitle} break={shouldBreakBefore(1) || shouldBreakBeforeBlock('title')}>
           SOLICITAÇÃO DE PROCEDIMENTO CIRÚRGICO
         </Text>
 
-        {/* Justificativa clínica com suporte a Markdown - permite quebra de página */}
-        <View style={styles.justificationBox} wrap={true}>
+        {/* Justificativa clínica com suporte a Markdown - Bloco justification */}
+        <View style={styles.justificationBox} wrap={true} break={shouldBreakBefore(2) || shouldBreakBeforeBlock('justification')}>
           {orderData?.clinicalJustification ? (
             parseMarkdownToPdf(orderData.clinicalJustification).map((line, lineIndex) => {
-              if (line.type === 'horizontalRule') {
-                return <View key={lineIndex} style={styles.mdHorizontalRule} />;
-              }
+              const shouldBreakHere = shouldBreakBeforeJustificationLine(lineIndex);
               
-              if (line.type === 'heading') {
+              const renderLineContent = () => {
+                if (line.type === 'horizontalRule') {
+                  return <View style={styles.mdHorizontalRule} />;
+                }
+                
+                if (line.type === 'heading') {
+                  return (
+                    <Text style={styles.mdHeading}>
+                      {line.segments.map((seg, segIndex) => {
+                        if (seg.bold && seg.italic) {
+                          return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                        }
+                        if (seg.bold) {
+                          return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                        }
+                        if (seg.italic) {
+                          return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                        }
+                        return <Text key={segIndex}>{seg.text}</Text>;
+                      })}
+                    </Text>
+                  );
+                }
+                
+                if (line.type === 'listItem') {
+                  return (
+                    <View style={styles.mdListItem}>
+                      <Text style={styles.mdBullet}>•</Text>
+                      <Text style={styles.mdListContent}>
+                        {line.segments.map((seg, segIndex) => {
+                          if (seg.bold && seg.italic) {
+                            return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                          }
+                          if (seg.bold) {
+                            return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                          }
+                          if (seg.italic) {
+                            return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                          }
+                          return <Text key={segIndex}>{seg.text}</Text>;
+                        })}
+                      </Text>
+                    </View>
+                  );
+                }
+                
+                if (line.type === 'numberedListItem') {
+                  return (
+                    <View style={styles.mdListItem}>
+                      <Text style={styles.mdBullet}>{line.number}.</Text>
+                      <Text style={styles.mdListContent}>
+                        {line.segments.map((seg, segIndex) => {
+                          if (seg.bold && seg.italic) {
+                            return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
+                          }
+                          if (seg.bold) {
+                            return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
+                          }
+                          if (seg.italic) {
+                            return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
+                          }
+                          return <Text key={segIndex}>{seg.text}</Text>;
+                        })}
+                      </Text>
+                    </View>
+                  );
+                }
+                
                 return (
-                  <Text key={lineIndex} style={styles.mdHeading}>
+                  <Text style={styles.mdParagraph}>
                     {line.segments.map((seg, segIndex) => {
                       if (seg.bold && seg.italic) {
                         return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
@@ -733,67 +824,12 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
                     })}
                   </Text>
                 );
-              }
-              
-              if (line.type === 'listItem') {
-                return (
-                  <View key={lineIndex} style={styles.mdListItem}>
-                    <Text style={styles.mdBullet}>•</Text>
-                    <Text style={styles.mdListContent}>
-                      {line.segments.map((seg, segIndex) => {
-                        if (seg.bold && seg.italic) {
-                          return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
-                        }
-                        if (seg.bold) {
-                          return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
-                        }
-                        if (seg.italic) {
-                          return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
-                        }
-                        return <Text key={segIndex}>{seg.text}</Text>;
-                      })}
-                    </Text>
-                  </View>
-                );
-              }
-              
-              if (line.type === 'numberedListItem') {
-                return (
-                  <View key={lineIndex} style={styles.mdListItem}>
-                    <Text style={styles.mdBullet}>{line.number}.</Text>
-                    <Text style={styles.mdListContent}>
-                      {line.segments.map((seg, segIndex) => {
-                        if (seg.bold && seg.italic) {
-                          return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
-                        }
-                        if (seg.bold) {
-                          return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
-                        }
-                        if (seg.italic) {
-                          return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
-                        }
-                        return <Text key={segIndex}>{seg.text}</Text>;
-                      })}
-                    </Text>
-                  </View>
-                );
-              }
+              };
               
               return (
-                <Text key={lineIndex} style={styles.mdParagraph}>
-                  {line.segments.map((seg, segIndex) => {
-                    if (seg.bold && seg.italic) {
-                      return <Text key={segIndex} style={styles.boldItalic}>{seg.text}</Text>;
-                    }
-                    if (seg.bold) {
-                      return <Text key={segIndex} style={styles.bold}>{seg.text}</Text>;
-                    }
-                    if (seg.italic) {
-                      return <Text key={segIndex} style={styles.italic}>{seg.text}</Text>;
-                    }
-                    return <Text key={segIndex}>{seg.text}</Text>;
-                  })}
-                </Text>
+                <View key={lineIndex} break={shouldBreakHere}>
+                  {renderLineContent()}
+                </View>
               );
             })
           ) : (
@@ -801,14 +837,14 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
           )}
         </View>
 
-        {/* Informações do procedimento - NÃO pode quebrar entre páginas */}
-        <View style={styles.procedureInfoRow} wrap={false}>
+        {/* Informações do procedimento - Bloco procedure-info */}
+        <View style={styles.procedureInfoRow} wrap={false} break={shouldBreakBefore(3) || shouldBreakBeforeBlock('procedure-info')}>
           <View style={styles.procedureInfoColumn}>
             <Text style={styles.sectionHeader}>Caráter do Procedimento:</Text>
             <Text style={styles.procedureInfoText}>
               {orderData?.procedureType === 'eletiva' ? 'Eletivo' : 
                orderData?.procedureType === 'urgencia' ? 'Urgência' : 
-               orderData?.procedureType === 'emergencia' ? 'Emergência' : 'Não especificado'}
+               orderData?.procedureType === 'emergencia' ? 'Emergência' : ''}
             </Text>
           </View>
           <View style={styles.procedureInfoColumn}>
@@ -816,7 +852,8 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
             <Text style={styles.procedureInfoText}>
               {orderData?.procedureLaterality === 'direito' ? 'Direito' :
                orderData?.procedureLaterality === 'esquerdo' ? 'Esquerdo' :
-               orderData?.procedureLaterality === 'bilateral' ? 'Bilateral' : 'Não especificado'}
+               orderData?.procedureLaterality === 'bilateral' ? 'Bilateral' :
+               orderData?.procedureLaterality === 'nao_se_aplica' ? 'Não se aplica' : ''}
             </Text>
           </View>
         </View>
@@ -1063,6 +1100,7 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
             const hasOpme = group.opmeItemsList.length > 0;
             const hasSuppliers = group.suppliers.length > 0;
             const showHeader = hasMultipleGroups && group.approachId;
+            const groupSectionIndex = 4 + groupIndex;
 
             const renderCidsSection = () => (
               <View style={styles.clinicalSection}>
@@ -1251,8 +1289,20 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
               );
             };
 
+            // Gerar ID do bloco para quebra forçada (compatível com preview V2)
+            // Preview V2 usa key no formato "${procedureId}|${approachId}" ou "general"
+            // Verificar quebras forçadas por tipo de seção dentro do grupo
+            const groupHeaderBlockId = `group-header-${key}`;
+            const cidsBlockId = `cids-${key}`;
+            const cbhpmBlockId = `cbhpm-${key}`;
+            const opmeBlockId = `opme-${key}`;
+            const suppliersBlockId = `suppliers-${key}`;
+            
+            // Verificar se algum bloco do grupo tem quebra forçada (o primeiro a aparecer indica quebra no grupo)
+            const shouldBreakGroup = shouldBreakBeforeBlock(groupHeaderBlockId) || shouldBreakBeforeBlock(cidsBlockId);
+            
             return (
-              <View key={key} style={groupIndex > 0 ? { marginTop: 10, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: '#e5e7eb' } : {}}>
+              <View key={key} style={groupIndex > 0 ? { marginTop: 10, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: '#e5e7eb' } : {}} break={shouldBreakBefore(groupSectionIndex) || shouldBreakGroup}>
                 {/* Agrupa título + primeira seção para não ficarem separados em páginas diferentes */}
                 {showHeader && hasCids && (
                   <View wrap={false} minPresenceAhead={180}>
@@ -1439,8 +1489,8 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
           );
         })()}
 
-        {/* BLOCO DE ASSINATURA - minPresenceAhead nas seções anteriores garante conteúdo junto */}
-        <View wrap={false}>
+        {/* BLOCO DE ASSINATURA - Bloco signature */}
+        <View wrap={false} break={shouldBreakBeforeBlock('signature')}>
           {/* Seção de assinatura */}
           <View style={styles.signatureSection}>
             {/* Data */}
@@ -1495,13 +1545,22 @@ export const OrderPDFDocument: React.FC<OrderPDFDocumentProps> = ({
               <Page size="A4" style={styles.page} key={`attachment-${index}`}>
                 <PageHeader />
                 
-                {/* Imagem do anexo */}
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 20, marginBottom: 20 }}>
+                {/* Imagem do anexo - ajuste inteligente baseado na proporção */}
+                <View style={{ 
+                  flex: 1, 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  marginTop: 10, 
+                  marginBottom: 10,
+                  padding: 5
+                }}>
                   <Image 
                     style={{ 
+                      width: attachment.isDocumentRatio ? '100%' : undefined,
+                      height: attachment.isDocumentRatio ? '100%' : undefined,
                       maxWidth: '100%', 
                       maxHeight: '100%',
-                      objectFit: 'contain' // Manter proporção da imagem
+                      objectFit: 'contain'
                     }} 
                     src={attachment.url} 
                   />
