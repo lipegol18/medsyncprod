@@ -124,8 +124,9 @@ const FOOTER_HEIGHT_PX = 60;
 // A4 PDF: 842 pontos total, 702 pontos de conteúdo (80 topo + 60 base)
 // Proporção conteúdo = 702/842 = 83.4%
 // A4 em pixels (96dpi): 297mm = 1123px, 83.4% = ~936px
-// Margem de segurança de 5% para compensar diferenças de renderização HTML vs react-pdf
-const PAGE_CONTENT_HEIGHT_PX = 890;
+// Margem de segurança de 10% para compensar diferenças de renderização HTML vs react-pdf
+// Reduzido para evitar corte de conteúdo na primeira página
+const PAGE_CONTENT_HEIGHT_PX = 840;
 
 const formatDateBR = (dateString: string | null | undefined): string => {
   if (!dateString) return "";
@@ -142,7 +143,9 @@ interface ContentBlock {
   type:
     | "patient-data"
     | "title"
-    | "justification"
+    | "justification-header"
+    | "justification-paragraph"
+    | "justification-references"
     | "procedure-info"
     | "group-header"
     | "cids"
@@ -484,34 +487,118 @@ export function OrderPreviewV2({
     });
 
     if (clinicalJustification) {
-      // Cálculo mais preciso: fonte 9pt (~12px), line-height 1.4 (~17px/linha)
-      // Container tem ~739px de largura (210mm - 40pt padding), cabe ~115 caracteres por linha
-      // Fórmula: (caracteres / 115) * 17
-      const justificationLines = Math.ceil(clinicalJustification.length / 115);
-      const justificationHeight = justificationLines * 17;
+      // Divide o texto em seções: parágrafos normais e referências bibliográficas
+      const referencesPattern = /^(REFERÊNCIAS BIBLIOGRÁFICAS|REFERÊNCIAS|REFERENCIAS|BIBLIOGRAFIA|REFERENCES):\s*$/im;
+      const parts = clinicalJustification.split(referencesPattern);
+      const mainText = parts[0] || "";
+      const referencesSection = parts.length > 2 ? parts[2] : (parts.length > 1 ? parts[1] : "");
+      const hasReferences = referencesPattern.test(clinicalJustification);
+      
+      // Divide o texto principal em parágrafos (por linhas vazias ou dupla quebra)
+      const paragraphs = mainText
+        .split(/\n\s*\n/)
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+      
+      // Adiciona cabeçalho da seção de Indicação Clínica
       blocks.push({
-        id: "justification",
-        type: "justification",
-        estimatedHeight: Math.max(60, justificationHeight),
+        id: "justification-header",
+        type: "justification-header",
+        estimatedHeight: 25,
         content: (
           <div
-            className="text-justify mb-4"
             style={{
-              fontSize: "9pt",
-              color: "#000000",
-              lineHeight: 1.4,
+              fontSize: "10pt",
+              fontWeight: "bold",
+              color: "#374151",
               fontFamily: "Helvetica, Arial, sans-serif",
               paddingLeft: "5pt",
               paddingRight: "5pt",
+              marginBottom: "8px",
             }}
           >
-            <MarkdownViewer
-              content={clinicalJustification}
-              className="prose-xs"
-            />
+            INDICAÇÃO CLÍNICA:
           </div>
         ),
       });
+      
+      // Adiciona cada parágrafo como bloco separado
+      paragraphs.forEach((paragraph, index) => {
+        const paragraphLines = Math.ceil(paragraph.length / 115);
+        const paragraphHeight = paragraphLines * 17;
+        blocks.push({
+          id: `justification-paragraph-${index}`,
+          type: "justification-paragraph",
+          estimatedHeight: Math.max(30, paragraphHeight + 10),
+          content: (
+            <div
+              className="text-justify"
+              style={{
+                fontSize: "9pt",
+                color: "#000000",
+                lineHeight: 1.4,
+                fontFamily: "Helvetica, Arial, sans-serif",
+                paddingLeft: "5pt",
+                paddingRight: "5pt",
+                marginBottom: "10px",
+              }}
+            >
+              <MarkdownViewer
+                content={paragraph}
+                className="prose-xs"
+              />
+            </div>
+          ),
+        });
+      });
+      
+      // Adiciona seção de referências bibliográficas como bloco separado
+      if (hasReferences && referencesSection.trim()) {
+        const refLines = referencesSection.split('\n').filter(l => l.trim());
+        const refHeight = refLines.length * 22 + 35;
+        blocks.push({
+          id: "justification-references",
+          type: "justification-references",
+          estimatedHeight: Math.max(50, refHeight),
+          content: (
+            <div
+              style={{
+                fontSize: "9pt",
+                color: "#000000",
+                lineHeight: 1.4,
+                fontFamily: "Helvetica, Arial, sans-serif",
+                paddingLeft: "5pt",
+                paddingRight: "5pt",
+                marginBottom: "10px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "9pt",
+                  fontWeight: "bold",
+                  color: "#374151",
+                  marginBottom: "6px",
+                }}
+              >
+                REFERÊNCIAS BIBLIOGRÁFICAS:
+              </div>
+              {refLines.map((ref, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    fontSize: "8pt",
+                    color: "#4b5563",
+                    marginBottom: "4px",
+                    paddingLeft: "10px",
+                  }}
+                >
+                  {ref.trim()}
+                </div>
+              ))}
+            </div>
+          ),
+        });
+      }
     }
 
     blocks.push({
@@ -599,7 +686,7 @@ export function OrderPreviewV2({
         blocks.push({
           id: `cids-${key}`,
           type: "cids",
-          estimatedHeight: 20 + group.cids.length * 16,
+          estimatedHeight: 30 + group.cids.length * 20,
           content: (
             <div
               className="mb-3"
@@ -1213,15 +1300,15 @@ export function OrderPreviewV2({
       {/* Logo Médico: PDF usa 160pt x 120pt = ~213px x 160px - centralizado verticalmente */}
       <div
         className="flex items-center justify-end overflow-visible"
-        style={{ width: "213px", height: "80px" }}
+        style={{ width: "256px", height: "96px" }}
       >
         {user?.logoUrl && (
           <img
             src={user.logoUrl}
             alt="Logo do Médico"
             style={{
-              maxWidth: "213px",
-              maxHeight: "160px",
+              maxWidth: "256px",
+              maxHeight: "192px",
               objectFit: "contain",
             }}
             onError={(e) => {
@@ -1316,7 +1403,7 @@ export function OrderPreviewV2({
                 variant={pageNum === currentPage ? "default" : "outline"}
                 size="sm"
                 onClick={() => setCurrentPage(pageNum)}
-                className={`h-8 w-8 p-0 ${pageNum === currentPage ? "bg-medsync-blue hover:bg-medsync-blue/90" : ""}`}
+                className={`h-8 w-8 p-0 ${pageNum === currentPage ? "bg-medsync-blue hover:bg-medsync-blue/90 text-white" : ""}`}
               >
                 {pageNum}
               </Button>

@@ -138,8 +138,8 @@ const styles = StyleSheet.create({
     objectFit: 'contain',
   },
   doctorLogo: {
-    width: 160,
-    height: 120,
+    width: 192,
+    height: 144,
     objectFit: 'contain',
   },
   fixedFooter: {
@@ -618,21 +618,65 @@ export function OrderPDFDocumentV2({
           SOLICITAÇÃO DE PROCEDIMENTO CIRÚRGICO
         </Text>
 
-        {clinicalJustification && (
-          <View break={shouldBreakBefore('justification')}>
-            {parseMarkdownToPdf(clinicalJustification).map((line, idx) => (
-              <Text key={idx} style={styles.justificationText}>
-                {line.type === 'listItem' ? '• ' : ''}
-                {line.segments.map((seg, sIdx) => {
-                  if (seg.bold && seg.italic) return <Text key={sIdx} style={[styles.bold, styles.italic]}>{seg.text}</Text>;
-                  if (seg.bold) return <Text key={sIdx} style={styles.bold}>{seg.text}</Text>;
-                  if (seg.italic) return <Text key={sIdx} style={styles.italic}>{seg.text}</Text>;
-                  return <Text key={sIdx}>{seg.text}</Text>;
-                })}
+        {clinicalJustification && (() => {
+          const referencesPattern = /^(REFERÊNCIAS BIBLIOGRÁFICAS|REFERÊNCIAS|REFERENCIAS|BIBLIOGRAFIA|REFERENCES):\s*$/im;
+          const parts = clinicalJustification.split(referencesPattern);
+          const mainText = parts[0] || "";
+          const referencesSection = parts.length > 2 ? parts[2] : (parts.length > 1 ? parts[1] : "");
+          const hasReferences = referencesPattern.test(clinicalJustification);
+          
+          const paragraphs = mainText
+            .split(/\n\s*\n/)
+            .map(p => p.trim())
+            .filter(p => p.length > 0);
+          
+          return (
+            <>
+              <Text 
+                style={{ fontSize: 10, fontWeight: 'bold', color: '#374151', marginBottom: 6 }}
+                break={shouldBreakBefore('justification-header')}
+              >
+                INDICAÇÃO CLÍNICA:
               </Text>
-            ))}
-          </View>
-        )}
+              
+              {paragraphs.map((paragraph, index) => (
+                <View 
+                  key={index} 
+                  style={{ marginBottom: 8 }}
+                  break={shouldBreakBefore(`justification-paragraph-${index}`)}
+                >
+                  {parseMarkdownToPdf(paragraph).map((line, idx) => (
+                    <Text key={idx} style={styles.justificationText}>
+                      {line.type === 'listItem' ? '• ' : ''}
+                      {line.segments.map((seg, sIdx) => {
+                        if (seg.bold && seg.italic) return <Text key={sIdx} style={[styles.bold, styles.italic]}>{seg.text}</Text>;
+                        if (seg.bold) return <Text key={sIdx} style={styles.bold}>{seg.text}</Text>;
+                        if (seg.italic) return <Text key={sIdx} style={styles.italic}>{seg.text}</Text>;
+                        return <Text key={sIdx}>{seg.text}</Text>;
+                      })}
+                    </Text>
+                  ))}
+                </View>
+              ))}
+              
+              {hasReferences && referencesSection.trim() && (
+                <View 
+                  style={{ marginBottom: 8 }}
+                  break={shouldBreakBefore('justification-references')}
+                >
+                  <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#374151', marginBottom: 4 }}>
+                    REFERÊNCIAS BIBLIOGRÁFICAS:
+                  </Text>
+                  {referencesSection.split('\n').filter(l => l.trim()).map((ref, idx) => (
+                    <Text key={idx} style={{ fontSize: 8, color: '#4b5563', marginBottom: 2, paddingLeft: 10 }}>
+                      {ref.trim()}
+                    </Text>
+                  ))}
+                </View>
+              )}
+            </>
+          );
+        })()}
 
         <View style={styles.procedureInfoRow} break={shouldBreakBefore('procedure-info')}>
           <View style={styles.procedureInfoColumn}>
