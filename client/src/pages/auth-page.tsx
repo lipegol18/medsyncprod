@@ -171,12 +171,22 @@ export default function AuthPage() {
         --chat--toggle--hover--background: var(--chat--color-primary-shade-50);
         --chat--toggle--active--background: var(--chat--color-primary-shade-100);
         --chat--toggle--color: #ffffff;
-        --chat--toggle--size: 60px;
+        --chat--toggle--size: 40px;
         --chat--toggle--border-radius: 999px;
       }
       .n8n-chat__toggle {
         background-color: #37A5D7 !important;
         color: #ffffff !important;
+      }
+      .chat-window-toggle {
+        width: 40px !important;
+        height: 40px !important;
+        min-width: 40px !important;
+        min-height: 40px !important;
+      }
+      .chat-window-toggle svg {
+        width: 24px !important;
+        height: 24px !important;
       }
       .n8n-chat__message-list .n8n-chat__message:nth-child(1) .n8n-chat__message-bubble {
         background: #ffffff !important;
@@ -774,6 +784,7 @@ export default function AuthPage() {
                 <Link
                   href="/lgpd"
                   className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
+                  onClick={() => window.scrollTo(0, 0)}
                 >
                   <Shield className="h-3 w-3" />
                   Política de Privacidade e LGPD
