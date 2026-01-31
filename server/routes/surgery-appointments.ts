@@ -236,7 +236,7 @@ router.get('/available-orders', isAuthenticated, async (req, res) => {
     console.log('✅ Buscando pedidos disponíveis para usuário:', userId);
 
     // Buscar pedidos médicos do usuário logado que estão em status apropriado para agendamento
-    // Status adequado: autorizado (3) e autorizado parcial (4)
+    // Status adequado: autorizado (3), autorizado parcial (4) e autorização pós (11)
     // Excluir pedidos que já possuem agendamentos ativos (não cancelados)
     const orders = await db
       .select({
@@ -258,7 +258,7 @@ router.get('/available-orders', isAuthenticated, async (req, res) => {
       .leftJoin(surgeryAppointments, eq(medicalOrders.id, surgeryAppointments.medicalOrderId))
       .where(and(
         eq(medicalOrders.userId, userId),
-        inArray(medicalOrders.statusId, [3, 4]), // autorizado + autorizado parcial
+        inArray(medicalOrders.statusId, [3, 4, 11]), // autorizado + autorizado parcial + autorização pós
         isNull(surgeryAppointments.id) // pedido NÃO possui agendamento
       ))
       .orderBy(desc(medicalOrders.createdAt));
@@ -497,6 +497,10 @@ router.get('/by-medical-order/:medicalOrderId', isAuthenticated, async (req, res
       .select({
         id: surgeryAppointments.id,
         medicalOrderId: surgeryAppointments.medicalOrderId,
+        patientId: surgeryAppointments.patientId,
+        patientName: patients.fullName,
+        hospitalId: surgeryAppointments.hospitalId,
+        hospitalName: hospitals.name,
         scheduledDate: surgeryAppointments.scheduledDate,
         scheduledTime: surgeryAppointments.scheduledTime,
         estimatedDuration: surgeryAppointments.estimatedDuration,
@@ -505,10 +509,13 @@ router.get('/by-medical-order/:medicalOrderId', isAuthenticated, async (req, res
         surgeryRoom: surgeryAppointments.surgeryRoom,
         priority: surgeryAppointments.priority,
         notes: surgeryAppointments.notes,
+        preOperativeNotes: surgeryAppointments.preOperativeNotes,
         createdAt: surgeryAppointments.createdAt,
         updatedAt: surgeryAppointments.updatedAt,
       })
       .from(surgeryAppointments)
+      .leftJoin(patients, eq(surgeryAppointments.patientId, patients.id))
+      .leftJoin(hospitals, eq(surgeryAppointments.hospitalId, hospitals.id))
       .where(and(
         eq(surgeryAppointments.medicalOrderId, medicalOrderId),
         eq(surgeryAppointments.doctorId, userId)
@@ -523,7 +530,31 @@ router.get('/by-medical-order/:medicalOrderId', isAuthenticated, async (req, res
       return res.json(null); // Retorna null ao invés de 404 - é normal não ter agendamento
     }
 
-    res.json(appointment[0]);
+    let result = { ...appointment[0] };
+
+    // Se agendamento não tem hospital ou surgeryType, buscar do pedido médico
+    if (!result.hospitalId || !result.hospitalName || !result.surgeryType) {
+      const orderData = await db
+        .select({
+          hospitalId: medicalOrders.hospitalId,
+          hospitalName: hospitals.name,
+          procedureType: medicalOrders.procedureType,
+        })
+        .from(medicalOrders)
+        .leftJoin(hospitals, eq(medicalOrders.hospitalId, hospitals.id))
+        .where(eq(medicalOrders.id, medicalOrderId))
+        .limit(1);
+
+      if (orderData.length > 0) {
+        if (!result.hospitalId) result.hospitalId = orderData[0].hospitalId;
+        if (!result.hospitalName) result.hospitalName = orderData[0].hospitalName;
+        if (!result.surgeryType && orderData[0].procedureType) {
+          result.surgeryType = orderData[0].procedureType as 'eletiva' | 'urgencia';
+        }
+      }
+    }
+
+    res.json(result);
   } catch (error) {
     console.error('❌ Erro ao buscar agendamento por pedido médico:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });

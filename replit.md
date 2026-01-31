@@ -22,7 +22,7 @@ Preferred communication style: Simple, everyday language.
     - Comprehensive theme system with light mode as default (Sky color palette) and dark mode as an option.
     - **Official MedSync Color Palette**: #2ca8e0 (primary), #36a9e1, #124a6b, #6e6f70.
     - Responsive dashboard design with real-time statistical cards.
-    - Enhanced surgical calendar with fixed-height grid layout, precise appointment positioning, and visual indicators.
+    - Enhanced surgical calendar using react-big-calendar with drag-and-drop, event resize, multiple views (month/week/day/agenda), Portuguese localization, and urgency indicators via red left border.
     - Standardized button and modal theming.
     - Proxima Nova and Nunito fonts.
     - Interactive subscription plan cards with hover effects and selection states.

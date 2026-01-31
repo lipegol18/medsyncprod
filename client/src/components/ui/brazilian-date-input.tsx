@@ -147,14 +147,14 @@ export const BrazilianDateInput = forwardRef<HTMLInputElement, BrazilianDateInpu
     };
 
     return (
-      <div className="relative">
+      <div className="flex gap-1 items-center">
         <Input
           ref={ref}
           type="text"
           value={displayValue}
           onChange={handleInputChange}
           placeholder={placeholder}
-          className={cn("pr-10", className)}
+          className={cn("flex-1", className)}
           disabled={disabled}
           required={required}
           name={name}
@@ -162,20 +162,29 @@ export const BrazilianDateInput = forwardRef<HTMLInputElement, BrazilianDateInpu
           {...props}
         />
         
-        {/* Input oculto para seletor de data nativo - apenas no ícone */}
-        <input
-          type="date"
-          value={value}
-          onChange={handleDateChange}
-          className="absolute right-0 top-0 w-10 h-full opacity-0 cursor-pointer"
-          disabled={disabled}
-          tabIndex={-1}
-        />
-        
-        {/* Ícone do calendário */}
-        <Calendar 
-          className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" 
-        />
+        {/* Botão do calendário separado */}
+        <div className="relative flex-shrink-0">
+          <button
+            type="button"
+            className="h-7 w-8 flex items-center justify-center border rounded-md bg-background hover:bg-muted transition-colors"
+            disabled={disabled}
+            onClick={() => {
+              const dateInput = document.getElementById(`date-picker-${name || 'default'}`) as HTMLInputElement;
+              dateInput?.showPicker?.();
+            }}
+          >
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </button>
+          <input
+            id={`date-picker-${name || 'default'}`}
+            type="date"
+            value={value}
+            onChange={handleDateChange}
+            className="absolute inset-0 opacity-0 cursor-pointer"
+            disabled={disabled}
+            tabIndex={-1}
+          />
+        </div>
       </div>
     );
   }

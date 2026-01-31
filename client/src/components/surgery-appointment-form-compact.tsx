@@ -30,6 +30,25 @@ const surgeryAppointmentFormSchema = z.object({
   priority: z.number().min(1).max(4),
   notes: z.string().optional(),
   cancellationReason: z.string().optional(),
+}).refine((data) => {
+  // FLAG: Desabilitar validação de data/hora passada para testes
+  // Mude para 'true' para permitir agendamentos no passado (apenas para testes)
+  const ALLOW_PAST_SCHEDULING = true;
+  
+  if (ALLOW_PAST_SCHEDULING) {
+    return true;
+  }
+  
+  // Validar que a data/hora não está no passado
+  const [year, month, day] = data.scheduledDate.split('-').map(Number);
+  const [hours, minutes] = data.scheduledTime.split(':').map(Number);
+  const scheduledDateTime = new Date(year, month - 1, day, hours, minutes);
+  const now = new Date();
+  
+  return scheduledDateTime > now;
+}, {
+  message: 'Não é possível agendar para uma data/hora que já passou',
+  path: ['scheduledDate'],
 });
 
 type SurgeryAppointmentFormData = z.infer<typeof surgeryAppointmentFormSchema>;
@@ -346,67 +365,89 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 pb-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="medicalOrderId"
-                    render={({ field }) => (
-                      <FormItem className="space-y-0">
-                        <FormLabel className="text-xs font-medium">
-                          Paciente
-                        </FormLabel>
-                        <Select 
-                          onValueChange={(value) => {
-                            const orderId = parseInt(value);
-                            field.onChange(orderId);
-                            const order = availableOrders.find(o => o.id === orderId);
-                            if (order) {
-                              setSelectedOrder(order);
-                              // Preencher campos automaticamente quando um pedido é selecionado
-                              autoFillFormFields(order);
-                            }
-                          }}
-                          value={field.value ? field.value.toString() : ''}
-                          disabled={isLoadingOrders || !!preSelectedOrderId}
-                        >
-                          <FormControl>
-                            <SelectTrigger className={`h-7 text-xs ${!!preSelectedOrderId ? 'bg-gray-50 dark:bg-gray-900 disabled:opacity-100 disabled:text-foreground' : 'focus:border-medsync-blue focus:ring-medsync-blue'}`}>
-                              <SelectValue placeholder="Selecione um pedido" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {isLoadingOrders ? (
-                              <SelectItem value="loading" disabled>
-                                Carregando...
-                              </SelectItem>
-                            ) : availableOrders.length > 0 ? (
-                              availableOrders.map((order) => (
-                                <SelectItem key={order.id} value={order.id.toString()}>
-                                  #{order.id} - {order.patientName}
-                                </SelectItem>
-                              ))
-                            ) : (
-                              <SelectItem value="no-orders" disabled>
-                                Nenhum pedido disponível
-                              </SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-0">
+                    <FormLabel className="text-xs font-medium">
+                      Paciente
+                    </FormLabel>
+                    {preSelectedOrderId ? (
+                      <div className="flex items-center gap-2 p-1 border rounded-md bg-gray-50 dark:bg-gray-900 h-7 mt-0.5">
+                        <span className="font-medium text-xs truncate text-foreground">
+                          {selectedOrder?.patientName || existingAppointment?.patientName || 'Carregando...'}
+                        </span>
+                      </div>
+                    ) : (
+                      <FormField
+                        control={form.control}
+                        name="medicalOrderId"
+                        render={({ field }) => (
+                          <FormItem className="space-y-0">
+                            <Select 
+                              onValueChange={(value) => {
+                                const orderId = parseInt(value);
+                                field.onChange(orderId);
+                                const order = availableOrders.find(o => o.id === orderId);
+                                if (order) {
+                                  setSelectedOrder(order);
+                                  autoFillFormFields(order);
+                                }
+                              }}
+                              value={field.value ? field.value.toString() : ''}
+                              disabled={isLoadingOrders}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="h-7 text-xs focus:border-medsync-blue focus:ring-medsync-blue">
+                                  <SelectValue placeholder="Selecione um pedido" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {isLoadingOrders ? (
+                                  <SelectItem value="loading" disabled>
+                                    Carregando...
+                                  </SelectItem>
+                                ) : availableOrders.length > 0 ? (
+                                  availableOrders.map((order) => (
+                                    <SelectItem key={order.id} value={order.id.toString()}>
+                                      #{order.id} - {order.patientName}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <SelectItem value="no-orders" disabled>
+                                    Nenhum pedido disponível
+                                  </SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     )}
-                  />
+                  </div>
                   
                   <div className="space-y-0">
                     <FormLabel className="text-xs font-medium">
                       Hospital
                     </FormLabel>
                     <div className="flex items-center gap-2 p-1 border rounded-md bg-gray-50 dark:bg-gray-900 h-7 mt-0.5">
-                      {selectedOrder ? (
-                        <span className="font-medium text-xs truncate text-foreground">{selectedOrder.hospitalName}</span>
+                      {selectedOrder?.hospitalName || existingAppointment?.hospitalName ? (
+                        <span className="font-medium text-xs truncate text-foreground">
+                          {selectedOrder?.hospitalName || existingAppointment?.hospitalName}
+                        </span>
                       ) : (
                         <span className="text-muted-foreground text-xs">Selecione pedido primeiro</span>
                       )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-0">
+                    <FormLabel className="text-xs font-medium">
+                      Tipo
+                    </FormLabel>
+                    <div className="flex items-center gap-2 p-1 border rounded-md bg-gray-50 dark:bg-gray-900 h-7 mt-0.5">
+                      <span className="font-medium text-xs truncate text-foreground">
+                        {form.watch('surgeryType') === 'urgencia' ? 'Urgência' : 'Eletiva'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -424,9 +465,9 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                   Informações do Agendamento
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6 space-y-2 pt-4 pb-4">
-                {/* Data e Horário */}
-                <div className="grid grid-cols-2 gap-4">
+              <CardContent className="pt-4 pb-4">
+                {/* Data, Horário e Duração */}
+                <div className="grid grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
                     name="scheduledDate"
@@ -457,22 +498,19 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                             onChange={field.onChange}
                             placeholder="HH:MM"
                             className="h-7 text-xs focus:border-medsync-blue focus:ring-medsync-blue"
+                            roundToHalfHour={true}
                           />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
-
-                {/* Duração, Tipo e Status */}
-                <div className="grid grid-cols-3 gap-3">
                   <FormField
                     control={form.control}
                     name="estimatedDuration"
                     render={({ field }) => (
                       <FormItem className="space-y-0">
-                        <FormLabel className="text-xs font-medium">Duração (min)</FormLabel>
+                        <FormLabel className="text-xs font-medium">Duração Aproximada (min)</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -484,54 +522,6 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                             onChange={(e) => field.onChange(parseInt(e.target.value))}
                           />
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="surgeryType"
-                    render={({ field }) => (
-                      <FormItem className="space-y-0">
-                        <FormLabel className="text-xs font-medium">
-                          Tipo
-                        </FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={!!selectedOrder}>
-                          <FormControl>
-                            <SelectTrigger className={`h-7 text-xs ${!!selectedOrder ? 'bg-gray-50 dark:bg-gray-900 disabled:opacity-100 disabled:text-foreground' : 'focus:border-medsync-blue focus:ring-medsync-blue'}`}>
-                              <SelectValue placeholder="Eletiva" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="eletiva">Eletiva</SelectItem>
-                            <SelectItem value="urgencia">Urgência</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem className="space-y-0">
-                        <FormLabel className="text-xs font-medium">Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled>
-                          <FormControl>
-                            <SelectTrigger className="h-7 text-xs bg-gray-50 dark:bg-gray-900 disabled:opacity-100 disabled:text-foreground">
-                              <SelectValue placeholder="Agendado" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="agendado">Agendado</SelectItem>
-                            <SelectItem value="confirmado">Confirmado</SelectItem>
-                            <SelectItem value="em_andamento">Em Andamento</SelectItem>
-                            <SelectItem value="concluido">Concluído</SelectItem>
-                            <SelectItem value="cancelado">Cancelado</SelectItem>
-                            <SelectItem value="reagendado">Reagendado</SelectItem>
-                          </SelectContent>
-                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

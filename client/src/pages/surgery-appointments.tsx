@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SurgeryAppointmentFormCompact } from '@/components/surgery-appointment-form-compact';
-import { SurgicalCalendarBig } from '@/components/surgical-calendar-big';
+import { SurgicalCalendar } from '@/components/surgical-calendar';
 import { Calendar } from 'lucide-react';
 import type { SurgeryAppointment } from '@shared/schema';
 
@@ -156,7 +156,7 @@ export default function SurgeryAppointments() {
 
   return (
     <>
-      <SurgicalCalendarBig 
+      <SurgicalCalendar 
         appointments={appointments}
         onNewAppointment={handleCreateAppointment}
         onEditAppointment={handleEditAppointment}

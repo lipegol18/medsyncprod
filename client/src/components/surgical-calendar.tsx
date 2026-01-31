@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
-import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
-import { format, addDays, startOfWeek, isSameDay, parseISO, isToday, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { Calendar, dateFnsLocalizer, Views, SlotInfo, View } from 'react-big-calendar';
+import withDragAndDrop, { withDragAndDropProps } from 'react-big-calendar/lib/addons/dragAndDrop';
+import { format, parse, startOfWeek, getDay, parseISO, addWeeks, subWeeks, addMonths, subMonths, addDays, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Clock, User, AlertTriangle, Calendar, ChevronLeft, ChevronRight, Grid3X3, List, Eye } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus } from 'lucide-react';
 import type { SurgeryAppointment as BaseSurgeryAppointment } from '@shared/schema';
+
+import 'react-big-calendar/lib/css/react-big-calendar.css';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 
 interface SurgeryAppointment extends BaseSurgeryAppointment {
   patientName?: string | null;
@@ -19,7 +22,43 @@ interface SurgicalCalendarProps {
   onUpdateAppointment: (appointmentId: number, updates: Partial<SurgeryAppointment>) => void;
 }
 
-type ViewMode = 'week' | 'day' | 'month';
+interface CalendarEvent {
+  id: number;
+  title: string;
+  start: Date;
+  end: Date;
+  resource: SurgeryAppointment;
+}
+
+const locales = {
+  'pt-BR': ptBR,
+};
+
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek: () => startOfWeek(new Date(), { weekStartsOn: 1 }),
+  getDay,
+  locales,
+});
+
+const DnDCalendar = withDragAndDrop<CalendarEvent>(Calendar);
+
+const messages = {
+  allDay: 'Dia inteiro',
+  previous: 'Anterior',
+  next: 'Próximo',
+  today: 'Hoje',
+  month: 'Mês',
+  week: 'Semana',
+  day: 'Dia',
+  agenda: 'Agenda',
+  date: 'Data',
+  time: 'Hora',
+  event: 'Evento',
+  noEventsInRange: 'Não há cirurgias neste período.',
+  showMore: (total: number) => `+ ${total} mais`,
+};
 
 export function SurgicalCalendar({
   appointments,
@@ -28,455 +67,381 @@ export function SurgicalCalendar({
   onUpdateAppointment,
 }: SurgicalCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [view, setView] = useState<View>(Views.WEEK);
+  const calendarRef = useRef<HTMLDivElement>(null);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'agendado': return 'bg-blue-500';
-      case 'em_andamento': return 'bg-yellow-500';
-      case 'confirmado': return 'bg-green-500';
-      case 'realizado': return 'bg-gray-500';
-      case 'cancelado': return 'bg-red-500';
-      default: return 'bg-gray-400';
-    }
-  };
+  useEffect(() => {
+    const container = calendarRef.current;
+    if (!container) return;
 
-  const getSurgeryTypeColor = (surgeryType: string) => {
-    switch (surgeryType) {
-      case 'urgencia': return 'bg-red-500';
-      case 'emergencia': return 'bg-red-600';
-      case 'eletiva': return 'bg-green-500';
-      default: return 'bg-blue-500';
-    }
-  };
+    let savedScrollY = 0;
 
-  const handleDragEnd = async (result: DropResult) => {
-    const { destination, source, draggableId } = result;
-    
-    console.log('🎯 Drag ended:', { destination, source, draggableId });
-    
-    if (!destination) return;
-    
-    if (destination.droppableId === source.droppableId && destination.index === source.index) {
-      return;
-    }
-
-    const appointmentId = parseInt(draggableId);
-    const appointment = appointments.find(app => app.id === appointmentId);
-    
-    if (!appointment) return;
-
-    console.log('📋 Appointment found:', appointment);
-
-    // Parse destination information
-    const destParts = destination.droppableId.split('-');
-    console.log('🎯 Destination parts:', destParts);
-    
-    if (destParts[0] === 'day') {
-      // Moving to a different day
-      const destDate = destParts[1];
-      const [year, month, day] = destDate.split('-').map(Number);
-      const originalTime = appointment.scheduledTime;
-      
-      if (!originalTime) return;
-      
-      const [hours, minutes] = originalTime.split(':').map(Number);
-      const newDateTime = new Date(year, month - 1, day, hours, minutes);
-      
-      console.log('📅 Moving to new day:', { destDate, newDateTime: newDateTime.toISOString(), originalTime });
-      
-      await onUpdateAppointment(appointmentId, {
-        scheduledDate: newDateTime,
-        scheduledTime: originalTime
-      });
-    } else if (destParts[0] === 'hour') {
-      // Moving to a different hour on the same day
-      const [, date, hourStr] = destParts;
-      const destHour = parseInt(hourStr);
-      const [year, month, day] = date.split('-').map(Number);
-      const newTime = `${destHour.toString().padStart(2, '0')}:00`;
-      const newDateTime = new Date(year, month - 1, day, destHour, 0);
-      
-      console.log('⏰ Moving to new time:', { date, destHour, newTime, newDateTime: newDateTime.toISOString() });
-      
-      await onUpdateAppointment(appointmentId, {
-        scheduledDate: newDateTime,
-        scheduledTime: newTime
-      });
-    }
-  };
-
-  const navigateDate = (direction: 'prev' | 'next') => {
-    switch (viewMode) {
-      case 'week':
-        setCurrentDate(direction === 'next' ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1));
-        break;
-      case 'month':
-        setCurrentDate(direction === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1));
-        break;
-      case 'day':
-        setCurrentDate(direction === 'next' ? addDays(currentDate, 1) : addDays(currentDate, -1));
-        break;
-    }
-  };
-
-  // Função para calcular quantas horas uma cirurgia ocupa
-  const getAppointmentDurationHours = (appointment: SurgeryAppointment): number => {
-    if (appointment.estimatedDuration) {
-      return Math.ceil(appointment.estimatedDuration / 60); // Arredondar para cima
-    }
-    return 1; // Padrão de 1 hora se não tiver duração
-  };
-
-  // Função para verificar se uma hora está ocupada por uma cirurgia
-  const isHourOccupiedByAppointment = (day: Date, hour: number): SurgeryAppointment | null => {
-    for (const appointment of appointments) {
-      if (!appointment.scheduledDate || !appointment.scheduledTime) continue;
-      
-      const appDate = typeof appointment.scheduledDate === 'string' ? parseISO(appointment.scheduledDate) : appointment.scheduledDate;
-      if (!isSameDay(appDate, day)) continue;
-      
-      const [appHour] = appointment.scheduledTime.split(':').map(Number);
-      const durationHours = getAppointmentDurationHours(appointment);
-      
-      // Verificar se esta hora está dentro do range da cirurgia
-      if (hour >= appHour && hour < appHour + durationHours) {
-        return appointment;
+    const saveScrollPosition = (e: MouseEvent) => {
+      if (e.target instanceof HTMLElement && e.target.closest('.rbc-event')) {
+        savedScrollY = window.scrollY;
       }
-    }
-    return null;
-  };
+    };
 
-  const renderWeekView = () => {
-    const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-    const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-    const hours = Array.from({ length: 13 }, (_, i) => i + 8); // 8h às 20h
+    const restoreScrollPosition = () => {
+      if (savedScrollY !== window.scrollY) {
+        window.scrollTo({ top: savedScrollY, behavior: 'instant' });
+      }
+    };
 
-    return (
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-8 gap-1">
-          {/* Header com horários */}
-          <div className="h-12 flex items-center justify-center font-medium text-sm border-b">
-            Horários
-          </div>
-          {weekDays.map((day) => (
-            <Droppable key={day.toISOString()} droppableId={`day-${format(day, 'yyyy-MM-dd')}`}>
-              {(provided, snapshot) => (
-                <div
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  className={`h-12 flex flex-col items-center justify-center text-sm font-medium border-b ${
-                    isToday(day) ? 'bg-blue-50 text-blue-600' : ''
-                  } ${snapshot.isDraggingOver ? 'bg-blue-100' : ''}`}
-                >
-                  <div>{format(day, 'EEE', { locale: ptBR })}</div>
-                  <div className="text-xs">{format(day, 'dd/MM')}</div>
-                  {provided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          ))}
+    const preventScrollOnFocus = (e: FocusEvent) => {
+      if (e.target instanceof HTMLElement && e.target.closest('.rbc-event')) {
+        requestAnimationFrame(restoreScrollPosition);
+      }
+    };
 
-          {/* Grid de horários */}
-          {hours.map((hour) => (
-            <React.Fragment key={hour}>
-              <div className="h-16 flex items-center justify-center text-sm font-medium border-r bg-gray-50">
-                {hour.toString().padStart(2, '0')}:00
-              </div>
-              {weekDays.map((day) => {
-                const dayStr = format(day, 'yyyy-MM-dd');
-                const occupyingAppointment = isHourOccupiedByAppointment(day, hour);
-                
-                // Verificar se é o horário de início da cirurgia (para renderizar o card)
-                const isStartHour = occupyingAppointment && (() => {
-                  const appDate = typeof occupyingAppointment.scheduledDate === 'string' 
-                    ? parseISO(occupyingAppointment.scheduledDate) 
-                    : occupyingAppointment.scheduledDate;
-                  const [appHour] = occupyingAppointment.scheduledTime!.split(':').map(Number);
-                  return isSameDay(appDate, day) && appHour === hour;
-                })();
+    container.addEventListener('mousedown', saveScrollPosition, { capture: true });
+    container.addEventListener('focusin', preventScrollOnFocus, { capture: true });
+    
+    return () => {
+      container.removeEventListener('mousedown', saveScrollPosition, { capture: true });
+      container.removeEventListener('focusin', preventScrollOnFocus, { capture: true });
+    };
+  }, []);
 
-                return (
-                  <Droppable key={`${dayStr}-${hour}`} droppableId={`hour-${dayStr}-${hour}`}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className={`h-16 border border-gray-200 p-1 relative ${
-                          snapshot.isDraggingOver ? 'bg-blue-100' : ''
-                        } ${occupyingAppointment && !isStartHour ? 'bg-gray-100' : ''}`}
-                      >
-                        {isStartHour && occupyingAppointment && (
-                          <Draggable draggableId={occupyingAppointment.id.toString()} index={0}>
-                            {(provided, snapshot) => {
-                              const durationHours = getAppointmentDurationHours(occupyingAppointment);
-                              const height = durationHours * 64 + (durationHours - 1) * 4; // 64px por hora + gaps
-                              
-                              return (
-                                <div
-                                  ref={provided.innerRef}
-                                  {...provided.draggableProps}
-                                  {...provided.dragHandleProps}
-                                  className={`absolute left-1 right-1 rounded p-2 text-white text-xs cursor-move z-10 ${getStatusColor(
-                                    occupyingAppointment.status
-                                  )} ${snapshot.isDragging ? 'opacity-75 shadow-lg' : ''}`}
-                                  style={{
-                                    height: `${height}px`,
-                                    ...provided.draggableProps.style
-                                  }}
-                                  onClick={() => onEditAppointment(occupyingAppointment)}
-                                >
-                                  <div className="font-medium truncate mb-1">
-                                    {occupyingAppointment.scheduledTime} - {durationHours}h
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Badge 
-                                      variant="secondary" 
-                                      className={`text-xs ${getSurgeryTypeColor(occupyingAppointment.surgeryType || 'eletiva')}`}
-                                    >
-                                      {occupyingAppointment.surgeryType}
-                                    </Badge>
-                                    <div className="flex items-center gap-1 text-xs">
-                                      <User size={10} />
-                                      <span className="truncate">{occupyingAppointment.patientName}</span>
-                                    </div>
-                                    {occupyingAppointment.priority?.toString() === 'alta' && (
-                                      <div className="flex items-center gap-1 text-xs">
-                                        <AlertTriangle size={10} />
-                                        <span>Urgente</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            }}
-                          </Draggable>
-                        )}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                );
-              })}
-            </React.Fragment>
-          ))}
-        </div>
-      </DragDropContext>
-    );
-  };
+  const events: CalendarEvent[] = useMemo(() => {
+    return appointments.map((appointment) => {
+      let startDate: Date;
+      
+      if (appointment.scheduledDate) {
+        if (typeof appointment.scheduledDate === 'string') {
+          startDate = parseISO(appointment.scheduledDate);
+        } else {
+          startDate = new Date(appointment.scheduledDate);
+        }
+      } else {
+        startDate = new Date();
+      }
 
-  const renderDayView = () => {
-    const hours = Array.from({ length: 13 }, (_, i) => i + 8);
-    const dayAppointments = appointments.filter(app => {
-      if (!app.scheduledDate) return false;
-      const appDate = typeof app.scheduledDate === 'string' ? parseISO(app.scheduledDate) : app.scheduledDate;
-      return isSameDay(appDate, currentDate);
+      if (appointment.scheduledTime) {
+        const [hours, minutes] = appointment.scheduledTime.split(':').map(Number);
+        startDate.setHours(hours, minutes, 0, 0);
+      }
+
+      const durationMinutes = appointment.estimatedDuration || 60;
+      const endDate = new Date(startDate.getTime() + durationMinutes * 60 * 1000);
+
+      return {
+        id: appointment.id,
+        title: `${appointment.patientName || 'Paciente'} - ${appointment.surgeryType === 'urgencia' ? 'Urgência' : 'Eletiva'}`,
+        start: startDate,
+        end: endDate,
+        resource: appointment,
+      };
     });
+  }, [appointments]);
 
-    return (
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="space-y-1">
-          <div className="text-center font-semibold text-lg mb-4">
-            {format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-          </div>
-          {hours.map((hour) => {
-            const appointment = dayAppointments.find(app => {
-              if (!app.scheduledTime) return false;
-              const [appHour] = app.scheduledTime.split(':').map(Number);
-              return appHour === hour;
-            });
-
-            return (
-              <Droppable key={hour} droppableId={`hour-${format(currentDate, 'yyyy-MM-dd')}-${hour}`}>
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={`flex border rounded p-4 ${snapshot.isDraggingOver ? 'bg-blue-100' : 'bg-white'}`}
-                  >
-                    <div className="w-20 text-sm font-medium text-gray-600">
-                      {hour.toString().padStart(2, '0')}:00
-                    </div>
-                    <div className="flex-1">
-                      {appointment && (
-                        <Draggable draggableId={appointment.id.toString()} index={0}>
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              className={`p-4 rounded cursor-move ${getStatusColor(appointment.status)} text-white ${
-                                snapshot.isDragging ? 'opacity-75 shadow-lg' : ''
-                              }`}
-                              onClick={() => onEditAppointment(appointment)}
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <h3 className="font-semibold">{appointment.surgeryType}</h3>
-                                <Badge variant="secondary" className="text-xs">
-                                  {appointment.status}
-                                </Badge>
-                              </div>
-                              <div className="space-y-1 text-sm">
-                                <div className="flex items-center gap-2">
-                                  <User size={14} />
-                                  <span>{appointment.patientName}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Clock size={14} />
-                                  <span>{appointment.scheduledTime}</span>
-                                </div>
-                                {appointment.priority?.toString() === 'alta' && (
-                                  <div className="flex items-center gap-2 text-yellow-200">
-                                    <AlertTriangle size={14} />
-                                    <span>Alta Prioridade</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      )}
-                    </div>
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            );
-          })}
-        </div>
-      </DragDropContext>
-    );
-  };
-
-  const renderMonthView = () => {
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(currentDate);
-    const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
-    return (
-      <div className="grid grid-cols-7 gap-1">
-        {/* Headers dos dias da semana */}
-        {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => (
-          <div key={day} className="p-2 text-center font-semibold text-gray-600 border-b">
-            {day}
-          </div>
-        ))}
-        
-        {/* Preencher dias vazios do início do mês */}
-        {Array.from({ length: (monthStart.getDay() + 6) % 7 }, (_, i) => (
-          <div key={`empty-${i}`} className="h-24 border bg-gray-50"></div>
-        ))}
-        
-        {/* Dias do mês */}
-        {calendarDays.map((day) => {
-          const dayAppointments = appointments.filter(app => {
-            if (!app.scheduledDate) return false;
-            const appDate = typeof app.scheduledDate === 'string' ? parseISO(app.scheduledDate) : app.scheduledDate;
-            return isSameDay(appDate, day);
-          });
-
-          return (
-            <div
-              key={day.toISOString()}
-              className={`h-24 border p-1 ${isToday(day) ? 'bg-blue-50' : 'bg-white'} cursor-pointer hover:bg-gray-50`}
-              onClick={() => {
-                setCurrentDate(day);
-                setViewMode('day');
-              }}
-            >
-              <div className="text-sm font-medium mb-1">{format(day, 'd')}</div>
-              <div className="space-y-1 overflow-hidden">
-                {dayAppointments.slice(0, 2).map((appointment) => (
-                  <div
-                    key={appointment.id}
-                    className={`text-xs px-1 py-0.5 rounded text-white truncate ${getStatusColor(appointment.status)}`}
-                  >
-                    {appointment.scheduledTime} - {appointment.patientName}
-                  </div>
-                ))}
-                {dayAppointments.length > 2 && (
-                  <div className="text-xs text-gray-500">+{dayAppointments.length - 2} mais</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const getDateRangeText = () => {
-    switch (viewMode) {
-      case 'week':
-        const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-        return `${format(weekStart, "dd 'de' MMMM", { locale: ptBR })} - ${format(addDays(weekStart, 6), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`;
-      case 'month':
-        return format(currentDate, "MMMM 'de' yyyy", { locale: ptBR });
-      case 'day':
-        return format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-      default:
-        return '';
+  const getEventStyle = useCallback((event: CalendarEvent) => {
+    const appointment = event.resource;
+    let backgroundColor = '#3b82f6';
+    let borderLeft = '';
+    
+    switch (appointment.status) {
+      case 'agendado':
+        backgroundColor = '#3b82f6';
+        break;
+      case 'confirmado':
+        backgroundColor = '#22c55e';
+        break;
+      case 'em_andamento':
+        backgroundColor = '#eab308';
+        break;
+      case 'concluido':
+      case 'realizado':
+        backgroundColor = '#6b7280';
+        break;
+      case 'cancelado':
+        backgroundColor = '#ef4444';
+        break;
+      case 'reagendado':
+        backgroundColor = '#8b5cf6';
+        break;
     }
-  };
+
+    if (appointment.surgeryType === 'urgencia') {
+      borderLeft = '4px solid #ef4444';
+    }
+
+    return {
+      style: {
+        backgroundColor,
+        borderRadius: '4px',
+        opacity: 0.9,
+        color: 'white',
+        border: '0',
+        borderLeft,
+        display: 'block',
+        fontSize: '12px',
+        padding: '2px 4px',
+      },
+    };
+  }, []);
+
+  const handleEventDrop: withDragAndDropProps<CalendarEvent>['onEventDrop'] = useCallback(
+    ({ event, start, end }) => {
+      const newStart = start instanceof Date ? start : new Date(start);
+      const scheduledTime = format(newStart, 'HH:mm');
+      
+      onUpdateAppointment(event.id, {
+        scheduledDate: newStart,
+        scheduledTime,
+      });
+    },
+    [onUpdateAppointment]
+  );
+
+  const handleEventResize: withDragAndDropProps<CalendarEvent>['onEventResize'] = useCallback(
+    ({ event, start, end }) => {
+      const newStart = start instanceof Date ? start : new Date(start);
+      const newEnd = end instanceof Date ? end : new Date(end);
+      const durationMinutes = Math.round((newEnd.getTime() - newStart.getTime()) / 60000);
+      const scheduledTime = format(newStart, 'HH:mm');
+      
+      onUpdateAppointment(event.id, {
+        scheduledDate: newStart,
+        scheduledTime,
+        estimatedDuration: durationMinutes,
+      });
+    },
+    [onUpdateAppointment]
+  );
+
+  const handleSelectEvent = useCallback(
+    (event: CalendarEvent) => {
+      onEditAppointment(event.resource);
+    },
+    [onEditAppointment]
+  );
+
+  const handleSelectSlot = useCallback(
+    (slotInfo: SlotInfo) => {
+      onNewAppointment();
+    },
+    [onNewAppointment]
+  );
+
+  const handleNavigate = useCallback((newDate: Date) => {
+    setCurrentDate(newDate);
+  }, []);
+
+  const handleViewChange = useCallback((newView: View) => {
+    setView(newView);
+  }, []);
 
   return (
-    <div className="space-y-4">
-      {/* Header com navegação e controles */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => navigateDate('prev')}>
-            <ChevronLeft size={16} />
-          </Button>
-          <h3 className="text-lg font-semibold min-w-96 text-center">
-            {getDateRangeText()}
-          </h3>
-          <Button variant="outline" size="sm" onClick={() => navigateDate('next')}>
-            <ChevronRight size={16} />
-          </Button>
+    <div className="container mx-auto p-6 space-y-6" ref={calendarRef}>
+      <div className="h-full flex flex-col">
+        {/* Cabeçalho Moderno com Fundo Azul */}
+        <div className="mb-8">
+          <div className="flex flex-col mb-8 p-10 rounded-xl bg-medsync-blue">
+            <div className="flex items-center justify-center my-2">
+              <h1 className="text-3xl font-bold text-white text-center">
+                Agenda Cirúrgica
+              </h1>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Botões de visualização */}
-          <div className="flex border rounded-lg p-1">
-            <Button
-              variant={viewMode === 'day' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('day')}
+        {/* Toolbar personalizada */}
+        <Card className="border-gray-200 bg-gradient-to-r from-sky-50 to-sky-100/50 shadow-sm mb-6">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-4">
+              <div className="p-2 bg-sky-200 rounded-lg">
+                <CalendarIcon className="h-5 w-5 text-sky-700" />
+              </div>
+              <div>
+                <CardTitle className="flex items-center text-foreground">
+                  Sua agenda cirúrgica
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  Gerencie suas cirurgias
+                </CardDescription>
+              </div>
+            </div>
+
+            <button
+              onClick={onNewAppointment}
+              className="bg-medsync-blue hover:bg-medsync-blue-dark text-white font-semibold px-4 py-2 rounded-md flex items-center gap-2"
             >
-              <Eye size={14} className="mr-1" />
-              Dia
-            </Button>
-            <Button
-              variant={viewMode === 'week' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('week')}
-            >
-              <List size={14} className="mr-1" />
-              Semana
-            </Button>
-            <Button
-              variant={viewMode === 'month' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('month')}
-            >
-              <Grid3X3 size={14} className="mr-1" />
-              Mês
-            </Button>
+              <Plus size={16} />
+              Nova Cirurgia
+            </button>
           </div>
 
-          <Button onClick={onNewAppointment} className="flex items-center gap-2">
-            <Calendar size={16} />
-            Novo Agendamento
-          </Button>
-        </div>
-      </div>
+          <div className="flex gap-2 px-4 pb-4">
+            {[
+              { key: Views.DAY, label: 'Dia' },
+              { key: Views.WEEK, label: 'Semana' },
+              { key: Views.MONTH, label: 'Mês' },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setView(key)}
+                className={
+                  view === key
+                    ? 'btn-medsync-dark px-4 py-2 rounded-md text-sm'
+                    : 'px-4 py-2 rounded-md text-sm border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium'
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </Card>
 
-      {/* Conteúdo do calendário */}
-      <Card className="p-4">
-        {viewMode === 'week' && renderWeekView()}
-        {viewMode === 'day' && renderDayView()}
-        {viewMode === 'month' && renderMonthView()}
-      </Card>
+        {/* Navegação do calendário */}
+        <div className="flex items-center justify-between mb-4 p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+          <button
+            onClick={() => {
+              if (view === Views.WEEK) {
+                setCurrentDate(subWeeks(currentDate, 1));
+              } else if (view === Views.MONTH) {
+                setCurrentDate(subMonths(currentDate, 1));
+              } else {
+                setCurrentDate(subDays(currentDate, 1));
+              }
+            }}
+            className="btn-medsync-dark px-4 py-2 rounded-md"
+          >
+            Anterior
+          </button>
+          
+          <h3 className="text-lg font-semibold text-sky-800">
+            {view === Views.WEEK && (
+              <>Semana de {format(startOfWeek(currentDate, { weekStartsOn: 1 }), "dd/MM/yyyy", { locale: ptBR })} a {format(addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), 6), "dd/MM/yyyy", { locale: ptBR })}</>
+            )}
+            {view === Views.MONTH && format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
+            {view === Views.DAY && format(currentDate, "EEEE, dd/MM/yyyy", { locale: ptBR })}
+          </h3>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentDate(new Date())}
+              className="btn-medsync-dark px-4 py-2 rounded-md"
+            >
+              Hoje
+            </button>
+            <button
+              onClick={() => {
+                if (view === Views.WEEK) {
+                  setCurrentDate(addWeeks(currentDate, 1));
+                } else if (view === Views.MONTH) {
+                  setCurrentDate(addMonths(currentDate, 1));
+                } else {
+                  setCurrentDate(addDays(currentDate, 1));
+                }
+              }}
+              className="btn-medsync-dark px-4 py-2 rounded-md"
+            >
+              Próximo
+            </button>
+          </div>
+        </div>
+
+        {/* Calendário */}
+        <Card className="p-4">
+        <style>{`
+          .rbc-calendar {
+            font-family: inherit;
+          }
+          .rbc-toolbar {
+            display: none;
+          }
+          .rbc-header {
+            padding: 0.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            border-bottom: 1px solid hsl(var(--border));
+          }
+          .rbc-today {
+            background-color: hsl(var(--primary) / 0.1);
+          }
+          .rbc-off-range-bg {
+            background-color: hsl(var(--muted) / 0.5);
+          }
+          .rbc-event,
+          .rbc-event a,
+          .rbc-event button {
+            outline: none !important;
+          }
+          .rbc-event {
+            cursor: grab;
+          }
+          .rbc-event:active {
+            cursor: grabbing;
+          }
+          .rbc-addons-dnd-dragging .rbc-event {
+            cursor: grabbing;
+          }
+          .rbc-event:focus {
+            outline: none !important;
+          }
+          .rbc-time-slot {
+            min-height: 30px;
+          }
+          .rbc-timeslot-group {
+            min-height: 60px;
+          }
+          .rbc-current-time-indicator {
+            background-color: hsl(var(--destructive));
+            height: 2px;
+          }
+          .rbc-addons-dnd-resizable {
+            position: relative;
+          }
+          .rbc-addons-dnd-resize-ns-anchor {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 8px;
+            cursor: ns-resize;
+          }
+          .rbc-addons-dnd-resize-ns-anchor:first-child {
+            top: 0;
+          }
+          .rbc-addons-dnd-resize-ns-anchor:last-child {
+            bottom: 0;
+          }
+        `}</style>
+        <DnDCalendar
+          localizer={localizer}
+          events={events}
+          startAccessor="start"
+          endAccessor="end"
+          style={{ height: 650 }}
+          views={['month', 'week', 'day', 'agenda']}
+          view={view}
+          onView={handleViewChange}
+          date={currentDate}
+          onNavigate={handleNavigate}
+          onSelectEvent={handleSelectEvent}
+          onSelectSlot={handleSelectSlot}
+          onEventDrop={handleEventDrop}
+          onEventResize={handleEventResize}
+          selectable
+          resizable
+          step={30}
+          timeslots={2}
+          min={new Date(0, 0, 0, 6, 0, 0)}
+          max={new Date(0, 0, 0, 22, 0, 0)}
+          messages={messages}
+          eventPropGetter={getEventStyle}
+          culture="pt-BR"
+          formats={{
+            timeGutterFormat: (date: Date) => format(date, 'HH:mm'),
+            eventTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
+              `${format(start, 'HH:mm')} - ${format(end, 'HH:mm')}`,
+            dayHeaderFormat: (date: Date) => format(date, "EEEE, dd 'de' MMMM", { locale: ptBR }),
+            dayRangeHeaderFormat: ({ start, end }: { start: Date; end: Date }) =>
+              `${format(start, "dd 'de' MMM", { locale: ptBR })} - ${format(end, "dd 'de' MMM", { locale: ptBR })}`,
+          }}
+        />
+        </Card>
+      </div>
     </div>
   );
 }
