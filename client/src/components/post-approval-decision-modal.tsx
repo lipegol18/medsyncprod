@@ -1,5 +1,4 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Check, AlertTriangle } from "lucide-react";
 
@@ -140,13 +139,13 @@ export function PostApprovalDecisionModal({
 
         {/* Footer */}
         <div className="flex justify-end gap-3 pt-4 border-t border-border">
-          <Button
-            variant="outline"
+          <button
+            type="button"
             onClick={handleDecideLater}
-            className="border-border text-muted-foreground hover:bg-muted/80"
+            className="btn-medsync-light"
           >
             Decidir Depois
-          </Button>
+          </button>
         </div>
       </div>
     </div>

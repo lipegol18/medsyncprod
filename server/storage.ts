@@ -131,101 +131,18 @@ import { normalizeText } from "./utils/normalize";
 // Cache global para mapeamento de cores
 let statusColorCache: Record<string, any> = {};
 
-// Função para converter cor hexadecimal para classes CSS Tailwind
-function hexToTailwindClasses(hexColor: string) {
-  if (!hexColor || !hexColor.startsWith("#")) {
-    return {
-      background: "bg-gradient-to-r from-slate-50 to-slate-100/50",
-      iconBg: "bg-slate-200",
-      iconText: "text-slate-700",
-    };
-  }
-
-  // Converter hex para RGB
-  const hex = hexColor.replace("#", "");
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-
-  // Determinar cor principal baseada nos valores RGB
-  const max = Math.max(r, g, b);
-  const isGrayish =
-    Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30;
-
-  if (isGrayish) {
-    return {
-      background: "bg-gradient-to-r from-slate-50 to-slate-100/50",
-      iconBg: "bg-slate-200",
-      iconText: "text-slate-700",
-    };
-  }
-
-  // Verificar primeiro se é amarelo (prioridade sobre vermelho para cores claras)
-  if ((r > 220 && g > 220 && b < 200) || (r > 240 && g > 230 && b < 180)) {
-    // Amarelo ou amarelo claro como #FFF59D
-    return {
-      background: "bg-gradient-to-r from-yellow-50 to-yellow-100/50",
-      iconBg: "bg-yellow-200",
-      iconText: "text-yellow-700",
-    };
-  }
-
-  // Verificar se é laranja (cores com R alto, G médio-alto, B médio-baixo)
-  if (
-    (r > 240 && g > 180 && g < 220 && b < 160) ||
-    (r === 255 && g > 200 && b < 140)
-  ) {
-    // Laranja como #FFCC80 (255, 204, 128)
-    return {
-      background: "bg-gradient-to-r from-orange-50 to-orange-100/50",
-      iconBg: "bg-orange-200",
-      iconText: "text-orange-700",
-    };
-  }
-
-  // Determinar cor dominante
-  if (r > g && r > b) {
-    // Vermelho dominante
-    return {
-      background: "bg-gradient-to-r from-red-50 to-red-100/50",
-      iconBg: "bg-red-200",
-      iconText: "text-red-700",
-    };
-  } else if (g > r && g > b) {
-    // Verde dominante
-    return {
-      background: "bg-gradient-to-r from-green-50 to-green-100/50",
-      iconBg: "bg-green-200",
-      iconText: "text-green-700",
-    };
-  } else if (b > r && b > g) {
-    // Azul dominante
-    return {
-      background: "bg-gradient-to-r from-blue-50 to-blue-100/50",
-      iconBg: "bg-blue-200",
-      iconText: "text-blue-700",
-    };
-  } else if (r > 180 && g > 100 && g < 180 && b < 150) {
-    // Laranja
-    return {
-      background: "bg-gradient-to-r from-orange-50 to-orange-100/50",
-      iconBg: "bg-orange-200",
-      iconText: "text-orange-700",
-    };
-  } else if (r > 150 && b > 150 && g < 180) {
-    // Roxo
-    return {
-      background: "bg-gradient-to-r from-purple-50 to-purple-100/50",
-      iconBg: "bg-purple-200",
-      iconText: "text-purple-700",
-    };
-  }
-
-  // Fallback para cinza
+// Função para converter nome de cor Tailwind em classes CSS
+// A coluna 'color' no banco armazena nomes como: slate, yellow, green, red, blue, orange, purple
+function colorToTailwindClasses(colorName: string) {
+  const validColors = ['slate', 'gray', 'zinc', 'neutral', 'stone', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose'];
+  
+  // Se não for uma cor válida, usar slate como fallback
+  const color = validColors.includes(colorName?.toLowerCase()) ? colorName.toLowerCase() : 'slate';
+  
   return {
-    background: "bg-gradient-to-r from-slate-50 to-slate-100/50",
-    iconBg: "bg-slate-200",
-    iconText: "text-slate-700",
+    background: `bg-gradient-to-r from-${color}-50 to-${color}-100/50`,
+    iconBg: `bg-${color}-200`,
+    iconText: `text-${color}-700`,
   };
 }
 
@@ -240,9 +157,9 @@ async function initializeStatusColorCache() {
       // Usar statusId como chave em vez de cor para evitar conflitos
       statusColorCache[status.id] = {
         statusName: status.name,
-        statusColor: status.color || "#EEEEEE",
-        color: status.color || "#EEEEEE",
-        classes: hexToTailwindClasses(status.color || "#EEEEEE"),
+        statusColor: status.color || "slate",
+        color: status.color || "slate",
+        classes: colorToTailwindClasses(status.color || "slate"),
       };
     });
 
@@ -2348,7 +2265,7 @@ export class DatabaseStorage implements IStorage {
         const cachedStatus = statusColorCache[order.statusId];
         const statusColor = statusInfo?.color || "#EEEEEE";
         const colorClasses =
-          cachedStatus?.classes || hexToTailwindClasses(statusColor);
+          cachedStatus?.classes || colorToTailwindClasses(statusColor || "slate");
 
         // Correção específica para status ID 10
         if (order.statusId === 10 && !statusInfo) {
