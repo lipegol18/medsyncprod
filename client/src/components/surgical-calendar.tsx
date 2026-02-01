@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo, View } from 'react-big-calendar';
 import withDragAndDrop, { withDragAndDropProps } from 'react-big-calendar/lib/addons/dragAndDrop';
-import { format, parse, startOfWeek, getDay, parseISO, addWeeks, subWeeks, addMonths, subMonths, addDays, subDays } from 'date-fns';
+import { format, parse, startOfWeek, getDay, parseISO, addWeeks, subWeeks, addMonths, subMonths, addDays, subDays, endOfWeek, isWithinInterval, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -135,36 +135,74 @@ export function SurgicalCalendar({
     });
   }, [appointments]);
 
+  // Calcula os horários min/max dinâmicos baseado nos eventos da semana/mês/dia atual
+  const { dynamicMin, dynamicMax } = useMemo(() => {
+    // Horários padrão: 08:00 às 21:00
+    const DEFAULT_MIN_HOUR = 8;
+    const DEFAULT_MAX_HOUR = 21;
+    
+    let minHour = DEFAULT_MIN_HOUR;
+    let maxHour = DEFAULT_MAX_HOUR;
+    
+    // Determina o intervalo de datas baseado na view atual
+    let rangeStart: Date;
+    let rangeEnd: Date;
+    
+    if (view === Views.WEEK) {
+      rangeStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+      rangeEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
+    } else if (view === Views.MONTH) {
+      rangeStart = startOfMonth(currentDate);
+      rangeEnd = endOfMonth(currentDate);
+    } else if (view === Views.DAY) {
+      rangeStart = startOfDay(currentDate);
+      rangeEnd = endOfDay(currentDate);
+    } else {
+      // Agenda view - mostra próximos 30 dias
+      rangeStart = startOfDay(currentDate);
+      rangeEnd = addDays(currentDate, 30);
+    }
+    
+    // Filtra eventos dentro do intervalo e verifica horários
+    events.forEach((event) => {
+      if (isWithinInterval(event.start, { start: rangeStart, end: rangeEnd })) {
+        const eventStartHour = event.start.getHours();
+        const eventEndHour = event.end.getHours() + (event.end.getMinutes() > 0 ? 1 : 0);
+        
+        // Expande o horário mínimo se necessário (baseado no início do evento)
+        if (eventStartHour < minHour) {
+          minHour = eventStartHour;
+        }
+        
+        // Expande o horário máximo se necessário (baseado no início E fim do evento)
+        const requiredMax = Math.max(eventStartHour + 1, eventEndHour);
+        if (requiredMax > maxHour) {
+          // Limita a 23 (react-big-calendar usa 23:59:59 internamente para o final do dia)
+          maxHour = Math.min(23, requiredMax);
+        }
+      }
+    });
+    
+    // Cria as datas min/max para o react-big-calendar
+    // Para o max, usamos 23:59:59 se for hora 23+, senão usamos a hora exata
+    const minDate = new Date(1970, 0, 1, minHour, 0, 0);
+    const maxDate = maxHour >= 23 
+      ? new Date(1970, 0, 1, 23, 59, 59) 
+      : new Date(1970, 0, 1, maxHour, 0, 0);
+    
+    console.log('Calendar time range:', { minHour, maxHour, events: events.length });
+    
+    return {
+      dynamicMin: minDate,
+      dynamicMax: maxDate,
+    };
+  }, [events, currentDate, view]);
+
   const getEventStyle = useCallback((event: CalendarEvent) => {
     const appointment = event.resource;
-    let backgroundColor = '#3b82f6';
-    let borderLeft = '';
     
-    switch (appointment.status) {
-      case 'agendado':
-        backgroundColor = '#3b82f6';
-        break;
-      case 'confirmado':
-        backgroundColor = '#22c55e';
-        break;
-      case 'em_andamento':
-        backgroundColor = '#eab308';
-        break;
-      case 'concluido':
-      case 'realizado':
-        backgroundColor = '#6b7280';
-        break;
-      case 'cancelado':
-        backgroundColor = '#ef4444';
-        break;
-      case 'reagendado':
-        backgroundColor = '#8b5cf6';
-        break;
-    }
-
-    if (appointment.surgeryType === 'urgencia') {
-      borderLeft = '4px solid #ef4444';
-    }
+    // Cor baseada no tipo de cirurgia: Urgência = Vermelho, Eletiva = Azul
+    let backgroundColor = appointment.surgeryType === 'urgencia' ? '#ef4444' : '#3b82f6';
 
     return {
       style: {
@@ -173,7 +211,6 @@ export function SurgicalCalendar({
         opacity: 0.9,
         color: 'white',
         border: '0',
-        borderLeft,
         display: 'block',
         fontSize: '12px',
         padding: '2px 4px',
@@ -236,8 +273,8 @@ export function SurgicalCalendar({
     <div className="container mx-auto p-6 space-y-6" ref={calendarRef}>
       <div className="h-full flex flex-col">
         {/* Cabeçalho Moderno com Fundo Azul */}
-        <div className="mb-8">
-          <div className="flex flex-col mb-8 p-10 rounded-xl bg-medsync-blue">
+        <div className="mb-2">
+          <div className="flex flex-col mb-2 p-10 rounded-xl bg-medsync-blue">
             <div className="flex items-center justify-center my-2">
               <h1 className="text-3xl font-bold text-white text-center">
                 Agenda Cirúrgica
@@ -247,7 +284,7 @@ export function SurgicalCalendar({
         </div>
 
         {/* Toolbar personalizada */}
-        <Card className="border-gray-200 bg-gradient-to-r from-sky-50 to-sky-100/50 shadow-sm mb-6">
+        <Card className="border-gray-200 bg-gradient-to-r from-sky-50 to-sky-100/50 shadow-sm mb-4">
           <div className="flex items-center justify-between p-4">
             <div className="flex items-center gap-4">
               <div className="p-2 bg-sky-200 rounded-lg">
@@ -381,10 +418,16 @@ export function SurgicalCalendar({
             outline: none !important;
           }
           .rbc-time-slot {
-            min-height: 30px;
+            min-height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .rbc-label {
+            text-align: center;
           }
           .rbc-timeslot-group {
-            min-height: 60px;
+            min-height: 40px;
           }
           .rbc-current-time-indicator {
             background-color: hsl(var(--destructive));
@@ -426,8 +469,8 @@ export function SurgicalCalendar({
           resizable
           step={30}
           timeslots={2}
-          min={new Date(0, 0, 0, 6, 0, 0)}
-          max={new Date(0, 0, 0, 22, 0, 0)}
+          min={dynamicMin}
+          max={dynamicMax}
           messages={messages}
           eventPropGetter={getEventStyle}
           culture="pt-BR"
