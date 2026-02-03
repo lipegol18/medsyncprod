@@ -5233,7 +5233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const doctorId = parseInt(req.params.doctorId);
         const patientId = parseInt(req.params.patientId);
 
-        // Verificar se os IDs sr�o válidos
+        // Verificar se os IDs são válidos
         if (isNaN(doctorId) || isNaN(patientId)) {
           return res.status(400).json({ message: "IDs inválidos" });
         }
@@ -5252,6 +5252,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const patient = await storage.getPatient(patientId);
         if (!patient) {
           return res.status(404).json({ message: "Paciente não encontrado" });
+        }
+
+        // Verificar se há pedidos do médico para este paciente
+        const ordersCount = await storage.countOrdersByDoctorAndPatient(doctorId, patientId);
+        if (ordersCount > 0) {
+          console.log(
+            `Não é possível remover associação: Médico ${doctorId} possui ${ordersCount} pedido(s) para o paciente ${patientId}`,
+          );
+          return res.status(400).json({ 
+            message: `Não é possível remover este paciente pois você possui ${ordersCount} pedido(s) cirúrgico(s) associado(s) a ele.`,
+            hasOrders: true,
+            ordersCount 
+          });
         }
 
         // Remover a associação

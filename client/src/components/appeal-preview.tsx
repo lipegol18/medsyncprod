@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import MedSyncLogo from "@/assets/icons/Medsync_Y_Estilizado_Azul.svg";
 import { useAuth } from "@/hooks/use-auth";
 import { GripVertical, RotateCcw } from "lucide-react";
+import { calculateAge } from "@/lib/utils";
 
 interface AppealPreviewProps {
   patient: {
@@ -47,17 +48,6 @@ export function AppealPreview({
   const formatDateBR = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('pt-BR');
-  };
-
-  const calculateAge = (birthDate: string) => {
-    const birth = new Date(birthDate);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    return age;
   };
 
   // Calcular posições das quebras de página

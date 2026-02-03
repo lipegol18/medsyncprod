@@ -432,6 +432,7 @@ export interface IStorage {
     isActive: boolean,
   ): Promise<DoctorPatient | undefined>;
   removeDoctorPatient(doctorId: number, patientId: number): Promise<boolean>;
+  countOrdersByDoctorAndPatient(doctorId: number, patientId: number): Promise<number>;
 
   // Password reset operations
   createPasswordResetToken(email: string): Promise<string>;
@@ -3759,6 +3760,27 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error("Erro ao remover associação médico-paciente:", error);
       return false;
+    }
+  }
+
+  async countOrdersByDoctorAndPatient(
+    doctorId: number,
+    patientId: number,
+  ): Promise<number> {
+    try {
+      const result = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(medicalOrders)
+        .where(
+          and(
+            eq(medicalOrders.userId, doctorId),
+            eq(medicalOrders.patientId, patientId),
+          ),
+        );
+      return Number(result[0]?.count || 0);
+    } catch (error) {
+      console.error("Erro ao contar pedidos do médico para o paciente:", error);
+      return 0;
     }
   }
 

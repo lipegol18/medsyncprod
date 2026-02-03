@@ -10,6 +10,7 @@ import { AppealPreview } from "@/components/appeal-preview";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import RoboMedSyncIcon from "@/assets/icons/MedSync_Icones_Robo Medsync_Sem_Borda.svg";
 import { RichTextEditor } from "@/components/rich-text-editor";
+import { calculateAge } from "@/lib/utils";
 
 interface AppealAttachment {
   id: string;
@@ -636,19 +637,6 @@ export function AppealGenerator({
     try {
       setIsGeneratingAppealAI(true);
       
-      // Calcular idade do paciente
-      const calculateAge = (birthDate: string | null | undefined): number => {
-        if (!birthDate) return 0;
-        const today = new Date();
-        const birth = new Date(birthDate);
-        let age = today.getFullYear() - birth.getFullYear();
-        const monthDiff = today.getMonth() - birth.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-          age--;
-        }
-        return age;
-      };
-
       // Mapear sexo do paciente
       const mapSexo = (sex: string | null | undefined): string => {
         if (!sex) return "Não informado";

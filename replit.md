@@ -11,173 +11,35 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Frontend Architecture
-- **Framework**: React 18 with TypeScript
-- **Build Tool**: Vite
-- **Styling**: TailwindCSS with Shadcn/ui component library, Radix UI primitives
-- **State Management**: Tanstack React Query for server state management
-- **UI/UX Decisions**:
-    - Professional, clean interface with intuitive navigation.
-    - Color-coded visual indicators for status and urgency.
-    - Modern circular icon designs and consistent layouts (e.g., two-column forms, skeleton loading states).
-    - Comprehensive theme system with light mode as default (Sky color palette) and dark mode as an option.
-    - **Official MedSync Color Palette**: #2ca8e0 (primary), #36a9e1, #124a6b, #6e6f70.
-    - Responsive dashboard design with real-time statistical cards.
-    - Enhanced surgical calendar using react-big-calendar with drag-and-drop, event resize, multiple views (month/week/day/agenda), Portuguese localization, and urgency indicators via red left border.
-    - Standardized button and modal theming.
-    - Proxima Nova and Nunito fonts.
-    - Interactive subscription plan cards with hover effects and selection states.
-    - Enhanced 3-step registration flow (Form → Plans → Confirmation → Payment) with a comprehensive data review screen before finalization via Stripe Checkout.
-    - **CSS Architecture**: Complete CSS variable system with theme support, semantic status colors, calendar variables, and utility classes.
-    - **Static Assets Architecture**: All static assets (icons, images) are managed by Vite bundler in `client/src/assets/` with TypeScript imports for compile-time verification.
+- **Framework**: React 18 with TypeScript and Vite.
+- **Styling**: TailwindCSS with Shadcn/ui and Radix UI primitives.
+- **State Management**: Tanstack React Query.
+- **UI/UX Decisions**: Professional, clean, and intuitive interface with a comprehensive theme system (light/dark mode, Sky color palette default). Features include responsive dashboards with real-time statistics, enhanced surgical calendar with drag-and-drop, standardized components, custom fonts (Proxima Nova, Nunito), interactive subscription plan cards, and a guided 3-step registration flow integrated with Stripe Checkout. All static assets are managed by Vite in `client/src/assets/`.
 
 ### Backend Architecture
-- **Runtime**: Node.js with Express.js
-- **Language**: TypeScript with ES modules
-- **Database**: PostgreSQL with Drizzle ORM
-- **File Processing**: Google Cloud Vision API for OCR
-- **PDF Generation**: React-PDF renderer for medical reports
-- **Core Architectural Decisions**:
-    - **Modular Design**: Services are modular, e.g., document extraction service.
-    - **Relational Data Model**: Fully relational database design with foreign keys.
-    - **Batch Saving Pattern**: Data collected and saved in batches on explicit user actions.
-    - **Automated Workflow**: Automation for form pre-population, status transitions, and scheduling prompts.
-    - **Strict Business Rule Enforcement**: Prevents incomplete orders, restricts status transitions, enforces one appointment per order.
-    - **Optimized Data Loading**: Utilizes parallel API calls (Promise.all) for efficient loading.
-    - **Unified Folder Structure**: Standardized folder structure (`/uploads/orders/[ID]/`) with consistent subfolders and intelligent PDF management.
-    - **Status System Normalization**: Order status migrated to an integer foreign key.
-    - **Flexible Pricing Architecture**: Supports temporal promotional pricing with automatic reversion to full price.
-    - **Selective Removal System**: Allows removal of surgical procedures while preserving shared data.
-    - **Docker Containerization**: Complete Docker setup for build/deployment.
-    - **Authentication Flow**: Reorganized with `/` as auth landing and `/welcome` as post-login dashboard.
-    - **Relational Routes Architecture**: Separated relational routes in `server/relational-routes.ts` and `server/relational-services.ts` for managing CIDs, OPME, suppliers, and CBHPM procedures, registered via `app.use('/api', relationalRoutes)` before main routes.
+- **Runtime**: Node.js with Express.js.
+- **Language**: TypeScript with ES modules.
+- **Database**: PostgreSQL with Drizzle ORM.
+- **File Processing**: Google Cloud Vision API for OCR and React-PDF for report generation.
+- **Core Architectural Decisions**: Modular design, fully relational data model, batch saving pattern for user actions, automated workflows (form pre-population, status transitions), strict business rule enforcement, optimized data loading via parallel API calls, unified folder structure (`/uploads/orders/[ID]/`), normalized integer-based order status, flexible pricing architecture (promotional pricing), selective removal system for surgical procedures, and Docker containerization. Authentication flow reorganized with `/` as auth landing and `/welcome` as post-login dashboard. Relational routes for CIDs, OPME, suppliers, and CBHPM procedures are separated for better organization.
 
 ### Database Architecture
-- **ORM**: Drizzle with full TypeScript support
-- **Database**: PostgreSQL 16
-- **Migrations**: Drizzle Kit
-- **Relationships**: Fully relational design with foreign keys and cascade delete.
-- **Key Tables**: Medical orders, patients, hospitals, order statuses, CIDs, CBHPM procedures, OPME items, suppliers, surgical procedures, surgical approaches, clinical justifications, surgery appointments, anatomical regions. Many-to-many relationships are managed via association tables.
-- **Anatomical Region Persistence**: Medical orders include `anatomicalRegionId` foreign key, with full end-to-end persistence and visual feedback.
-- **Complete Audit System**: Patient records have full lifecycle tracking with 7 audit fields: `created_at`, `created_by`, `updated_at`, `updated_by`, `is_deleted`, `deleted_at`, and `deleted_by` for full accountability and LGPD/ISO 27001 compliance.
-- **Patient-Provider Relationships**: 
-    - `insuranceProviderId` (FK) links patients to `health_insurance_providers` table for standardized insurance data
-    - Doctor-patient relationships managed via `doctor_patients` junction table
-    - `createdBy` (FK) tracks who created the patient record (audit field)
-    - Legacy fields removed: `insurance`, `activatedBy`, `activated_by_id` (Jan 2026)
+- **ORM**: Drizzle with full TypeScript support.
+- **Database**: PostgreSQL 16.
+- **Migrations**: Drizzle Kit.
+- **Relationships**: Fully relational design with foreign keys and cascade delete, including many-to-many relationships via association tables.
+- **Key Tables**: Medical orders, patients, hospitals, order statuses, CIDs, CBHPM procedures, OPME items, suppliers, surgical procedures, surgical approaches, clinical justifications, surgery appointments, anatomical regions. Includes full audit system for patient records (7 audit fields) and standardized `insuranceProviderId` for patient-provider linking.
 
 ### Deployment and Environment Configuration
-- **Multi-Environment Support**: Flexible deployment across Replit, production, staging, and development environments.
-- **Environment Variables**: Uses `APP_PROTOCOL`, `APP_DOMAIN`, `APP_PORT`, `NODE_ENV` for configuration, with auto-detection for Replit.
-- **CORS Configuration**: Automatically includes localhost and configured base URL, with optional custom origins.
-- **Stripe Integration**: Automatically generates correct Stripe callback URLs based on the environment. Stripe webhooks must be updated manually upon server migration.
-- **Environment Validation**: System automatically validates configuration on startup (e.g., production must use HTTPS).
-- **Configuration Helper**: `server/utils/environment.ts` provides utility functions for environment checks and URL generation.
+- **Multi-Environment Support**: Flexible deployment across Replit, production, staging, and development.
+- **Environment Variables**: Uses `APP_PROTOCOL`, `APP_DOMAIN`, `APP_PORT`, `NODE_ENV` with auto-detection for Replit.
+- **CORS Configuration**: Automatic inclusion of localhost and configured base URL, with optional custom origins.
+- **Stripe Integration**: Automated generation of correct Stripe callback URLs.
+- **Environment Validation**: Automatic configuration validation on startup.
 
 ## External Dependencies
 
-- **Google Cloud Services**:
-    - **Vision API**: For OCR processing.
-- **Database Services**:
-    - **Neon Database**: PostgreSQL hosting.
-- **Email Services**:
-    - **SendGrid**: For email notifications.
-- **UI Libraries**:
-    - **Radix UI**: Primitives for UI components.
-    - **React-beautiful-dnd**: For drag and drop functionality.
-
-## Technical Notes
-
-### Onboarding Tour System
-- **Library**: React Joyride for guided tours
-- **Architecture**: Independent modular system in `client/src/features/onboarding/`
-- **Components**:
-    - `OnboardingProvider`: Context provider with Joyride integration, wraps the app
-    - `useOnboarding`: Hook for tour control (startTour, stopTour, isTourCompleted)
-    - `TourTooltip`: Custom tooltip component with MedSync styling
-    - Tours defined in `tours/` folder (e.g., `profileTour.ts`)
-- **Storage**: Completed tours persisted in localStorage (`medsync_onboarding_completed_tours`)
-- **Profile Tour Steps**: Header intro, Logo section, Signature section, CRM card section, Signature note explanation, Save button
-- **Dashboard Tour Steps**: Welcome, Total pedidos, Aguardando envio, Aguardando agendamento, Autorizados, Pendências, Aguardando recurso, Novo pedido button, Novo paciente button, Gráfico distribuição, Agenda cirúrgica
-- **Patients Tour Steps**: Header, Filtros de busca, Botão novo paciente (com explicação completa do formulário)
-- **Create Order Tour Steps** (18 total):
-  - **Wizard Step 1** (5 steps): Header, Progress bar, Seleção de paciente, Seleção de hospital, Navegação
-  - **Wizard Step 2** (2 steps): Indicação Clínica, Anexos/OCR
-  - **Wizard Step 3** (7 steps): Região Anatômica, Procedimento Cirúrgico, Lateralidade, Caráter, Campos Auto-preenchidos, Justificativa com IA, Próximos Passos
-  - **Wizard Step 4** (2 steps): Visualização do Pedido, Navegação para PDF
-  - **Wizard Step 5** (2 steps): PDF Gerado, Download e Envio
-- **Tour-Wizard Synchronization**: Tours can include `metadata.wizardStep` to control which wizard step should be active. The create-order page registers a listener that automatically switches wizard steps as the tour progresses, and restores the original step when the tour ends.
-- **Targeting**: Uses `data-testid` attributes on profile page elements for tour step targets
-- **Tour Menu Location**: Dashboard (home.tsx) - dropdown menu "Tours de Ajuda" in header banner
-- **Visibility**: Tour menu visible only for doctors (roleId === 2)
-- **Navigation**: Selecting a tour navigates to the corresponding page and starts the tour automatically
-
-### Admin Modules Structure
-- **Location**: Admin modules are organized in `client/src/pages/admin/` and `client/src/components/admin/`
-- **Pattern**: Each admin module follows a consistent CRUD pattern with:
-  - Main page with table listing, search, and filters
-  - Form dialog component for create/edit operations
-  - Delete confirmation dialog
-- **Health Insurance Providers Module** (`/admin/insurance-providers`):
-  - Manages health insurance providers (operadoras de saúde)
-  - Table: `health_insurance_providers`
-  - Components: `client/src/pages/admin/insurance-providers.tsx`, `client/src/components/admin/insurance-providers/`
-- **Health Insurance Plans Module** (`/admin/insurance-plans`):
-  - Manages health insurance plans associated with providers
-  - Table: `health_insurance_plans` (linked via `registroAns` to provider's `ansCode`)
-  - Filter by provider (operadora) support
-  - Full CRUD operations: Create, Read, Update, Delete
-  - API endpoints: GET/POST/PUT/DELETE `/api/health-insurance-plans`
-  - Components: `client/src/pages/admin/insurance-plans.tsx`, `client/src/components/admin/insurance-plans/`
-  - Fields: código do plano, nome, modalidade, segmentação, acomodação, tipo de contratação, abrangência geográfica, situação, data início comercialização
-
-### Surgical Procedure-Approach Default Values System (Jan 2026)
-- **Table**: `surgical_procedure_approaches` - association between surgical procedures and approaches (conducts)
-- **New Fields Added**:
-  - `default_laterality` (TEXT, nullable): Pre-defined laterality for the combination. Values: `esquerdo`, `direito`, `bilateral`, `indeterminado`
-  - `default_character` (TEXT, nullable): Pre-defined surgery character. Values: `eletiva`, `urgencia`
-- **Auto-fill Behavior**: When a surgical approach is selected during order creation, the system automatically populates:
-  - Lateralidade field (if `default_laterality` is set)
-  - Caráter do Procedimento field (if `default_character` is set)
-- **Value Mapping**:
-  - Laterality: `indeterminado` → `nao_se_aplica` (frontend uses different value for "not applicable")
-  - Character: `emergencia` → `urgencia` (normalized to database enum values)
-- **Use Cases**:
-  - Spine surgeries (Coluna): Set `default_laterality = 'indeterminado'` to auto-select "Não se aplica"
-  - Fracture procedures: Set `default_character = 'urgencia'` to default to emergency character
-  - Elective procedures: Set `default_character = 'eletiva'` for scheduled surgeries
-- **Implementation Files**:
-  - `shared/schema.ts`: Field definitions in `surgicalProcedureApproaches` table
-  - `server/routes.ts`: API endpoints return new fields
-  - `client/src/steps/surgery-data.tsx`: Auto-fill logic on conduct selection
-
-### Observation Notes System (Additional Notes)
-- **Subtitle Format**: `### [Procedimento] → [Conduta]` (human-readable, no IDs visible)
-- **Association Key**: Uses procedure name + approach name for grouping observations with their respective items
-- **Backward Compatibility**: Supports legacy format `### [Procedimento] → [Conduta] [PID:x][AID:y]` for existing data
-- **Automatic Cleanup**: When a procedure+conduct combination is removed, the corresponding observation sections are automatically removed from all 3 text fields (CBHPM, OPME, Suppliers)
-- **Helper Functions**:
-    - `removeSubtitleSection`: Removes a specific section from observation text based on procedure and approach names
-    - `removeObservationSectionsForApproach`: Orchestrates removal across all 3 observation fields
-- **Implementation Files**:
-    - `client/src/steps/surgery-data.tsx`: Subtitle insertion on conduct selection, automatic cleanup on removal
-    - `client/src/pages/create-order.tsx`: Preview parsing and display (Step 4)
-    - `client/src/components/order-pdf-document.tsx`: PDF generation with observations
-
-### Draggable Page Break Markers (Jan 2026)
-- **Feature**: Visual draggable markers for adjusting page breaks in PDF previews
-- **Implemented In**: Both surgical order preview (Step 4) and appeal preview
-- **Technical Details**:
-    - `PageBreakInfo` interface: Stores `originalPosition` and `adjustedPosition` for each break
-    - `PAGE_HEIGHT_PX`: 970px (usable A4 page height in pixels)
-    - `MIN_PAGE_CONTENT`: 200px (minimum content per page to prevent breaks too close together)
-    - Markers are color-coded: gray (default), amber (adjusted), primary (dragging)
-    - Global mouse event listeners for smooth drag experience
-    - Reset button to restore original positions
-- **Implementation Files**:
-    - `client/src/pages/create-order.tsx`: Order preview page breaks (Step 4)
-    - `client/src/components/appeal-preview.tsx`: Appeal preview page breaks
-- **UI Elements**:
-    - Dashed line with page number indicator
-    - GripVertical icon for drag affordance
-    - "Arraste as linhas para ajustar as quebras de página" instruction text
-    - "Resetar" button with RotateCcw icon
+- **Google Cloud Services**: Vision API (for OCR).
+- **Database Services**: Neon Database (PostgreSQL hosting).
+- **Email Services**: SendGrid (for email notifications).
+- **UI Libraries**: Radix UI (primitives), React-beautiful-dnd (drag and drop).

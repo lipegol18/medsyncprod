@@ -6,6 +6,43 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Calcula a idade a partir da data de nascimento
+ * @param birthDate Data de nascimento (string ISO, Date ou null/undefined)
+ * @returns Idade em anos (número) ou 0 se a data for inválida
+ */
+export function calculateAge(birthDate: string | Date | null | undefined): number {
+  if (!birthDate) return 0;
+  
+  try {
+    const today = new Date();
+    const birth = typeof birthDate === 'string' ? new Date(birthDate) : birthDate;
+    
+    if (isNaN(birth.getTime())) return 0;
+    
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    
+    return age;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Calcula a idade e retorna como string formatada
+ * @param birthDate Data de nascimento (string ISO, Date ou null/undefined)
+ * @returns String formatada "X anos" ou string vazia se inválido
+ */
+export function calculateAgeFormatted(birthDate: string | Date | null | undefined): string {
+  const age = calculateAge(birthDate);
+  return age > 0 ? `${age} anos` : '';
+}
+
+/**
  * Formata uma data no formato brasileiro (DD/MM/YYYY)
  * @param date Objeto Date ou string ISO
  * @returns Data formatada no padrão brasileiro

@@ -16,8 +16,18 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Search, UserPlus, Pencil, Trash2, CheckCircle, Circle, Loader2, Filter, X, ChevronsUpDown, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Search, UserPlus, Pencil, Trash2, CheckCircle, Circle, Loader2, Filter, X, ChevronsUpDown, Check, AlertTriangle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn, calculateAge } from "@/lib/utils";
 import { type Patient } from "@shared/schema";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PatientFormDialog } from "@/components/patients/patient-form-dialog";
@@ -36,6 +46,8 @@ export default function Patients() {
   const [openPatientForm, setOpenPatientForm] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | undefined>(undefined);
   const [processingPatientId, setProcessingPatientId] = useState<number | null>(null);
+  const [showDissociateModal, setShowDissociateModal] = useState(false);
+  const [patientToRemove, setPatientToRemove] = useState<Patient | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   
@@ -150,22 +162,6 @@ export default function Patients() {
     return date.toLocaleDateString('pt-BR');
   };
   
-  // Função para calcular a idade com base na data de nascimento
-  const calculateAge = (birthDate: string | Date): number => {
-    const today = new Date();
-    const birth = new Date(birthDate);
-    
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    
-    // Se ainda não fez aniversário este ano, diminui 1 da idade
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    
-    return age;
-  };
-  
   // Função para abrir o formulário de edição com um paciente selecionado
   const handleEdit = (patient: Patient) => {
     setSelectedPatient(patient);
@@ -264,28 +260,38 @@ export default function Patients() {
     }
   };
   
-  // Função para desassociar um paciente do médico
-  const handleDissociatePatient = async (patientId: number) => {
-    if (!user?.id) return;
+  // Função para abrir o modal de confirmação de desassociação
+  const openDissociateModal = (patient: Patient) => {
+    setPatientToRemove(patient);
+    setShowDissociateModal(true);
+  };
+  
+  // Função para executar a desassociação do paciente
+  const confirmDissociatePatient = async () => {
+    if (!user?.id || !patientToRemove) return;
     
-    if (!confirm("Tem certeza que deseja remover este paciente da sua lista?")) {
-      return;
-    }
+    setProcessingPatientId(patientToRemove.id);
+    setShowDissociateModal(false);
     
-    setProcessingPatientId(patientId);
+    const patientName = patientToRemove.fullName || "paciente";
     
     try {
-      const patient = patients?.find(p => p.id === patientId);
-      const patientName = patient?.fullName || "paciente";
-      
-      // Usar um endpoint mais direto que aceita doctorId e patientId
-      const response = await fetch(`/api/doctors/${user.id}/patients/${patientId}`, {
+      const response = await fetch(`/api/doctors/${user.id}/patients/${patientToRemove.id}`, {
         method: "DELETE",
         credentials: "include"
       });
       
       if (!response.ok) {
         const errorData = await response.json();
+        // Se tem pedidos associados, mostrar mensagem específica
+        if (errorData.hasOrders) {
+          toast({
+            title: "Não é possível remover este paciente",
+            description: errorData.message,
+            variant: "destructive",
+          });
+          return;
+        }
         throw new Error(errorData.message || `Erro HTTP: ${response.status}`);
       }
       
@@ -293,18 +299,20 @@ export default function Patients() {
       queryClient.invalidateQueries({ queryKey: ['/api/doctors', user.id, 'patients'] });
       
       toast({
-        title: "Paciente desassociado com sucesso",
+        title: "Paciente removido com sucesso",
         description: `${patientName} foi removido(a) da sua lista.`,
       });
     } catch (error) {
-      console.error("Erro ao desassociar paciente:", error);
+      console.error("Erro ao remover paciente:", error);
+      const errorMessage = error instanceof Error ? error.message : "Não foi possível remover o paciente da sua lista.";
       toast({
-        title: "Erro ao desassociar paciente",
-        description: "Não foi possível remover o paciente da sua lista. Tente novamente mais tarde.",
+        title: "Erro ao remover paciente",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setProcessingPatientId(null);
+      setPatientToRemove(null);
     }
   };
   
@@ -652,6 +660,22 @@ export default function Patients() {
                                     Excluir
                                   </Button>
                                 )}
+                                {user?.roleId === 2 && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="border-red-200 text-red-700 hover:bg-red-50 h-9 font-medium hover:shadow-sm"
+                                    onClick={() => openDissociateModal(patient)}
+                                    disabled={processingPatientId === patient.id}
+                                  >
+                                    {processingPatientId === patient.id ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                    )}
+                                    Excluir
+                                  </Button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -673,6 +697,41 @@ export default function Patients() {
         onOpenChange={setOpenPatientForm}
         patient={selectedPatient}
       />
+
+      {/* Modal de confirmação de remoção de paciente */}
+      <AlertDialog open={showDissociateModal} onOpenChange={setShowDissociateModal}>
+        <AlertDialogContent className="bg-card border-red-500/50">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Remover Paciente
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Tem certeza que deseja remover <strong>{patientToRemove?.fullName}</strong>?
+              <br /><br />
+              Esta ação apenas será possível se não possuir pedidos ativos no sistema para o respectivo paciente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              className="bg-secondary border-gray-200 text-secondary-foreground hover:bg-secondary/80"
+              onClick={() => {
+                setShowDissociateModal(false);
+                setPatientToRemove(null);
+              }}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDissociatePatient}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Remover Paciente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

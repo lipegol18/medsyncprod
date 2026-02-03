@@ -1156,8 +1156,8 @@ export default function Orders() {
       <main className="flex-grow bg-muted/30">
         <div className="container mx-auto px-4 py-6 max-w-8xl">
           {/* Cabeçalho Moderno com Fundo Azul */}
-          <div className="mb-8">
-            <div className="flex flex-col mb-8 p-10 rounded-xl bg-medsync-blue">
+          <div className="mb-4">
+            <div className="flex flex-col p-10 rounded-xl bg-medsync-blue">
               <div className="flex items-center justify-center my-2">
                 <h1 className="text-3xl font-bold text-white text-center">
                   Gestão dos Pedidos Cirúrgicos
@@ -1166,22 +1166,9 @@ export default function Orders() {
             </div>
           </div>
           
-          {/* Botão Novo Pedido - Acima dos filtros */}
-          {!isLoading && !isError && (
-            <div className="flex justify-center sm:justify-end mb-4">
-              <Button
-                onClick={() => navigate("/create-order")}
-                className="bg-medsync-blue hover:bg-medsync-blue-dark text-white font-semibold h-10 w-full sm:w-auto sm:px-6"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Pedido
-              </Button>
-            </div>
-          )}
-          
           {/* Seção de Filtros Moderna */}
           {!isLoading && !isError && ordersData.length > 0 && (
-            <Card className="border-gray-200 bg-gradient-to-r from-sky-50 to-sky-100/50 shadow-sm mb-6">
+            <Card className="border-gray-200 bg-gradient-to-r from-sky-50 to-sky-100/50 shadow-sm mb-4">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -1358,6 +1345,15 @@ export default function Orders() {
                       : "Acompanhe o status e histórico dos seus pedidos cirúrgicos"}
                   </CardDescription>
                 </div>
+                {!isLoading && !isError && (
+                  <Button
+                    onClick={() => navigate("/create-order")}
+                    className="bg-medsync-blue hover:bg-medsync-blue-dark text-white font-semibold h-10 px-6"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Novo Pedido
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -1433,7 +1429,7 @@ export default function Orders() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {filteredOrdersData.map((order: any) => (
                     <Card key={order.id} className="border-gray-200 bg-card shadow-lg hover:shadow-xl transition-all duration-200 overflow-hidden group">
                       <CardContent className="p-0">

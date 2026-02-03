@@ -1,4 +1,5 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import { calculateAge } from '@/lib/utils';
 
 const styles = StyleSheet.create({
   page: {
@@ -211,18 +212,6 @@ const formatDateBR = (dateString?: string) => {
   if (!dateString) return 'Não informado';
   const date = new Date(dateString);
   return date.toLocaleDateString('pt-BR');
-};
-
-const calculateAge = (birthDate?: string) => {
-  if (!birthDate) return 0;
-  const birth = new Date(birthDate);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-  return age;
 };
 
 const MEDSYNC_VERSION = '2.5.3';

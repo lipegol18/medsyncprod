@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { GripVertical, RotateCcw } from 'lucide-react';
 import { MarkdownViewer } from '@/components/markdown-editor';
 import MedSyncLogo from '../assets/medsync-logo-new.svg';
+import { calculateAgeFormatted } from '@/lib/utils';
 
 export interface PageBreakInfo {
   originalPosition: number;
@@ -131,22 +132,6 @@ const formatDateBR = (dateString: string | null | undefined): string => {
 const formatCPF = (cpf: string | null | undefined): string => {
   if (!cpf) return '';
   return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-};
-
-const calculateAge = (birthDate: string | null | undefined): string => {
-  if (!birthDate) return '';
-  try {
-    const birth = new Date(birthDate);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    return `${age} anos`;
-  } catch {
-    return '';
-  }
 };
 
 const parsePorteValue = (porte: any): number => {
