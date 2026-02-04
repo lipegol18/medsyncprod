@@ -102,6 +102,7 @@ export interface OrderPDFDocumentV2Props {
   opmeAdditionalNotes?: string;
   supplierAdditionalNotes?: string;
   forcedPageBreaks?: string[];
+  attachments?: any[];
 }
 
 Font.register({
@@ -385,6 +386,7 @@ export function OrderPDFDocumentV2({
   opmeAdditionalNotes,
   supplierAdditionalNotes,
   forcedPageBreaks = [],
+  attachments = [],
 }: OrderPDFDocumentV2Props) {
 
   const groupItemsByApproach = () => {
@@ -811,6 +813,71 @@ export function OrderPDFDocumentV2({
           </View>
         </View>
       </Page>
+
+      {/* Páginas dos anexos de imagem */}
+      {attachments?.length > 0 && 
+        attachments
+          .filter((attachment: any) => 
+            attachment.type === 'image' || 
+            (attachment.type && ['jpeg', 'jpg', 'png', 'gif', 'webp'].includes(attachment.type.toLowerCase())) ||
+            (attachment.filename && /\.(jpeg|jpg|png|gif|webp)$/i.test(attachment.filename))
+          )
+          .map((attachment: any, index: number) => {
+            const imageAttachments = attachments.filter((att: any) => 
+              att.type === 'image' || 
+              (att.type && ['jpeg', 'jpg', 'png', 'gif', 'webp'].includes(att.type.toLowerCase())) ||
+              (att.filename && /\.(jpeg|jpg|png|gif|webp)$/i.test(att.filename))
+            );
+            const totalImageAttachments = imageAttachments.length;
+            
+            return (
+              <Page size="A4" style={styles.page} key={`attachment-${index}`}>
+                <PageHeader />
+                
+                {/* Imagem do anexo */}
+                <View style={{ 
+                  flex: 1, 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  marginTop: 10, 
+                  marginBottom: 10,
+                  padding: 5
+                }}>
+                  <Image 
+                    style={{ 
+                      width: attachment.isDocumentRatio ? '100%' : undefined,
+                      height: attachment.isDocumentRatio ? '100%' : undefined,
+                      maxWidth: '100%', 
+                      maxHeight: '100%',
+                      objectFit: 'contain'
+                    }} 
+                    src={attachment.url} 
+                  />
+                </View>
+                
+                {/* Legenda na parte inferior */}
+                <View style={{ 
+                  marginTop: 10, 
+                  marginBottom: 20,
+                  paddingTop: 10, 
+                  borderTopWidth: 1, 
+                  borderTopColor: '#e5e7eb',
+                  alignItems: 'center'
+                }}>
+                  <Text style={{ 
+                    fontSize: 10, 
+                    color: '#6b7280', 
+                    textAlign: 'center' 
+                  }}>
+                    Pedido nº {orderId} - Paciente: {selectedPatient?.fullName} - Anexo {index + 1} / {totalImageAttachments}
+                  </Text>
+                </View>
+                
+                <PageFooter />
+              </Page>
+            );
+          })
+      }
     </Document>
   );
 }

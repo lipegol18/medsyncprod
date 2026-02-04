@@ -2763,11 +2763,20 @@ export default function CreateOrder() {
       const forcedPageBreaksArray = Array.from(forcedPageBreaks);
       console.log('📄 Quebras de página forçadas do preview:', forcedPageBreaksArray);
       
+      // Buscar anexos de imagem do pedido atual para incluir no PDF V2
+      const pdfImageAttachments = (currentOrderData?.attachments || []).filter((attachment: any) => 
+        attachment.type === 'image' || 
+        (attachment.type && ['jpeg', 'jpg', 'png', 'gif', 'webp'].includes(attachment.type.toLowerCase())) ||
+        (attachment.filename && /\.(jpeg|jpg|png|gif|webp)$/i.test(attachment.filename))
+      );
+      console.log(`📷 Total de imagens nos anexos para PDF V2: ${pdfImageAttachments.length}`);
+      
       // Gerar PDF V2 principal usando react-pdf (mesma estrutura do Preview V2)
       const mainPdfBlob = await pdf(
         <OrderPDFDocumentV2 
           {...pdfV2Data} 
-          forcedPageBreaks={forcedPageBreaksArray} 
+          forcedPageBreaks={forcedPageBreaksArray}
+          attachments={pdfImageAttachments}
         />
       ).toBlob();
 
