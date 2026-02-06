@@ -299,28 +299,53 @@ export class MVChnExtractor {
     }
     
     // Telefone
-    const telefonePatterns = [
-      /(?:TELEFONE|CONTATO)[:\s]*\n?\s*(\(?\d{2}\)?\s*\d{4,5}[-\s]?\d{4})/i,
-      /\((\d{2})\)\s*(\d{4,5})[-\s]?(\d{4})/,
-    ];
+    // Estratégia 1: Número de 10-11 dígitos seguido de vírgula e email (padrão CHN do MV)
+    // Ex: "21991299606, agathagonze@gmail.com" ou "21988471280, fernandacunhavet@gmail.com"
+    const telEmailPattern = text.match(/(\d{10,11})\s*[,;]\s*[a-zA-Z0-9._%+-]+@/);
+    if (telEmailPattern?.[1]) {
+      const digits = telEmailPattern[1];
+      const ddd = digits.slice(0, 2);
+      const prefix = digits.slice(2, -4);
+      const suffix = digits.slice(-4);
+      patient.telefone = `(${ddd}) ${prefix}-${suffix}`;
+      console.log(`🏨 [MV-CHN] Telefone encontrado (padrão tel,email): ${patient.telefone}`);
+    }
     
-    for (const pattern of telefonePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        if (match[3]) {
-          // Pattern with capture groups for DDD, prefix, suffix
-          patient.telefone = `(${match[1]}) ${match[2]}-${match[3]}`;
-        } else if (match[1]) {
-          // Pattern with full number in group 1
-          const digits = match[1].replace(/\D/g, "");
-          if (digits.length >= 10) {
-            const ddd = digits.slice(0, 2);
-            const prefix = digits.slice(2, -4);
-            const suffix = digits.slice(-4);
-            patient.telefone = `(${ddd}) ${prefix}-${suffix}`;
-          }
+    // Estratégia 2: Número de 10-11 dígitos logo após CEP (mesma linha ou próxima)
+    // Ex: "CEP 28013037\n21991299606"
+    if (!patient.telefone) {
+      const cepTelPattern = text.match(/CEP\s*\d{5,8}\s*\n?\s*(\d{10,11})/i);
+      if (cepTelPattern?.[1]) {
+        const digits = cepTelPattern[1];
+        const ddd = digits.slice(0, 2);
+        const prefix = digits.slice(2, -4);
+        const suffix = digits.slice(-4);
+        patient.telefone = `(${ddd}) ${prefix}-${suffix}`;
+        console.log(`🏨 [MV-CHN] Telefone encontrado (padrão pós-CEP): ${patient.telefone}`);
+      }
+    }
+    
+    // Estratégia 3: Label "TELEFONE" ou "CONTATO" seguido do número
+    if (!patient.telefone) {
+      const telLabelMatch = text.match(/(?:TELEFONE|CONTATO)[:\s]*\n?\s*(\(?\d{2}\)?\s*\d{4,5}[-\s]?\d{4})/i);
+      if (telLabelMatch?.[1]) {
+        const digits = telLabelMatch[1].replace(/\D/g, "");
+        if (digits.length >= 10) {
+          const ddd = digits.slice(0, 2);
+          const prefix = digits.slice(2, -4);
+          const suffix = digits.slice(-4);
+          patient.telefone = `(${ddd}) ${prefix}-${suffix}`;
+          console.log(`🏨 [MV-CHN] Telefone encontrado (label TELEFONE): ${patient.telefone}`);
         }
-        break;
+      }
+    }
+    
+    // Estratégia 4: Formato (XX) XXXXX-XXXX em qualquer lugar do texto
+    if (!patient.telefone) {
+      const telParenMatch = text.match(/\((\d{2})\)\s*(\d{4,5})[-\s]?(\d{4})/);
+      if (telParenMatch) {
+        patient.telefone = `(${telParenMatch[1]}) ${telParenMatch[2]}-${telParenMatch[3]}`;
+        console.log(`🏨 [MV-CHN] Telefone encontrado (parênteses): ${patient.telefone}`);
       }
     }
     

@@ -535,6 +535,37 @@ export function PatientFormDialog({
           }
         }
         
+        // Preencher dados do convênio/plano de saúde (extraídos de telas MV, etiquetas, etc.)
+        if (insurance) {
+          if (insurance.provider) {
+            try {
+              const searchUrl = `/api/health-insurance-providers/search?q=${encodeURIComponent(insurance.provider)}`;
+              const providerResponse = await fetch(searchUrl, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                credentials: 'include'
+              });
+              
+              if (providerResponse.ok) {
+                const providersResult = await providerResponse.json();
+                if (providersResult && providersResult.length > 0) {
+                  setSelectedProvider(providersResult[0]);
+                }
+              }
+            } catch (error) {
+              console.error('Erro ao buscar operadora:', error);
+            }
+          }
+          
+          if (insurance.cardNumber) {
+            form.setValue('insuranceNumber', insurance.cardNumber);
+          }
+          
+          if (insurance.plan) {
+            form.setValue('plan', insurance.plan);
+          }
+        }
+        
         // Armazenar informações da extração para exibição
         setExtractedInfo({
           type: 'identity',
