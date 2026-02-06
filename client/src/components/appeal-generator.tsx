@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, CheckCircle, Download, AlertTriangle, Package, Stethoscope, Upload, X, FileText, Image as ImageIcon, ChevronDown, ChevronUp, Paperclip } from "lucide-react";
+import { Loader2, CheckCircle, Download, AlertTriangle, Package, Stethoscope, Upload, X, FileText, Image as ImageIcon, ChevronDown, ChevronUp, Paperclip, Check } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AppealPreview } from "@/components/appeal-preview";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import RoboMedSyncIcon from "@/assets/icons/MedSync_Icones_Robo Medsync_Sem_Borda.svg";
@@ -94,6 +95,7 @@ export function AppealGenerator({
   const [appealAttachments, setAppealAttachments] = useState<AppealAttachment[]>([]);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState<boolean>(false);
   const [showAttachmentSection, setShowAttachmentSection] = useState<boolean>(false);
+  const [selectedDeniedItemIds, setSelectedDeniedItemIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Carregar dados do pedido quando o modal abrir
@@ -179,6 +181,9 @@ export function AppealGenerator({
       
       console.log('Itens negados encontrados:', items);
       setDeniedItems(items);
+      // Auto-selecionar todos os itens negados por padrão
+      const allIds = new Set(items.map(item => `${item.type}-${item.id}`));
+      setSelectedDeniedItemIds(allIds);
     } catch (error) {
       console.error("Erro ao carregar itens negados:", error);
     } finally {
@@ -339,6 +344,7 @@ export function AppealGenerator({
     setAppealOrderData(null);
     setGeneratedAppealPdfUrl("");
     setDeniedItems([]);
+    setSelectedDeniedItemIds(new Set());
     setAppealAttachments([]);
   };
 
@@ -646,15 +652,6 @@ export function AppealGenerator({
         return sex;
       };
 
-      // Mapear tipo de procedimento
-      const mapCondutaCirurgica = (procedureType: string | null | undefined): string => {
-        if (!procedureType) return "Não informado";
-        if (procedureType === 'eletiva') return "Eletiva";
-        if (procedureType === 'urgencia') return "Urgência";
-        if (procedureType === 'emergencia') return "Emergência";
-        return procedureType;
-      };
-
       // Extrair TODOS os códigos CID do pedido (estrutura: cidCodes[].cid.code ou cidCodes[].code)
       const codigosCid: string[] = appealOrderData?.cidCodes?.map((cidItem: any) => 
         cidItem.cid?.code || cidItem.code || ''
@@ -678,33 +675,53 @@ export function AppealGenerator({
           nome: att.filename
         }));
 
-      // Determinar a conduta clínica (surgicalApproaches) - ex: "Artroscopia"
-      const condutaClinica = appealOrderData?.surgicalApproaches?.[0]?.name || "Não informado";
+      // Extrair nomes das condutas/abordagens cirúrgicas (ex: "Artroscopia, Via aberta")
+      const condutaCirurgica = appealOrderData?.surgicalApproaches?.map((approach: any) => 
+        approach.approachName || approach.name || ''
+      ).filter((name: string) => name).join(", ") || "Não informado";
       
-      // Determinar o procedimento cirúrgico principal (surgicalProcedures) - ex: "Ombro - Reparo do manguito rotador"
-      const procedimentoPrincipal = appealOrderData?.surgicalProcedures?.[0]?.procedureName || 
-                                    appealOrderData?.procedureName || 
-                                    "Não informado";
+      // Extrair nomes dos procedimentos cirúrgicos (ex: "Reparo do manguito rotador, Descompressão subacromial")
+      const procedimentoCirurgico = appealOrderData?.surgicalProcedures?.map((proc: any) => 
+        proc.procedureName || proc.name || ''
+      ).filter((name: string) => name).join(", ") || "Não informado";
 
-      // Construir payload completo para a API externa
+      // Extrair nomes dos fornecedores
+      const fornecedores = appealOrderData?.suppliers?.map((supplier: any) => 
+        supplier.companyName || supplier.tradeName || ''
+      ).filter((name: string) => name) || [];
+
+      // Construir payload completo para a API externa (padronizado com o pedido cirúrgico)
       const payload = {
         // Campos obrigatórios
         sexo_paciente: mapSexo(appealOrderData?.patient?.gender),
         idade: calculateAge(appealOrderData?.patient?.birthDate),
-        indicacao_clinica: procedimentoPrincipal,
+        indicacao_clinica: appealOrderData?.clinicalIndication || appealOrderData?.procedureName || "Não informado",
         regiao_anatomica: appealOrderData?.anatomicalRegion?.name || "Não informado",
-        procedimento_cirurgico: condutaClinica,
+        procedimento_cirurgico: procedimentoCirurgico,
         
         // Campos recomendados (contexto da glosa)
         motivo_glosa: rejectionReason,
         justificativa_enviada: appealOrderData?.clinicalJustification || "",
-        conduta_cirurgica: mapCondutaCirurgica(appealOrderData?.procedureType),
-        comorbidades_paciente: appealOrderData?.additionalNotes || "",
+        conduta_cirurgica: condutaCirurgica,
+        observacoes_adicionais: appealOrderData?.additionalNotes || "",
+        
+        // Campos adicionais (padronizados com pedido cirúrgico)
+        carater_procedimento: appealOrderData?.procedureType || "",
+        lateralidade: appealOrderData?.procedureLaterality || appealOrderData?.laterality || "",
+        fornecedores: fornecedores,
         
         // Arrays de códigos
         codigos_cid: codigosCid,
         codigos_cbhpm: codigosCbhpm,
         itens_opme: itensOpme,
+        
+        // Itens selecionados para recurso (negados/glosados)
+        codigos_cbhpm_neg: deniedItems
+          .filter(item => item.type === 'cbhpm' && selectedDeniedItemIds.has(`cbhpm-${item.id}`))
+          .map(item => item.code),
+        itens_opme_neg: deniedItems
+          .filter(item => item.type === 'opme' && selectedDeniedItemIds.has(`opme-${item.id}`))
+          .map(item => item.name),
         
         // Anexos
         anexos: anexosFormatados
@@ -777,7 +794,39 @@ export function AppealGenerator({
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Selecione os itens que deseja recorrer:
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => {
+                            const allIds = new Set(deniedItems.map(item => `${item.type}-${item.id}`));
+                            setSelectedDeniedItemIds(allIds);
+                          }}
+                        >
+                          Selecionar todos
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => setSelectedDeniedItemIds(new Set())}
+                        >
+                          Limpar seleção
+                        </Button>
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {selectedDeniedItemIds.size} de {deniedItems.length} selecionado(s)
+                        </span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Procedimentos CBHPM */}
                     {deniedItems.filter(item => item.type === 'cbhpm').length > 0 && (
                       <div className="space-y-2">
@@ -785,16 +834,32 @@ export function AppealGenerator({
                           <Stethoscope className="h-4 w-4" />
                           <span>Procedimentos CBHPM</span>
                         </div>
-                        {deniedItems.filter(item => item.type === 'cbhpm').map((item) => (
-                          <div 
-                            key={`cbhpm-${item.id}`}
-                            className={`p-2.5 rounded-lg border ${
-                              item.status === 'negado' 
-                                ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' 
-                                : 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
+                        {deniedItems.filter(item => item.type === 'cbhpm').map((item) => {
+                          const itemKey = `cbhpm-${item.id}`;
+                          const isSelected = selectedDeniedItemIds.has(itemKey);
+                          return (
+                            <label 
+                              key={itemKey}
+                              className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-start gap-2.5 ${
+                                isSelected
+                                  ? item.status === 'negado' 
+                                    ? 'bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700 ring-1 ring-red-300 dark:ring-red-700' 
+                                    : 'bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700 ring-1 ring-amber-300 dark:ring-amber-700'
+                                  : 'bg-muted/30 border-muted-foreground/20 opacity-60'
+                              }`}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) => {
+                                  setSelectedDeniedItemIds(prev => {
+                                    const next = new Set(prev);
+                                    if (checked) next.add(itemKey);
+                                    else next.delete(itemKey);
+                                    return next;
+                                  });
+                                }}
+                                className="mt-0.5"
+                              />
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs font-medium text-muted-foreground">{item.code}</p>
                                 <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
@@ -811,9 +876,9 @@ export function AppealGenerator({
                                   {item.quantityApproved ?? 0}/{item.quantityRequested}
                                 </p>
                               </div>
-                            </div>
-                          </div>
-                        ))}
+                            </label>
+                          );
+                        })}
                       </div>
                     )}
                     
@@ -824,16 +889,32 @@ export function AppealGenerator({
                           <Package className="h-4 w-4" />
                           <span>Materiais OPME</span>
                         </div>
-                        {deniedItems.filter(item => item.type === 'opme').map((item) => (
-                          <div 
-                            key={`opme-${item.id}`}
-                            className={`p-2.5 rounded-lg border ${
-                              item.status === 'negado' 
-                                ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' 
-                                : 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
+                        {deniedItems.filter(item => item.type === 'opme').map((item) => {
+                          const itemKey = `opme-${item.id}`;
+                          const isSelected = selectedDeniedItemIds.has(itemKey);
+                          return (
+                            <label 
+                              key={itemKey}
+                              className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-start gap-2.5 ${
+                                isSelected
+                                  ? item.status === 'negado' 
+                                    ? 'bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700 ring-1 ring-red-300 dark:ring-red-700' 
+                                    : 'bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700 ring-1 ring-amber-300 dark:ring-amber-700'
+                                  : 'bg-muted/30 border-muted-foreground/20 opacity-60'
+                              }`}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) => {
+                                  setSelectedDeniedItemIds(prev => {
+                                    const next = new Set(prev);
+                                    if (checked) next.add(itemKey);
+                                    else next.delete(itemKey);
+                                    return next;
+                                  });
+                                }}
+                                className="mt-0.5"
+                              />
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs font-medium text-muted-foreground">{item.code}</p>
                                 <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
@@ -850,11 +931,12 @@ export function AppealGenerator({
                                   {item.quantityApproved ?? 0}/{item.quantityRequested}
                                 </p>
                               </div>
-                            </div>
-                          </div>
-                        ))}
+                            </label>
+                          );
+                        })}
                       </div>
                     )}
+                    </div>
                   </div>
                 )}
               </div>

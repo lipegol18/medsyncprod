@@ -8964,10 +8964,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         motivo_glosa,
         justificativa_enviada,
         conduta_cirurgica,
-        comorbidades_paciente,
+        observacoes_adicionais,
+        carater_procedimento,
+        lateralidade,
+        fornecedores,
         codigos_cid,
         codigos_cbhpm,
         itens_opme,
+        codigos_cbhpm_neg,
+        itens_opme_neg,
         anexos
       } = req.body;
 
@@ -8990,7 +8995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const API_URL = "https://hook-prod.iotninja.com.br/webhook/resposta-glosa";
       const API_TOKEN = "Bearer f9a2b8e3-c1d5-4e7f-a6b0-9c8d7e6f5a4b";
 
-      // Construir payload para API externa
+      // Construir payload para API externa (padronizado com pedido cirúrgico)
       const payload = {
         sexo_paciente: sexo_paciente || "Não informado",
         idade: idade || 0,
@@ -9000,10 +9005,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         motivo_glosa: motivo_glosa || "",
         justificativa_enviada: justificativa_enviada || "",
         conduta_cirurgica: conduta_cirurgica || "Não informado",
-        comorbidades_paciente: comorbidades_paciente || "",
+        observacoes_adicionais: observacoes_adicionais || "",
+        carater_procedimento: carater_procedimento || "",
+        lateralidade: lateralidade || "",
+        fornecedores: fornecedores || [],
         codigos_cid: codigos_cid || [],
         codigos_cbhpm: codigos_cbhpm || [],
         itens_opme: itens_opme || [],
+        codigos_cbhpm_neg: codigos_cbhpm_neg || [],
+        itens_opme_neg: itens_opme_neg || [],
         anexos: anexos || []
       };
 
