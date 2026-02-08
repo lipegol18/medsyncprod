@@ -381,6 +381,60 @@ export class MVAdvExtractor {
     }
     
     // ========================================
+    // EMAIL - Buscar via múltiplas estratégias
+    // Na tela ADV, o email pode aparecer:
+    //   1) No campo "E-mail" do grid (label na linha acima)
+    //   2) Como texto livre no OCR (padrão xxx@xxx.xxx)
+    // ========================================
+    if (!patient.email) {
+      // Estratégia 1: Buscar do fieldMap
+      const emailFromMap = fieldMap['E-MAIL'] || fieldMap['EMAIL'];
+      if (emailFromMap) {
+        const emailMatch = emailFromMap.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+        if (emailMatch) {
+          patient.email = emailMatch[0].toLowerCase();
+          console.log(`🏨 [MV-ADV] Email encontrado (grid): ${patient.email}`);
+        }
+      }
+    }
+    
+    if (!patient.email) {
+      // Estratégia 2: Buscar após label "E-mail" nas linhas seguintes
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (/\bE-?mail\b/i.test(line)) {
+          // Verificar se o email está na mesma linha (após o label)
+          const sameLineMatch = line.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+          if (sameLineMatch) {
+            patient.email = sameLineMatch[0].toLowerCase();
+            console.log(`🏨 [MV-ADV] Email encontrado (mesma linha): ${patient.email}`);
+            break;
+          }
+          // Procurar nas próximas linhas
+          for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+            const nextLine = lines[j].trim();
+            const emailMatch = nextLine.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+            if (emailMatch) {
+              patient.email = emailMatch[0].toLowerCase();
+              console.log(`🏨 [MV-ADV] Email encontrado (após label): ${patient.email}`);
+              break;
+            }
+          }
+          if (patient.email) break;
+        }
+      }
+    }
+    
+    if (!patient.email) {
+      // Estratégia 3: Buscar qualquer padrão de email no texto completo
+      const emailMatch = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+      if (emailMatch) {
+        patient.email = emailMatch[0].toLowerCase();
+        console.log(`🏨 [MV-ADV] Email encontrado (fallback texto): ${patient.email}`);
+      }
+    }
+    
+    // ========================================
     // CAMPOS DE ENDEREÇO - Buscar na seção "Endereço Residencial"
     // Estrutura similar: Labels primeiro, depois valores
     // ========================================
