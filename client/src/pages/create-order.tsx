@@ -532,11 +532,22 @@ export default function CreateOrder() {
       return;
     }
 
-    // Primeiro, definimos o paciente selecionado
-    setSelectedPatient(patient);
-    console.log(
-      `Paciente selecionado: ${patient.fullName} (ID: ${patient.id})`,
-    );
+    // Buscar paciente completo via API para incluir nome da operadora (insurance)
+    let enrichedPatient = patient;
+    try {
+      const fullPatient = await apiRequest(`/api/patients/${patient.id}`, "GET");
+      enrichedPatient = fullPatient;
+      setSelectedPatient(fullPatient);
+      console.log(
+        `Paciente selecionado: ${fullPatient.fullName} (ID: ${fullPatient.id}), Convênio: ${fullPatient.insurance || 'N/A'}`,
+      );
+    } catch (error) {
+      console.error("Erro ao buscar dados completos do paciente:", error);
+      setSelectedPatient(patient);
+      console.log(
+        `Paciente selecionado (fallback): ${patient.fullName} (ID: ${patient.id})`,
+      );
+    }
 
     // Verificar se existe um pedido em preenchimento para este paciente
     try {
@@ -575,7 +586,7 @@ export default function CreateOrder() {
           // Armazenar os dados para o diálogo
           // ✅ RESTAURADO: Mostrar modal para usuário escolher
           setExistingOrderData(orderData);
-          setPendingPatient(patient);
+          setPendingPatient(enrichedPatient);
           setShowExistingOrderDialog(true);
           
           console.log('🔄 Modal exibido - usuário pode escolher entre editar ou criar novo');
