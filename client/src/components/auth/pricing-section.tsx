@@ -932,7 +932,7 @@ export function PricingSection({ onPlanSelection, selectedPlanId, onAdvanceToPay
               if (selectedPlanCard === 'START') {
                 return 'Iniciar Teste Gratuito';
               }
-              return 'Avançar para Pagamento';
+              return 'Escolher este Plano';
             })()}
           </button>
         </div>

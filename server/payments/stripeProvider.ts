@@ -124,6 +124,11 @@ export class StripeProvider implements PaymentProvider {
     try {
       console.log(`🚀 [Stripe] Criando/atualizando cliente: ${input.email}`);
 
+      const existingCustomers = await this.stripe.customers.list({
+        email: input.email,
+        limit: 1,
+      });
+
       const customerData: Stripe.CustomerCreateParams = {
         email: input.email,
         name: input.name,
@@ -143,27 +148,32 @@ export class StripeProvider implements PaymentProvider {
         },
       };
 
-      const stripeCustomer = await this.stripe.customers.create(customerData);
+      let stripeCustomer: Stripe.Customer;
 
-      console.log(`✅ [Stripe] Cliente criado: ${stripeCustomer.id}`);
+      if (existingCustomers.data.length > 0) {
+        stripeCustomer = await this.stripe.customers.update(
+          existingCustomers.data[0].id,
+          customerData as Stripe.CustomerUpdateParams,
+        );
+        console.log(`✅ [Stripe] Cliente existente atualizado: ${stripeCustomer.id}`);
+      } else {
+        stripeCustomer = await this.stripe.customers.create(customerData);
+        console.log(`✅ [Stripe] Cliente novo criado: ${stripeCustomer.id}`);
 
-      // Adicionar CPF como tax_id para compliance fiscal brasileiro
-      if (input.cpf) {
-        try {
-          const cleanCpf = input.cpf.replace(/\D/g, ""); // Remove formatação
-
-          await this.stripe.customers.createTaxId(stripeCustomer.id, {
-            type: "br_cpf",
-            value: cleanCpf,
-          });
-
-          console.log(`✅ [Stripe] CPF adicionado como tax_id: ${cleanCpf}`);
-        } catch (taxIdError: any) {
-          console.warn(
-            `⚠️ [Stripe] Erro ao adicionar CPF como tax_id:`,
-            taxIdError.message,
-          );
-          // Não falhar a criação do customer por erro no tax_id
+        if (input.cpf) {
+          try {
+            const cleanCpf = input.cpf.replace(/\D/g, "");
+            await this.stripe.customers.createTaxId(stripeCustomer.id, {
+              type: "br_cpf",
+              value: cleanCpf,
+            });
+            console.log(`✅ [Stripe] CPF adicionado como tax_id: ${cleanCpf}`);
+          } catch (taxIdError: any) {
+            console.warn(
+              `⚠️ [Stripe] Erro ao adicionar CPF como tax_id:`,
+              taxIdError.message,
+            );
+          }
         }
       }
 

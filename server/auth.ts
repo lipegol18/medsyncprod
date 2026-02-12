@@ -2,7 +2,7 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
 import session from "express-session";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { User as SelectUser } from "@shared/schema";
 import connectPg from "connect-pg-simple";
 import { pool, db } from "./db";
@@ -392,29 +392,25 @@ export function setupAuth(app: Express) {
         registrationData.name ||
         `${registrationData.firstName} ${registrationData.lastName}`;
 
-      // Lógica específica por tipo de plano
       const now = new Date();
-      let userToCreate = {
-        ...userData,
-        name: fullName, // Garantir que name seja sempre definido
-        password: await hashPassword(registrationData.password),
-        active: false, // Por padrão inativo
-      };
+      const hashedPassword = await hashPassword(registrationData.password);
 
-      // Criar usuário primeiro
-      const user = await storage.createUser({
-        ...userToCreate,
-        active: planId === 1, // Ativar imediatamente para trial (plano START)
-      });
-
-      // Se for plano START (ID 1), criar assinatura de trial
+      // ============================================================
+      // FLUXO TRIAL (planId === 1): Criar usuário diretamente
+      // ============================================================
       if (planId === 1) {
-        const trialDays = plan.trialDays || 15; // Default 15 dias
+        const user = await storage.createUser({
+          ...userData,
+          name: fullName,
+          password: hashedPassword,
+          active: true,
+        });
+
+        const trialDays = plan.trialDays || 15;
         const trialEndDate = new Date(
           now.getTime() + trialDays * 24 * 60 * 60 * 1000,
         );
 
-        // Criar assinatura de trial na nova estrutura
         await storage.createUserSubscription({
           userId: user.id,
           planId: planId,
@@ -426,38 +422,30 @@ export function setupAuth(app: Express) {
           updatedAt: now,
         });
 
-        console.log(`Configurando trial de ${trialDays} dias para plano START`);
-      }
-      console.log("Usuário criado com sucesso, ID:", user.id);
+        console.log(`Trial de ${trialDays} dias configurado para plano START, usuário ${user.id}`);
 
-      // Criar endereço se fornecido
-      if (cep && logradouro && cidade && uf) {
-        try {
-          const addressData = {
-            userId: user.id,
-            isPrimary: true,
-            cep,
-            logradouro,
-            numero: numero || "",
-            complemento: complemento || "",
-            bairro: bairro || "",
-            cidade,
-            uf,
-            country: "BR",
-          };
-          await storage.createUserAddress(addressData);
-        } catch (addressError) {
-          console.error("Erro ao criar endereço:", addressError);
+        if (cep && logradouro && cidade && uf) {
+          try {
+            await storage.createUserAddress({
+              userId: user.id,
+              isPrimary: true,
+              cep,
+              logradouro,
+              numero: numero || "",
+              complemento: complemento || "",
+              bairro: bairro || "",
+              cidade,
+              uf,
+              country: "BR",
+            });
+          } catch (addressError) {
+            console.error("Erro ao criar endereço:", addressError);
+          }
         }
-      }
 
-      // Notificar webhook
-      WebhookService.notifyNewUser(user);
+        WebhookService.notifyNewUser(user);
+        const { password, ...userWithoutPassword } = user;
 
-      const { password, ...userWithoutPassword } = user;
-
-      if (planId === 1) {
-        // Para plano START, fazer login automático e retornar sucesso
         req.login(user, async (err) => {
           if (err) {
             console.error("Erro no login automático:", err);
@@ -467,9 +455,7 @@ export function setupAuth(app: Express) {
           }
 
           try {
-            // Buscar informações da assinatura de trial criada
             const userSubscription = await storage.getUserSubscription(user.id);
-
             res.status(201).json({
               ...userWithoutPassword,
               message:
@@ -488,233 +474,165 @@ export function setupAuth(app: Express) {
             });
           }
         });
-      } else {
-        // Para outros planos, criar sessão de checkout do Stripe
-        let discountCode = null;
-        if (discountCodeId) {
-          try {
-            // Buscar código de desconto automático
-            const [code] = await db
-              .select()
-              .from(discountCodes)
-              .where(
-                and(
-                  eq(discountCodes.id, discountCodeId),
-                  eq(discountCodes.isActive, true),
-                  eq(discountCodes.isAutomatic, true),
-                ),
-              );
+        return;
+      }
 
-            if (code) {
-              discountCode = code;
-              console.log("✅ Código de desconto automático encontrado:", {
-                id: code.id,
-                code: code.code,
-                externalCouponId: code.externalCouponId,
-                discountValue: code.discountValue,
-              });
-            } else {
-              console.warn(
-                "⚠️ Código de desconto não encontrado ou inativo:",
-                discountCodeId,
-              );
-            }
-          } catch (error) {
-            console.error("❌ Erro ao buscar código de desconto:", error);
-          }
-        }
+      // ============================================================
+      // FLUXO PAGO (planId !== 1): Salvar em incomplete_registrations
+      // O usuário só será criado quando o webhook confirmar o pagamento
+      // (via handleRegTokenBasedRegistration)
+      // ============================================================
+      const regToken = randomUUID();
 
+      const incompleteRegData: any = {
+        email: registrationData.email,
+        firstName: registrationData.firstName,
+        lastName: registrationData.lastName,
+        cpf: registrationData.cpf,
+        phone: registrationData.phone,
+        username: registrationData.username,
+        password: hashedPassword,
+        roleId: registrationData.roleId,
+        crm: registrationData.crm || registrationData.crmNumber,
+        crmUf: registrationData.crmUf || registrationData.crmState,
+        medicalSpecialtyId: registrationData.medicalSpecialtyId,
+        cep,
+        address: logradouro,
+        number: numero,
+        complement: complemento,
+        neighborhood: bairro,
+        city: cidade,
+        state: uf,
+        country: 'BR',
+        selectedPlanId: planId,
+        billingInterval: billingInterval,
+        regToken: regToken,
+        leadStatus: 'checkout_created',
+        currentStep: 'payment',
+      };
+
+      const registration = await storage.createIncompleteRegistration(incompleteRegData);
+      console.log(`Registro incompleto criado: ${registration.id}, regToken: ${regToken}`);
+
+      let discountCode = null;
+      if (discountCodeId) {
         try {
-          // Criar sessão de checkout do Stripe
-          const paymentProvider = getPaymentProvider();
-          if (!paymentProvider) {
-            throw new Error("Provedor de pagamento não disponível");
+          const [code] = await db
+            .select()
+            .from(discountCodes)
+            .where(
+              and(
+                eq(discountCodes.id, discountCodeId),
+                eq(discountCodes.isActive, true),
+                eq(discountCodes.isAutomatic, true),
+              ),
+            );
+          if (code) {
+            discountCode = code;
+            console.log("Código de desconto automático encontrado:", code.code);
           }
-
-          // Preparar metadata para o Stripe
-          const metadata = {
-            userId: user.id.toString(),
-            planId: planId.toString(),
-            billingInterval: billingInterval, // Importante para calcular expiração no webhook
-            flow: 'registration', // Identificar fluxo de registro inicial
-            ...(discountCode && { discountCodeId: discountCode.id.toString() }),
-          };
-
-          // Preparar dados completos do cliente para Stripe
-          const customerData = {
-            email: registrationData.email,
-            name: fullName,
-            phone: registrationData.phone,
-            cpf: registrationData.cpf, // Para compliance fiscal brasileiro
-            address: {
-              line1: `${logradouro}, ${numero}${complemento ? `, ${complemento}` : ""}`,
-              city: cidade,
-              state: uf,
-              postal_code: cep.replace(/\D/g, ""), // CEP apenas números
-              country: "BR",
-            },
-            metadata: {
-              userId: user.id.toString(),
-              crm: `${registrationData.crm || registrationData.crmNumber}-${registrationData.crmUf || registrationData.crmState}`,
-              medicalSpecialtyId:
-                registrationData.medicalSpecialtyId?.toString(),
-              source: "medsync-registration",
-            },
-          };
-
-          // Criar sessão de checkout com dados completos do cliente
-          console.log(
-            "\n💳 ========== INICIANDO CRIAÇÃO DE CHECKOUT SESSION ==========",
-          );
-          console.log("📋 Plano selecionado:", {
-            id: plan.id,
-            name: plan.name,
-            priceIdMonthly: plan.priceIdMonthly,
-            priceIdYearly: plan.priceIdYearly,
-          });
-
-          const { successUrl, cancelUrl } = getStripeCallbacks();
-
-          const priceId = billingInterval === "yearly"
-            ? plan.priceIdYearly
-            : plan.priceIdMonthly;
-
-          if (!priceId) {
-            throw new Error(`Plano ${plan.name} não possui Price ID configurado para ${billingInterval}`);
-          }
-
-          // Configurar desconto baseado no billing interval
-          let promotionCodeId: string | undefined;
-          let allowPromotionCodes = true;
-
-          if (billingInterval === "yearly") {
-            // Plano anual: aplicar WELCOME50 automaticamente e desabilitar entrada manual
-            console.log("📅 Plano ANUAL detectado - buscando código WELCOME50...");
-            
-            const welcomePromo = await findPromotionCodeByCode("WELCOME50");
-            if (welcomePromo && welcomePromo.isActive && welcomePromo.stripePromotionCodeId) {
-              promotionCodeId = welcomePromo.stripePromotionCodeId;
-              allowPromotionCodes = false;
-              console.log(`✅ Código WELCOME50 encontrado e será aplicado automaticamente: ${promotionCodeId}`);
-            } else {
-              console.log("⚠️ Código WELCOME50 não encontrado ou inativo - permitindo códigos manuais");
-            }
-          } else {
-            // Plano mensal: permitir códigos promocionais manuais
-            console.log("📅 Plano MENSAL detectado - códigos promocionais habilitados para entrada manual");
-          }
-
-          const checkoutParams = {
-            priceId,
-            mode: "subscription" as const,
-            customerData: customerData,
-            successUrl,
-            cancelUrl,
-            metadata,
-            promotionCodeId,
-            allowPromotionCodes,
-          };
-
-          console.log("\n🎯 Parâmetros COMPLETOS para Stripe Checkout:");
-          console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-          console.log("📌 Billing Interval:", billingInterval);
-          console.log("💰 Price ID Selecionado:", checkoutParams.priceId);
-          console.log("🔗 Success URL:", checkoutParams.successUrl);
-          console.log("🔗 Cancel URL:", checkoutParams.cancelUrl);
-          console.log("🎫 Promotion Code ID:", promotionCodeId || "Nenhum (entrada manual permitida)");
-          console.log("🎫 Allow Promotion Codes:", allowPromotionCodes);
-          console.log("👤 Customer Email:", customerData.email);
-          console.log("📊 Metadata:", metadata);
-          console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-
-          console.log("⏳ Chamando Stripe API...");
-          const checkoutSession =
-            await paymentProvider.createCheckoutSession(checkoutParams);
-          console.log("✅ Stripe respondeu com sucesso!");
-
-          console.log(
-            "\n🎉 ========== CHECKOUT SESSION CRIADA COM SUCESSO ==========",
-          );
-          console.log("🔗 Checkout URL:", checkoutSession.url);
-          console.log("🆔 Session ID:", checkoutSession.id);
-          console.log("✅ Status: Pronto para redirecionar usuário");
-          console.log(
-            "=========================================================\n",
-          );
-
-          // Criar assinatura com status pending_payment para rastrear o checkout abandonado
-          // Proteção contra null - usar fallback para priceMonthly se priceYearly não estiver definido
-          const price = billingInterval === "yearly" 
-            ? (plan.priceYearly || plan.priceMonthly || 0)
-            : (plan.priceMonthly || 0);
-          await storage.createUserSubscription({
-            userId: user.id,
-            planId: planId,
-            status: "pending_payment",
-            startedAt: now,
-            originalPrice: price,
-            finalPrice: price, // Será atualizado pelo webhook com o valor final após desconto
-            paymentProvider: "stripe",
-            paymentProviderSubscriptionId: checkoutSession.id, // Salvar session ID para rastreamento
-            createdAt: now,
-            updatedAt: now,
-          });
-          console.log(`✅ Assinatura criada com status 'pending_payment' para usuário ${user.id}, preço original: ${price}`);
-
-          res.status(201).json({
-            ...userWithoutPassword,
-            message:
-              "Dados salvos com sucesso. Redirecionando para pagamento...",
-            requiresPayment: true,
-            planId: planId,
-            checkoutUrl: checkoutSession.url,
-            sessionId: checkoutSession.id,
-            discountApplied: !!discountCode,
-          });
-        } catch (paymentError: any) {
-          console.error(
-            "\n❌ ========== ERRO AO CRIAR CHECKOUT SESSION ==========",
-          );
-          console.error("🚨 Tipo de erro:", paymentError.constructor.name);
-          console.error("📝 Mensagem:", paymentError.message);
-          console.error("📊 Stack trace:", paymentError.stack);
-
-          if (paymentError.response) {
-            console.error("📡 Resposta HTTP:", {
-              status: paymentError.response.status,
-              statusText: paymentError.response.statusText,
-              data: paymentError.response.data,
-            });
-          }
-
-          if (paymentError.raw) {
-            console.error("🔍 Dados brutos do erro:", paymentError.raw);
-          }
-
-          console.error("⚙️ Configuração do ambiente no momento do erro:", {
-            NODE_ENV: process.env.NODE_ENV,
-            APP_DOMAIN: process.env.APP_DOMAIN,
-            APP_PROTOCOL: process.env.APP_PROTOCOL,
-            APP_PORT: process.env.APP_PORT,
-            HAS_STRIPE_KEY: !!process.env.STRIPE_SECRET_KEY,
-            STRIPE_KEY_PREFIX: process.env.STRIPE_SECRET_KEY?.substring(0, 7),
-          });
-          console.error(
-            "======================================================\n",
-          );
-          // Fallback para o comportamento anterior
-          res.status(201).json({
-            ...userWithoutPassword,
-            message:
-              "Dados salvos com sucesso. Complete o pagamento para ativar sua conta.",
-            requiresPayment: true,
-            planId: planId,
-          });
+        } catch (error) {
+          console.error("Erro ao buscar código de desconto:", error);
         }
       }
-    } catch (error) {
+
+      const paymentProvider = getPaymentProvider();
+      if (!paymentProvider) {
+        return res.status(500).json({ 
+          message: "Provedor de pagamento não disponível. Tente novamente mais tarde." 
+        });
+      }
+
+      const metadata = {
+        regToken: regToken,
+        registrationId: registration.id.toString(),
+        planId: planId.toString(),
+        billingInterval: billingInterval,
+        flow: 'registration',
+        ...(discountCode && { discountCodeId: discountCode.id.toString() }),
+      };
+
+      const customerData = {
+        email: registrationData.email,
+        name: fullName,
+        phone: registrationData.phone,
+        cpf: registrationData.cpf,
+        address: {
+          line1: `${logradouro || ''}, ${numero || ''}${complemento ? `, ${complemento}` : ""}`,
+          city: cidade || '',
+          state: uf || '',
+          postal_code: cep ? cep.replace(/\D/g, "") : '',
+          country: "BR",
+        },
+        metadata: {
+          registrationId: registration.id.toString(),
+          crm: `${registrationData.crm || registrationData.crmNumber || ''}-${registrationData.crmUf || registrationData.crmState || ''}`,
+          medicalSpecialtyId: registrationData.medicalSpecialtyId?.toString(),
+          source: "medsync-registration",
+        },
+      };
+
+      const { successUrl, cancelUrl } = getStripeCallbacks();
+
+      const priceId = billingInterval === "yearly"
+        ? plan.priceIdYearly
+        : plan.priceIdMonthly;
+
+      if (!priceId) {
+        return res.status(400).json({ 
+          message: `Plano ${plan.name} não possui configuração de preço para ${billingInterval === 'yearly' ? 'anual' : 'mensal'}` 
+        });
+      }
+
+      let promotionCodeId: string | undefined;
+      let allowPromotionCodes = true;
+
+      if (billingInterval === "yearly") {
+        console.log("Plano ANUAL - buscando código WELCOME50...");
+        const welcomePromo = await findPromotionCodeByCode("WELCOME50");
+        if (welcomePromo && welcomePromo.isActive && welcomePromo.stripePromotionCodeId) {
+          promotionCodeId = welcomePromo.stripePromotionCodeId;
+          allowPromotionCodes = false;
+          console.log(`WELCOME50 será aplicado automaticamente: ${promotionCodeId}`);
+        }
+      }
+
+      const checkoutParams = {
+        priceId,
+        mode: "subscription" as const,
+        customerData: customerData,
+        successUrl,
+        cancelUrl,
+        metadata,
+        promotionCodeId,
+        allowPromotionCodes,
+      };
+
+      console.log(`Criando checkout session - Plano: ${plan.name}, Intervalo: ${billingInterval}, Price: ${priceId}`);
+
+      const checkoutSession =
+        await paymentProvider.createCheckoutSession(checkoutParams);
+
+      console.log(`Checkout session criada: ${checkoutSession.id}, URL: ${checkoutSession.url}`);
+
+      await storage.updateIncompleteRegistration(registration.id, {
+        stripeCheckoutSessionId: checkoutSession.id,
+        leadStatus: 'checkout_created',
+      });
+
+      res.status(200).json({
+        message: "Redirecionando para pagamento...",
+        requiresPayment: true,
+        planId: planId,
+        checkoutUrl: checkoutSession.url,
+        sessionId: checkoutSession.id,
+        discountApplied: !!discountCode,
+      });
+    } catch (error: any) {
       console.error("Erro ao registrar usuário com plano:", error);
-      next(error);
+      res.status(500).json({ 
+        message: "Erro ao processar registro. Tente novamente." 
+      });
     }
   });
 
@@ -1152,6 +1070,98 @@ export function setupAuth(app: Express) {
         error: "Erro interno do servidor",
         details: error instanceof Error ? error.message : "Erro desconhecido",
       });
+    }
+  });
+
+  const cpfLookupAttempts = new Map<string, { count: number; lastAttempt: number }>();
+  const CPF_RATE_LIMIT = 5;
+  const CPF_RATE_WINDOW = 60 * 1000;
+
+  app.post("/api/incomplete-registration/lookup", async (req: any, res: any) => {
+    try {
+      const { cpf, firstName, lastName } = req.body;
+
+      if (!cpf || cpf.replace(/\D/g, '').length < 11) {
+        return res.status(400).json({ error: "CPF inválido" });
+      }
+
+      if (!firstName || firstName.trim().length < 2) {
+        return res.status(400).json({ error: "Nome inválido" });
+      }
+
+      const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
+      const now = Date.now();
+      const attempts = cpfLookupAttempts.get(clientIp);
+      if (attempts) {
+        if (now - attempts.lastAttempt < CPF_RATE_WINDOW) {
+          if (attempts.count >= CPF_RATE_LIMIT) {
+            return res.status(429).json({ error: "Muitas tentativas. Aguarde um momento." });
+          }
+          attempts.count++;
+          attempts.lastAttempt = now;
+        } else {
+          cpfLookupAttempts.set(clientIp, { count: 1, lastAttempt: now });
+        }
+      } else {
+        cpfLookupAttempts.set(clientIp, { count: 1, lastAttempt: now });
+      }
+
+      const registration = await storage.getIncompleteRegistrationByCpf(cpf);
+
+      if (!registration) {
+        return res.status(404).json({ error: "Registro não encontrado" });
+      }
+
+      if (registration.completedAt) {
+        return res.status(404).json({ error: "Registro não encontrado" });
+      }
+
+      const firstNameMatch = registration.firstName?.toLowerCase().trim() === firstName.toLowerCase().trim();
+      if (!firstNameMatch) {
+        return res.status(404).json({ error: "Registro não encontrado" });
+      }
+
+      if (lastName && lastName.trim().length > 0 && registration.lastName) {
+        const lastNameMatch = registration.lastName.toLowerCase().trim() === lastName.toLowerCase().trim();
+        if (!lastNameMatch) {
+          return res.status(404).json({ error: "Registro não encontrado" });
+        }
+      }
+
+      let additionalData: Record<string, any> = {};
+      if (registration.userDataJson && typeof registration.userDataJson === 'object') {
+        additionalData = registration.userDataJson as Record<string, any>;
+      }
+
+      const formData = {
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        cpf: registration.cpf,
+        email: registration.email,
+        phone: registration.phone,
+        username: registration.username,
+        crm: registration.crm,
+        crmUf: registration.crmUf,
+        medicalSpecialtyId: registration.medicalSpecialtyId,
+        cep: registration.cep,
+        address: registration.address,
+        number: registration.number,
+        complement: registration.complement,
+        neighborhood: registration.neighborhood,
+        city: registration.city,
+        state: registration.state,
+        roleId: registration.roleId,
+        ...additionalData,
+      };
+
+      res.json({
+        success: true,
+        data: formData,
+        selectedPlanId: registration.selectedPlanId || null,
+      });
+    } catch (error) {
+      console.error("Erro ao buscar registro incompleto:", error);
+      res.status(500).json({ error: "Erro interno do servidor" });
     }
   });
 }

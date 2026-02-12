@@ -684,6 +684,9 @@ export interface IStorage {
   getIncompleteRegistrationByToken(
     regToken: string,
   ): Promise<IncompleteRegistration | undefined>;
+  getIncompleteRegistrationByCpf(
+    cpf: string,
+  ): Promise<IncompleteRegistration | undefined>;
   updateIncompleteRegistration(
     id: number,
     updates: Partial<InsertIncompleteRegistration>,
@@ -5047,6 +5050,25 @@ export class DatabaseStorage implements IStorage {
     subscription: InsertUserSubscription,
   ): Promise<UserSubscription> {
     try {
+      const existing = await db
+        .select()
+        .from(userSubscriptions)
+        .where(eq(userSubscriptions.userId, subscription.userId))
+        .limit(1);
+
+      if (existing.length > 0) {
+        console.log(`⚠️ Usuário ${subscription.userId} já possui assinatura (ID: ${existing[0].id}). Atualizando em vez de criar nova.`);
+        const [updated] = await db
+          .update(userSubscriptions)
+          .set({
+            ...subscription,
+            updatedAt: new Date(),
+          })
+          .where(eq(userSubscriptions.id, existing[0].id))
+          .returning();
+        return updated;
+      }
+
       const [newSubscription] = await db
         .insert(userSubscriptions)
         .values(subscription)
@@ -5623,45 +5645,60 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
 
     if (existing.length > 0) {
-      // Atualizar registro existente - merge inteligente (não sobrescrever dados existentes com null)
       const existingData = existing[0];
 
-      // Extrair dados adicionais (CRM, endereço, etc.) que não são campos básicos
-      const {
-        email,
-        firstName,
-        lastName,
-        cpf,
-        phone,
-        username,
-        selectedPlanId,
-        currentStep,
-        userAgent,
-        ipAddress,
-        source,
-        ...additionalData
-      } = data;
+      const knownFields = [
+        'email', 'firstName', 'lastName', 'cpf', 'phone', 'username',
+        'selectedPlanId', 'currentStep', 'userAgent', 'ipAddress', 'source',
+        'regToken', 'leadStatus', 'billingInterval', 'password',
+        'crm', 'crmUf', 'medicalSpecialtyId', 'roleId',
+        'cep', 'address', 'number', 'complement', 'neighborhood', 'city', 'state', 'country',
+        'stripeCustomerId', 'stripeCheckoutSessionId', 'userDataJson',
+        'completedAt', 'lastActivityAt', 'createdAt', 'updatedAt',
+      ];
 
-      // Merge do userDataJson existente com novos dados
+      const additionalData: Record<string, any> = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (!knownFields.includes(key) && value !== undefined) {
+          additionalData[key] = value;
+        }
+      }
+
       const existingUserData = existingData.userDataJson || {};
       const mergedUserData = { ...existingUserData, ...additionalData };
 
-      const mergedData = {
+      const mergedData: Record<string, any> = {
         firstName: data.firstName || existingData.firstName,
         lastName: data.lastName || existingData.lastName,
         cpf: data.cpf || existingData.cpf,
         phone: data.phone || existingData.phone,
         username: data.username || existingData.username,
         selectedPlanId: data.selectedPlanId || existingData.selectedPlanId,
-        currentStep: data.currentStep, // Sempre atualizar o step atual
+        currentStep: data.currentStep || existingData.currentStep,
         userAgent: data.userAgent || existingData.userAgent,
         ipAddress: data.ipAddress || existingData.ipAddress,
         source: data.source || existingData.source,
-        // Salvar dados extras como JSON
         userDataJson:
           Object.keys(mergedUserData).length > 0 ? mergedUserData : {},
         updatedAt: new Date(),
       };
+
+      if (data.regToken) mergedData.regToken = data.regToken;
+      if (data.leadStatus) mergedData.leadStatus = data.leadStatus;
+      if (data.billingInterval) mergedData.billingInterval = data.billingInterval;
+      if (data.password) mergedData.password = data.password;
+      if (data.crm) mergedData.crm = data.crm;
+      if (data.crmUf) mergedData.crmUf = data.crmUf;
+      if (data.medicalSpecialtyId) mergedData.medicalSpecialtyId = data.medicalSpecialtyId;
+      if (data.roleId) mergedData.roleId = data.roleId;
+      if (data.cep) mergedData.cep = data.cep;
+      if (data.address) mergedData.address = data.address;
+      if (data.number) mergedData.number = data.number;
+      if (data.complement !== undefined) mergedData.complement = data.complement;
+      if (data.neighborhood) mergedData.neighborhood = data.neighborhood;
+      if (data.city) mergedData.city = data.city;
+      if (data.state) mergedData.state = data.state;
+      if (data.country) mergedData.country = data.country;
 
       const updated = await db
         .update(incompleteRegistrations)
@@ -5835,6 +5872,29 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
 
     return result[0];
+  }
+
+  async getIncompleteRegistrationByCpf(
+    cpf: string,
+  ): Promise<IncompleteRegistration | undefined> {
+    const normalizedCpf = cpf.replace(/\D/g, '');
+    
+    const results = await db
+      .select()
+      .from(incompleteRegistrations)
+      .where(eq(incompleteRegistrations.cpf, cpf))
+      .orderBy(desc(incompleteRegistrations.createdAt))
+      .limit(1);
+
+    if (results.length > 0) return results[0];
+
+    const allWithCpf = await db
+      .select()
+      .from(incompleteRegistrations)
+      .orderBy(desc(incompleteRegistrations.createdAt));
+
+    const match = allWithCpf.find(r => r.cpf && r.cpf.replace(/\D/g, '') === normalizedCpf);
+    return match;
   }
 
   async updateIncompleteRegistration(

@@ -584,7 +584,7 @@ export function RegisterModal({
               className="flex-1 font-semibold py-3 px-8 rounded-lg transition-colors duration-200 bg-accent hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="button-finalize-payment"
             >
-              {registerWithPlanMutation.isPending ? 'Processando...' : 'Finalizar Pagamento'}
+              {registerWithPlanMutation.isPending ? 'Processando...' : 'Confirmar e Continuar'}
             </button>
           </div>
         </div>

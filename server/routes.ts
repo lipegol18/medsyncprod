@@ -14699,14 +14699,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return await handleUpgradeFlow(session);
       }
 
-      // FLUXO DE REGISTRO: Ativar usuário que completou pagamento durante registro
-      // Detectado quando existe userId e flow=registration no metadata
+      // FLUXO DE REGISTRO LEGADO: Manter compatibilidade para sessões criadas antes da migração
+      // Novos registros usam regToken e caem no handleRegTokenBasedRegistration acima
       if (metadata?.userId && metadata?.flow === 'registration') {
+        console.log(`⚠️ [LEGADO] Sessão de registro com userId detectada (fluxo antigo): userId=${metadata.userId}`);
         return await handlePendingPaymentFlow(session);
       }
 
       // FLUXO DE TRIAL UPGRADE: Ativar usuário que fez upgrade do trial expirado
-      // Detectado quando existe userId e flow=trial_upgrade no metadata
       if (metadata?.userId && metadata?.flow === 'trial_upgrade') {
         console.log(`🔄 [TRIAL_UPGRADE] Detectado fluxo trial_upgrade para usuário ${metadata.userId}`);
         return await handlePendingPaymentFlow(session);
@@ -14955,21 +14955,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`🎯 [MATERIALIZAÇÃO] Iniciando para regToken: ${regToken}`);
 
-      // 1. IDEMPOTÊNCIA: Verificar se já foi processado via regToken
-      const existingUser = await storage.getUserByRegToken(regToken);
-
-      if (existingUser) {
-        console.log(`✅ [IDEMPOTENTE] Usuário já materializado para regToken ${regToken}`);
-        return true;
-      }
-
-      // 2. Buscar registro incompleto
+      // 1. Buscar registro incompleto
       const registration = await storage.getIncompleteRegistrationByToken(regToken);
       if (!registration) {
         console.error(`❌ [MATERIALIZAÇÃO] Registro não encontrado para regToken: ${regToken}`);
         return false;
       }
 
+      // 2. IDEMPOTÊNCIA: Verificar se já foi processado
       if (registration.completedAt) {
         console.log(`✅ [IDEMPOTENTE] Registro já completado: ${registration.id}`);
         return true;
@@ -15011,6 +15004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const addressData = {
             userId: user.id,
+            cep: registration.cep || '',
             logradouro: registration.address || '',
             numero: registration.number || '',
             complemento: registration.complement || '',
@@ -15424,11 +15418,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const session = await paymentProvider.getCheckoutSession(sessionId);
       console.log(`📋 Session status: ${session.status}, payment_status: ${session.payment_status}`);
 
-      // Verificar se há metadata do usuário
       const userId = session.metadata?.userId;
+      const regToken = session.metadata?.regToken;
       const planId = session.metadata?.planId;
 
-      if (!userId || !planId) {
+      let userRecord: any = null;
+
+      if (userId) {
+        const user = await db.select().from(users).where(eq(users.id, parseInt(userId))).limit(1);
+        userRecord = user[0];
+      } else if (regToken) {
+        const registration = await storage.getIncompleteRegistrationByToken(regToken);
+        if (registration && registration.completedAt && registration.email) {
+          const user = await db.select().from(users).where(eq(users.email, registration.email)).limit(1);
+          userRecord = user[0];
+        } else if (registration && !registration.completedAt) {
+          return res.json({
+            success: false,
+            message: 'Pagamento confirmado! Aguarde enquanto finalizamos seu cadastro...',
+            session: {
+              id: session.id,
+              status: session.status,
+              payment_status: session.payment_status,
+              customer_email: session.customer_details?.email,
+              amount_total: session.amount_total
+            }
+          });
+        }
+      }
+
+      if (!userRecord && !planId) {
         return res.json({
           success: false,
           message: 'Processando dados do checkout...',
@@ -15441,10 +15460,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         });
       }
-
-      // Buscar usuário no banco
-      const user = await db.select().from(users).where(eq(users.id, parseInt(userId))).limit(1);
-      const userRecord = user[0];
       
       if (!userRecord) {
         console.log(`❌ Usuário não encontrado: ${userId}`);

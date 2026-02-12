@@ -27,7 +27,10 @@ export function RegisterForm({
   defaultValues
 }: RegisterFormProps) {
   const [isLoadingCEP, setIsLoadingCEP] = useState(false);
+  const [isLoadingPreviousData, setIsLoadingPreviousData] = useState(false);
+  const [showPrefillBanner, setShowPrefillBanner] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const prefillAttemptedRef = useRef<Set<string>>(new Set());
 
   const registerForm = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
@@ -79,7 +82,67 @@ export function RegisterForm({
     }
   }, [defaultValues]);
 
-  // Função para buscar dados do CEP
+  const handleCpfAutofill = async (cpfValue: string) => {
+    const cleanCpf = cpfValue.replace(/\D/g, '');
+    if (cleanCpf.length !== 11) return;
+    if (prefillAttemptedRef.current.has(cleanCpf)) return;
+
+    const firstNameValue = registerForm.getValues('firstName');
+    if (!firstNameValue || firstNameValue.trim().length < 2) return;
+
+    const lastNameValue = registerForm.getValues('lastName');
+
+    prefillAttemptedRef.current.add(cleanCpf);
+
+    try {
+      setIsLoadingPreviousData(true);
+      const response = await fetch('/api/incomplete-registration/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpf: cpfValue, firstName: firstNameValue, lastName: lastNameValue }),
+      });
+      if (!response.ok) return;
+
+      const result = await response.json();
+      if (!result.success || !result.data) return;
+
+      const d = result.data;
+      const fieldsToFill: Array<{ key: keyof RegisterForm; value: any }> = [
+        { key: 'email', value: d.email },
+        { key: 'phone', value: d.phone },
+        { key: 'username', value: d.username },
+        { key: 'crm', value: d.crm },
+        { key: 'crmUf', value: d.crmUf },
+        { key: 'medicalSpecialtyId', value: d.medicalSpecialtyId },
+        { key: 'cep', value: d.cep },
+        { key: 'address', value: d.address },
+        { key: 'number', value: d.number },
+        { key: 'complement', value: d.complement },
+        { key: 'neighborhood', value: d.neighborhood },
+        { key: 'city', value: d.city },
+        { key: 'state', value: d.state },
+        { key: 'roleId', value: d.roleId },
+      ];
+
+      let filledCount = 0;
+      fieldsToFill.forEach(({ key, value }) => {
+        if (value && !registerForm.getValues(key)) {
+          registerForm.setValue(key, value, { shouldValidate: true });
+          filledCount++;
+        }
+      });
+
+      if (filledCount > 0) {
+        setShowPrefillBanner(true);
+        setTimeout(() => setShowPrefillBanner(false), 5000);
+      }
+    } catch (error) {
+      // silently ignore
+    } finally {
+      setIsLoadingPreviousData(false);
+    }
+  };
+
   const handleCEPChange = async (cep: string) => {
     const cleanCEP = cep.replace(/\D/g, '');
     
@@ -185,6 +248,24 @@ export function RegisterForm({
         <p className="modal-subtitle text-sm">Crie sua conta para começar a usar</p>
       </div>
       
+      {showPrefillBanner && (
+        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 animate-in fade-in duration-300">
+          <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-sm text-blue-700">
+            Identificamos seus dados de um cadastro anterior. Os campos foram preenchidos automaticamente. Confira e ajuste o que precisar.
+          </p>
+        </div>
+      )}
+
+      {isLoadingPreviousData && (
+        <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+          <p className="text-sm text-gray-600">Verificando dados anteriores...</p>
+        </div>
+      )}
+
       <form 
         id="register-form"
         ref={formRef}
@@ -233,10 +314,10 @@ export function RegisterForm({
                 registerForm.trigger('cpf');
               }}
               onBlur={(e) => {
-                // Usar setTimeout para não interferir na navegação TAB
                 setTimeout(() => {
                   registerForm.trigger('cpf');
                   onFieldValidation('cpf', e.target.value);
+                  handleCpfAutofill(e.target.value);
                 }, 100);
               }}
               className="input-medsync"
