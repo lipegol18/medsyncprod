@@ -146,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiRequest("/api/logout", "POST");
     },
     onSuccess: () => {
+      queryClient.clear();
       queryClient.setQueryData(["/api/user"], null);
       toast({
         title: "Logout realizado com sucesso",
