@@ -28,9 +28,10 @@ export type InsertMedicalSpecialty = z.infer<typeof insertMedicalSpecialtySchema
 // Regiões Anatômicas do Corpo Humano
 export const anatomicalRegions = pgTable("anatomical_regions", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(), // Ex: "Ombro", "Joelho", "Coluna", etc.
-  title: text("title"), // Título associado à região do corpo
-  description: text("description"), // Breve descrição sobre a região
+  name: text("name").notNull().unique(),
+  title: text("title"),
+  description: text("description"),
+  iconKey: text("icon_key"),
 });
 
 export const insertAnatomicalRegionSchema = createInsertSchema(anatomicalRegions).omit({
@@ -39,6 +40,20 @@ export const insertAnatomicalRegionSchema = createInsertSchema(anatomicalRegions
 
 export type AnatomicalRegion = typeof anatomicalRegions.$inferSelect;
 export type InsertAnatomicalRegion = z.infer<typeof insertAnatomicalRegionSchema>;
+
+// Associação Especialidade Médica ↔ Região Anatômica (many-to-many)
+export const specialtyAnatomicalRegions = pgTable("specialty_anatomical_regions", {
+  id: serial("id").primaryKey(),
+  medicalSpecialtyId: integer("medical_specialty_id").notNull().references(() => medicalSpecialties.id, { onDelete: 'cascade' }),
+  anatomicalRegionId: integer("anatomical_region_id").notNull().references(() => anatomicalRegions.id, { onDelete: 'cascade' }),
+});
+
+export const insertSpecialtyAnatomicalRegionSchema = createInsertSchema(specialtyAnatomicalRegions).omit({
+  id: true,
+});
+
+export type SpecialtyAnatomicalRegion = typeof specialtyAnatomicalRegions.$inferSelect;
+export type InsertSpecialtyAnatomicalRegion = z.infer<typeof insertSpecialtyAnatomicalRegionSchema>;
 
 // Procedimentos Cirúrgicos Médicos
 export const surgicalProcedures = pgTable("surgical_procedures", {

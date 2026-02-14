@@ -1,6 +1,3 @@
-// Anatomical Region Icon Mapping
-// Maps anatomical region IDs to their corresponding SVG icons (gray and blue variants)
-
 import shoulderGray from '@/assets/icons/anatomy/shoulder_gray.svg';
 import shoulderBlue from '@/assets/icons/anatomy/shoulder_blue.svg';
 import elbowGray from '@/assets/icons/anatomy/elbow_gray.svg';
@@ -21,19 +18,46 @@ export interface RegionIcons {
   blue: string;
 }
 
-export const ANATOMICAL_REGION_ICONS: Record<number, RegionIcons> = {
-  1: { gray: shoulderGray, blue: shoulderBlue },        // Ombro
-  2: { gray: elbowGray, blue: elbowBlue },              // Cotovelo
-  3: { gray: handWristGray, blue: handWristBlue },      // Mão e Punho
-  4: { gray: hipGray, blue: hipBlue },                  // Quadril
-  5: { gray: kneeGray, blue: kneeBlue },                // Joelho
-  6: { gray: footAnkleGray, blue: footAnkleBlue },      // Pé e Tornozelo
-  7: { gray: spineGray, blue: spineBlue },              // Coluna Vertebral
+export const STATIC_ICON_MAP: Record<string, RegionIcons> = {
+  shoulder: { gray: shoulderGray, blue: shoulderBlue },
+  elbow: { gray: elbowGray, blue: elbowBlue },
+  hand_and_wrist: { gray: handWristGray, blue: handWristBlue },
+  hip: { gray: hipGray, blue: hipBlue },
+  knee: { gray: kneeGray, blue: kneeBlue },
+  foot_and_ankle: { gray: footAnkleGray, blue: footAnkleBlue },
+  spine: { gray: spineGray, blue: spineBlue },
 };
 
-export function getAnatomicalRegionIcon(regionId: number, selected: boolean = false): string | undefined {
-  const icons = ANATOMICAL_REGION_ICONS[regionId];
-  if (!icons) return undefined;
-  
-  return selected ? icons.blue : icons.gray;
+const LEGACY_ID_TO_KEY: Record<number, string> = {
+  1: 'shoulder',
+  2: 'elbow',
+  3: 'hand_and_wrist',
+  4: 'hip',
+  5: 'knee',
+  6: 'foot_and_ankle',
+  7: 'spine',
+};
+
+export function getIconByKey(iconKey: string, selected: boolean = false): string | undefined {
+  const staticIcons = STATIC_ICON_MAP[iconKey];
+  if (staticIcons) {
+    return selected ? staticIcons.blue : staticIcons.gray;
+  }
+  const variant = selected ? 'blue' : 'gray';
+  return `/api/anatomy-icons/${iconKey}_${variant}.svg`;
+}
+
+export function getAnatomicalRegionIcon(
+  regionId: number,
+  selected: boolean = false,
+  iconKey?: string | null
+): string | undefined {
+  if (iconKey) {
+    return getIconByKey(iconKey, selected);
+  }
+  const legacyKey = LEGACY_ID_TO_KEY[regionId];
+  if (legacyKey) {
+    return getIconByKey(legacyKey, selected);
+  }
+  return undefined;
 }

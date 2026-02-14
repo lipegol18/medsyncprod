@@ -49,8 +49,8 @@ import documentProcessingRoutes from "./routes/document-processing";
 import { randomUUID } from "crypto";
 import { getPaymentProvider } from "./payments";
 import { db, pool } from "./db";
-import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans, medicalSpecialties, userSubscriptions, discountCodes, insertDiscountCodeSchema, webhookEvents, surgeryAppointments, insertHealthInsurancePlanSchema } from "../shared/schema";
-import { eq, and, or, isNull, sql, desc, asc, not, ne, count, isNotNull } from "drizzle-orm";
+import { users, roles, medicalOrders, cidCodes, procedures, insertCidCodeSchema, medicalOrderCids, medicalOrderProcedures, medicalOrderOpmeItems, medicalOrderSuppliers, opmeItems, suppliers, surgicalApproaches, insertSurgicalApproachSchema, surgicalApproachProcedures, insertSurgicalApproachProcedureSchema, surgicalApproachOpmeItems, insertSurgicalApproachOpmeItemSchema, surgicalApproachSuppliers, insertSurgicalApproachSupplierSchema, clinicalJustifications, insertClinicalJustificationSchema, surgicalApproachJustifications, insertSurgicalApproachJustificationSchema, medicalOrderSurgicalApproaches, insertMedicalOrderSurgicalApproachSchema, medicalOrderSurgicalProcedures, insertMedicalOrderSurgicalProcedureSchema, medicalOrderStatusHistory, insertMedicalOrderStatusHistorySchema, orderStatuses, anatomicalRegions, surgicalProcedures, anatomicalRegionProcedures, surgicalProcedureApproaches, insertSurgicalProcedureApproachSchema, medicalOrderSupplierManufacturers, insertMedicalOrderSupplierManufacturerSchema, surgicalProcedureConductCids, patients, hospitals, subscriptionPlans, medicalSpecialties, userSubscriptions, discountCodes, insertDiscountCodeSchema, webhookEvents, surgeryAppointments, insertHealthInsurancePlanSchema, specialtyAnatomicalRegions } from "../shared/schema";
+import { eq, and, or, isNull, sql, desc, asc, not, ne, count, isNotNull, inArray } from "drizzle-orm";
 import { normalizeText } from "./utils/normalize";
 
 // Configurar o armazenamento de upload
@@ -7405,9 +7405,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // API para buscar todas as regiões anatômicas
   app.get("/api/anatomical-regions", async (req: Request, res: Response) => {
     try {
-      console.log("Buscando todas as regiões anatômicas...");
+      const specialtyId = req.query.specialtyId ? parseInt(req.query.specialtyId as string) : null;
+
+      if (specialtyId && !isNaN(specialtyId)) {
+        const associatedRegions = await db.select({
+          id: anatomicalRegions.id,
+          name: anatomicalRegions.name,
+          title: anatomicalRegions.title,
+          description: anatomicalRegions.description,
+          iconKey: anatomicalRegions.iconKey,
+        })
+          .from(specialtyAnatomicalRegions)
+          .innerJoin(anatomicalRegions, eq(specialtyAnatomicalRegions.anatomicalRegionId, anatomicalRegions.id))
+          .where(eq(specialtyAnatomicalRegions.medicalSpecialtyId, specialtyId))
+          .orderBy(anatomicalRegions.id);
+
+        if (associatedRegions.length > 0) {
+          return res.status(200).json(associatedRegions);
+        }
+      }
+
       const regions = await db.select().from(anatomicalRegions).orderBy(anatomicalRegions.id);
-      console.log(`Encontradas ${regions.length} regiões anatômicas`);
       res.status(200).json(regions);
     } catch (error) {
       console.error("Erro ao buscar regiões anatômicas:", error);
@@ -9076,9 +9094,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SURGICAL PROCEDURES API ENDPOINTS
   // ====================================
 
-  // GET /api/surgical-procedures - Listar todos os procedimentos cirúrgicos
+  // GET /api/surgical-procedures - Listar procedimentos cirúrgicos (com filtro opcional por especialidade)
   app.get("/api/surgical-procedures", isAuthenticated, async (req: Request, res: Response) => {
     try {
+      const specialtyId = req.query.specialtyId ? parseInt(req.query.specialtyId as string) : null;
+
+      if (specialtyId && !isNaN(specialtyId)) {
+        const regionIds = await db.select({ id: specialtyAnatomicalRegions.anatomicalRegionId })
+          .from(specialtyAnatomicalRegions)
+          .where(eq(specialtyAnatomicalRegions.medicalSpecialtyId, specialtyId));
+
+        if (regionIds.length > 0) {
+          const regionIdList = regionIds.map(r => r.id);
+          const procedureRows = await db.selectDistinct({
+            id: surgicalProcedures.id,
+            name: surgicalProcedures.name,
+            description: surgicalProcedures.description,
+            isActive: surgicalProcedures.isActive,
+          })
+            .from(surgicalProcedures)
+            .innerJoin(anatomicalRegionProcedures, eq(surgicalProcedures.id, anatomicalRegionProcedures.surgicalProcedureId))
+            .where(and(
+              eq(surgicalProcedures.isActive, true),
+              inArray(anatomicalRegionProcedures.anatomicalRegionId, regionIdList)
+            ))
+            .orderBy(surgicalProcedures.name);
+
+          console.log(`Retornando ${procedureRows.length} procedimentos filtrados pela especialidade ${specialtyId}`);
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          return res.json(procedureRows);
+        }
+      }
+
       const procedures = await db.select().from(surgicalProcedures).where(eq(surgicalProcedures.isActive, true));
       
       console.log(`Retornando ${procedures.length} procedimentos cirúrgicos`);
@@ -13079,6 +13127,347 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Erro ao remover fornecedor:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  // ==================== ADMIN APIS - REGIÕES ANATÔMICAS ====================
+
+  // GET /api/admin/anatomical-regions - Listar todas as regiões anatômicas
+  app.get("/api/admin/anatomical-regions", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const regions = await db.select().from(anatomicalRegions).orderBy(anatomicalRegions.name);
+      res.json(regions);
+    } catch (error) {
+      console.error("Erro ao listar regiões anatômicas:", error);
+      res.status(500).json({ error: "Erro ao listar regiões anatômicas" });
+    }
+  });
+
+  // POST /api/admin/anatomical-regions - Criar nova região anatômica
+  app.post("/api/admin/anatomical-regions", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { name, title, description, iconKey } = req.body;
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "O nome da região é obrigatório" });
+      }
+      const existing = await db.select().from(anatomicalRegions).where(eq(anatomicalRegions.name, name.trim()));
+      if (existing.length > 0) {
+        return res.status(409).json({ error: "Já existe uma região anatômica com este nome" });
+      }
+      const [region] = await db.insert(anatomicalRegions).values({
+        name: name.trim(),
+        title: title?.trim() || null,
+        description: description?.trim() || null,
+        iconKey: iconKey?.trim() || null,
+      }).returning();
+      res.status(201).json(region);
+    } catch (error) {
+      console.error("Erro ao criar região anatômica:", error);
+      res.status(500).json({ error: "Erro ao criar região anatômica" });
+    }
+  });
+
+  // PUT /api/admin/anatomical-regions/:id - Atualizar região anatômica
+  app.put("/api/admin/anatomical-regions/:id", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const regionId = parseInt(req.params.id);
+      if (isNaN(regionId)) {
+        return res.status(400).json({ error: "ID inválido" });
+      }
+      const { name, title, description, iconKey } = req.body;
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "O nome da região é obrigatório" });
+      }
+      const existing = await db.select().from(anatomicalRegions).where(
+        and(eq(anatomicalRegions.name, name.trim()), not(eq(anatomicalRegions.id, regionId)))
+      );
+      if (existing.length > 0) {
+        return res.status(409).json({ error: "Já existe outra região anatômica com este nome" });
+      }
+      const [updated] = await db.update(anatomicalRegions)
+        .set({
+          name: name.trim(),
+          title: title?.trim() || null,
+          description: description?.trim() || null,
+          iconKey: iconKey?.trim() || null,
+        })
+        .where(eq(anatomicalRegions.id, regionId))
+        .returning();
+      if (!updated) {
+        return res.status(404).json({ error: "Região anatômica não encontrada" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Erro ao atualizar região anatômica:", error);
+      res.status(500).json({ error: "Erro ao atualizar região anatômica" });
+    }
+  });
+
+  // DELETE /api/admin/anatomical-regions/:id - Remover região anatômica
+  app.delete("/api/admin/anatomical-regions/:id", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const regionId = parseInt(req.params.id);
+      if (isNaN(regionId)) {
+        return res.status(400).json({ error: "ID inválido" });
+      }
+      const associations = await db.select().from(anatomicalRegionProcedures)
+        .where(eq(anatomicalRegionProcedures.anatomicalRegionId, regionId));
+      if (associations.length > 0) {
+        return res.status(409).json({
+          error: `Esta região possui ${associations.length} procedimento(s) associado(s). Remova as associações antes de excluir.`
+        });
+      }
+      const [deleted] = await db.delete(anatomicalRegions)
+        .where(eq(anatomicalRegions.id, regionId))
+        .returning();
+      if (!deleted) {
+        return res.status(404).json({ error: "Região anatômica não encontrada" });
+      }
+      res.json({ success: true, message: "Região anatômica removida com sucesso" });
+    } catch (error) {
+      console.error("Erro ao remover região anatômica:", error);
+      res.status(500).json({ error: "Erro ao remover região anatômica" });
+    }
+  });
+
+  // GET /api/admin/medical-specialties - Listar todas as especialidades médicas
+  app.get("/api/admin/medical-specialties", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const specialties = await db.select({
+        id: medicalSpecialties.id,
+        name: medicalSpecialties.name,
+        isActive: medicalSpecialties.isActive,
+      }).from(medicalSpecialties).orderBy(medicalSpecialties.name);
+      res.json(specialties);
+    } catch (error) {
+      console.error("Erro ao listar especialidades:", error);
+      res.status(500).json({ error: "Erro ao listar especialidades médicas" });
+    }
+  });
+
+  // GET /api/admin/anatomical-regions/:id/specialties - Listar especialidades de uma região
+  app.get("/api/admin/anatomical-regions/:id/specialties", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const regionId = parseInt(req.params.id);
+      if (isNaN(regionId)) return res.status(400).json({ error: "ID inválido" });
+
+      const specialties = await db.select({
+        id: medicalSpecialties.id,
+        name: medicalSpecialties.name,
+      })
+        .from(specialtyAnatomicalRegions)
+        .innerJoin(medicalSpecialties, eq(specialtyAnatomicalRegions.medicalSpecialtyId, medicalSpecialties.id))
+        .where(eq(specialtyAnatomicalRegions.anatomicalRegionId, regionId))
+        .orderBy(medicalSpecialties.name);
+
+      res.json(specialties);
+    } catch (error) {
+      console.error("Erro ao listar especialidades da região:", error);
+      res.status(500).json({ error: "Erro ao listar especialidades" });
+    }
+  });
+
+  // PUT /api/admin/anatomical-regions/:id/specialties - Atualizar especialidades de uma região
+  app.put("/api/admin/anatomical-regions/:id/specialties", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const regionId = parseInt(req.params.id);
+      if (isNaN(regionId)) return res.status(400).json({ error: "ID inválido" });
+
+      const { specialtyIds } = req.body;
+      if (!Array.isArray(specialtyIds)) {
+        return res.status(400).json({ error: "specialtyIds deve ser um array" });
+      }
+
+      const [region] = await db.select().from(anatomicalRegions).where(eq(anatomicalRegions.id, regionId));
+      if (!region) return res.status(404).json({ error: "Região não encontrada" });
+
+      await db.delete(specialtyAnatomicalRegions)
+        .where(eq(specialtyAnatomicalRegions.anatomicalRegionId, regionId));
+
+      if (specialtyIds.length > 0) {
+        await db.insert(specialtyAnatomicalRegions).values(
+          specialtyIds.map((sid: number) => ({
+            medicalSpecialtyId: sid,
+            anatomicalRegionId: regionId,
+          }))
+        );
+      }
+
+      const updated = await db.select({
+        id: medicalSpecialties.id,
+        name: medicalSpecialties.name,
+      })
+        .from(specialtyAnatomicalRegions)
+        .innerJoin(medicalSpecialties, eq(specialtyAnatomicalRegions.medicalSpecialtyId, medicalSpecialties.id))
+        .where(eq(specialtyAnatomicalRegions.anatomicalRegionId, regionId))
+        .orderBy(medicalSpecialties.name);
+
+      res.json({ success: true, specialties: updated });
+    } catch (error) {
+      console.error("Erro ao atualizar especialidades da região:", error);
+      res.status(500).json({ error: "Erro ao atualizar especialidades" });
+    }
+  });
+
+  // POST /api/admin/anatomical-regions/:id/upload-icon - Upload de ícones SVG
+  const anatomyIconStorage = multer.diskStorage({
+    destination: function (_req, _file, cb) {
+      const iconDir = path.join(process.cwd(), 'client', 'src', 'assets', 'icons', 'anatomy');
+      if (!fs.existsSync(iconDir)) {
+        fs.mkdirSync(iconDir, { recursive: true });
+      }
+      cb(null, iconDir);
+    },
+    filename: function (req, file, cb) {
+      const variant = file.fieldname;
+      const iconKey = req.body.iconKey || req.params.iconKey || 'region';
+      const sanitizedKey = iconKey.replace(/[^a-z0-9_]/gi, '_').toLowerCase();
+      cb(null, `${sanitizedKey}_${variant}.svg`);
+    }
+  });
+
+  const anatomyIconUpload = multer({
+    storage: anatomyIconStorage,
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype === 'image/svg+xml' || file.originalname.endsWith('.svg')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Apenas arquivos SVG são permitidos'));
+      }
+    },
+    limits: { fileSize: 500 * 1024 }
+  });
+
+  app.post("/api/admin/anatomical-regions/:id/upload-icons",
+    isAuthenticated, isAdmin,
+    anatomyIconUpload.fields([{ name: 'gray', maxCount: 1 }, { name: 'blue', maxCount: 1 }]),
+    async (req: Request, res: Response) => {
+      try {
+        const regionId = parseInt(req.params.id);
+        if (isNaN(regionId)) {
+          return res.status(400).json({ error: "ID inválido" });
+        }
+
+        const [region] = await db.select().from(anatomicalRegions).where(eq(anatomicalRegions.id, regionId));
+        if (!region) {
+          return res.status(404).json({ error: "Região anatômica não encontrada" });
+        }
+
+        const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+        if (!files || (!files.gray && !files.blue)) {
+          return res.status(400).json({ error: "Envie pelo menos um ícone (gray ou blue)" });
+        }
+
+        let iconKey = req.body.iconKey || region.iconKey;
+        if (!iconKey) {
+          iconKey = region.name.toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        }
+
+        const iconDir = path.join(process.cwd(), 'client', 'src', 'assets', 'icons', 'anatomy');
+
+        if (files.gray && files.gray[0]) {
+          const targetPath = path.join(iconDir, `${iconKey}_gray.svg`);
+          if (files.gray[0].path !== targetPath) {
+            fs.renameSync(files.gray[0].path, targetPath);
+          }
+        }
+        if (files.blue && files.blue[0]) {
+          const targetPath = path.join(iconDir, `${iconKey}_blue.svg`);
+          if (files.blue[0].path !== targetPath) {
+            fs.renameSync(files.blue[0].path, targetPath);
+          }
+        }
+
+        const [updated] = await db.update(anatomicalRegions)
+          .set({ iconKey })
+          .where(eq(anatomicalRegions.id, regionId))
+          .returning();
+
+        res.json({
+          success: true,
+          region: updated,
+          icons: {
+            gray: files.gray ? `/api/anatomy-icons/${iconKey}_gray.svg` : null,
+            blue: files.blue ? `/api/anatomy-icons/${iconKey}_blue.svg` : null,
+          }
+        });
+      } catch (error) {
+        console.error("Erro no upload de ícones:", error);
+        res.status(500).json({ error: "Erro ao fazer upload dos ícones" });
+      }
+    }
+  );
+
+  // DELETE /api/admin/anatomical-regions/:id/icons - Remover ícones
+  app.delete("/api/admin/anatomical-regions/:id/icons", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const regionId = parseInt(req.params.id);
+      if (isNaN(regionId)) {
+        return res.status(400).json({ error: "ID inválido" });
+      }
+      const [region] = await db.select().from(anatomicalRegions).where(eq(anatomicalRegions.id, regionId));
+      if (!region || !region.iconKey) {
+        return res.status(404).json({ error: "Região ou ícones não encontrados" });
+      }
+      const iconDir = path.join(process.cwd(), 'client', 'src', 'assets', 'icons', 'anatomy');
+      const grayPath = path.join(iconDir, `${region.iconKey}_gray.svg`);
+      const bluePath = path.join(iconDir, `${region.iconKey}_blue.svg`);
+      if (fs.existsSync(grayPath)) fs.unlinkSync(grayPath);
+      if (fs.existsSync(bluePath)) fs.unlinkSync(bluePath);
+
+      const [updated] = await db.update(anatomicalRegions)
+        .set({ iconKey: null })
+        .where(eq(anatomicalRegions.id, regionId))
+        .returning();
+
+      res.json({ success: true, region: updated });
+    } catch (error) {
+      console.error("Erro ao remover ícones:", error);
+      res.status(500).json({ error: "Erro ao remover ícones" });
+    }
+  });
+
+  // GET /api/anatomy-icons/:filename - Servir ícones SVG
+  app.get("/api/anatomy-icons/:filename", (req: Request, res: Response) => {
+    const filename = req.params.filename;
+    if (!filename.endsWith('.svg') || filename.includes('..')) {
+      return res.status(400).json({ error: "Arquivo inválido" });
+    }
+    const filePath = path.join(process.cwd(), 'client', 'src', 'assets', 'icons', 'anatomy', filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Ícone não encontrado" });
+    }
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(filePath);
+  });
+
+  // GET /api/admin/anatomical-regions/available-icons - Listar ícones disponíveis
+  app.get("/api/admin/anatomical-regions/available-icons", isAuthenticated, isAdmin, async (_req: Request, res: Response) => {
+    try {
+      const iconDir = path.join(process.cwd(), 'client', 'src', 'assets', 'icons', 'anatomy');
+      if (!fs.existsSync(iconDir)) {
+        return res.json({ icons: [] });
+      }
+      const files = fs.readdirSync(iconDir).filter(f => f.endsWith('.svg'));
+      const iconKeys = new Set<string>();
+      files.forEach(f => {
+        const match = f.match(/^(.+)_(gray|blue)\.svg$/);
+        if (match) iconKeys.add(match[1]);
+      });
+
+      const icons = Array.from(iconKeys).map(key => ({
+        key,
+        gray: files.includes(`${key}_gray.svg`) ? `/api/anatomy-icons/${key}_gray.svg` : null,
+        blue: files.includes(`${key}_blue.svg`) ? `/api/anatomy-icons/${key}_blue.svg` : null,
+      }));
+
+      res.json({ icons });
+    } catch (error) {
+      console.error("Erro ao listar ícones:", error);
+      res.status(500).json({ error: "Erro ao listar ícones disponíveis" });
     }
   });
 

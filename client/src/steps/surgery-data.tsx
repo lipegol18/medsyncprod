@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import RoboMedSyncIcon from "@/assets/icons/MedSync_Icones_Robo Medsync_Sem_Borda.svg";
 import {
   Card,
@@ -215,6 +216,7 @@ interface AnatomicalRegion {
   id: number;
   name: string;
   iconUrl: string | null;
+  iconKey: string | null;
   title: string | null;
   description: string | null;
 }
@@ -1275,6 +1277,10 @@ export function SurgeryData({
   // Estados para a adição de múltiplos CIDs
   const [currentCid, setCurrentCid] = useState<CidCode | null>(null);
   
+  // Obter especialidade do médico logado
+  const { user } = useAuth();
+  const userSpecialtyId = user?.medicalSpecialtyId || null;
+
   // Estados para região anatômica removidos - agora gerenciados pelo AnatomicalRegionSelector
 
   // Estados para busca de procedimentos cirúrgicos
@@ -1282,6 +1288,10 @@ export function SurgeryData({
   const [surgicalProcedureSearchTerm, setSurgicalProcedureSearchTerm] = useState("");
   const [allSurgicalProcedures, setAllSurgicalProcedures] = useState<SurgicalProcedure[]>([]);
   const [surgicalProcedureLoading, setSurgicalProcedureLoading] = useState(false);
+
+  useEffect(() => {
+    setAllSurgicalProcedures([]);
+  }, [userSpecialtyId]);
   
   // Estado para controlar qual procedimento deve abrir o modal de conduta automaticamente
   const [autoOpenConductModalForProcedureId, setAutoOpenConductModalForProcedureId] = useState<number | null>(null);
@@ -1517,11 +1527,14 @@ export function SurgeryData({
 
   // Função para buscar todos os procedimentos cirúrgicos
   const fetchAllSurgicalProcedures = async () => {
-    if (allSurgicalProcedures.length > 0) return; // Já carregados
+    if (allSurgicalProcedures.length > 0) return;
     
     setSurgicalProcedureLoading(true);
     try {
-      const response = await fetch('/api/surgical-procedures', {
+      const url = userSpecialtyId
+        ? `/api/surgical-procedures?specialtyId=${userSpecialtyId}`
+        : '/api/surgical-procedures';
+      const response = await fetch(url, {
         method: 'GET',
         credentials: 'include',
         headers: {
@@ -3465,7 +3478,7 @@ export function SurgeryData({
                         )}
                       </CommandEmpty>
 
-                      {/* Mostrar procedimentos disponíveis da região selecionada primeiro */}
+                      {/* Mostrar procedimentos da região selecionada */}
                       {availableProceduresFromRegion.length > 0 && (
                         <CommandGroup
                           heading="Procedimentos da Região Selecionada"
@@ -3498,10 +3511,10 @@ export function SurgeryData({
                         </CommandGroup>
                       )}
 
-                      {/* Mostrar todos os procedimentos disponíveis */}
-                      {allSurgicalProcedures.length > 0 && (
+                      {/* Quando nenhuma região selecionada, mostrar procedimentos da especialidade */}
+                      {availableProceduresFromRegion.length === 0 && allSurgicalProcedures.length > 0 && (
                         <CommandGroup
-                          heading="Todos os Procedimentos"
+                          heading="Procedimentos da Especialidade"
                           className="text-muted-foreground"
                         >
                           {allSurgicalProcedures
@@ -3511,7 +3524,7 @@ export function SurgeryData({
                             )
                             .map((procedure) => (
                             <CommandItem
-                              key={`all-${procedure.id}`}
+                              key={`spec-${procedure.id}`}
                               value={procedure.name}
                               onSelect={() => handleSelectSurgicalProcedure(procedure)}
                               className="flex items-center justify-between p-3 cursor-pointer hover:bg-accent-light"
@@ -6175,13 +6188,23 @@ export const AnatomicalRegionSelector: React.FC<AnatomicalRegionSelectorProps> =
   setAvailableProceduresFromRegion = () => {},
   initialRegionId = null
 }) => {
+  const { user } = useAuth();
   const [selectedRegion, setSelectedRegion] = useState<AnatomicalRegion | null>(null);
   const [regions, setRegions] = useState<AnatomicalRegion[]>([]);
   const [loadingRegionProcedures, setLoadingRegionProcedures] = useState(false);
 
-  // Carregar regiões anatômicas
+  const specialtyId = user?.medicalSpecialtyId || null;
+
   const { data: regionData, isLoading } = useQuery({
-    queryKey: ["/api/anatomical-regions"],
+    queryKey: ["/api/anatomical-regions", { specialtyId }],
+    queryFn: async () => {
+      const url = specialtyId
+        ? `/api/anatomical-regions?specialtyId=${specialtyId}`
+        : "/api/anatomical-regions";
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) throw new Error("Erro ao carregar regiões");
+      return response.json();
+    },
   });
 
   useEffect(() => {
@@ -6283,7 +6306,7 @@ export const AnatomicalRegionSelector: React.FC<AnatomicalRegionSelectorProps> =
                 title={region.name}
               >
                 <img
-                  src={getAnatomicalRegionIcon(region.id, selectedRegion?.id === region.id) || ''}
+                  src={getAnatomicalRegionIcon(region.id, selectedRegion?.id === region.id, region.iconKey) || ''}
                   alt={region.name}
                 />
                 
