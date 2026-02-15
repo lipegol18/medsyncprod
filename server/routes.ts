@@ -13233,15 +13233,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/admin/medical-specialties - Listar todas as especialidades médicas
   app.get("/api/admin/medical-specialties", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
     try {
-      const specialties = await db.select({
-        id: medicalSpecialties.id,
-        name: medicalSpecialties.name,
-        isActive: medicalSpecialties.isActive,
-      }).from(medicalSpecialties).orderBy(medicalSpecialties.name);
+      const specialties = await db.select().from(medicalSpecialties).orderBy(medicalSpecialties.name);
       res.json(specialties);
     } catch (error) {
       console.error("Erro ao listar especialidades:", error);
       res.status(500).json({ error: "Erro ao listar especialidades médicas" });
+    }
+  });
+
+  // POST /api/admin/medical-specialties - Criar nova especialidade médica
+  app.post("/api/admin/medical-specialties", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { name, description, code, isActive } = req.body;
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "O nome da especialidade é obrigatório" });
+      }
+      const existing = await db.select().from(medicalSpecialties).where(eq(medicalSpecialties.name, name.trim()));
+      if (existing.length > 0) {
+        return res.status(409).json({ error: "Já existe uma especialidade com este nome" });
+      }
+      const [specialty] = await db.insert(medicalSpecialties).values({
+        name: name.trim(),
+        description: description?.trim() || null,
+        code: code?.trim() || null,
+        isActive: isActive !== undefined ? isActive : true,
+      }).returning();
+      res.status(201).json(specialty);
+    } catch (error) {
+      console.error("Erro ao criar especialidade:", error);
+      res.status(500).json({ error: "Erro ao criar especialidade médica" });
+    }
+  });
+
+  // PUT /api/admin/medical-specialties/:id - Atualizar especialidade médica
+  app.put("/api/admin/medical-specialties/:id", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const { name, description, code, isActive } = req.body;
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "O nome da especialidade é obrigatório" });
+      }
+      const existing = await db.select().from(medicalSpecialties)
+        .where(and(eq(medicalSpecialties.name, name.trim()), ne(medicalSpecialties.id, id)));
+      if (existing.length > 0) {
+        return res.status(409).json({ error: "Já existe outra especialidade com este nome" });
+      }
+      const [updated] = await db.update(medicalSpecialties)
+        .set({
+          name: name.trim(),
+          description: description?.trim() || null,
+          code: code?.trim() || null,
+          isActive: isActive !== undefined ? isActive : true,
+          updatedAt: new Date(),
+        })
+        .where(eq(medicalSpecialties.id, id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: "Especialidade não encontrada" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Erro ao atualizar especialidade:", error);
+      res.status(500).json({ error: "Erro ao atualizar especialidade médica" });
+    }
+  });
+
+  // DELETE /api/admin/medical-specialties/:id - Remover especialidade médica
+  app.delete("/api/admin/medical-specialties/:id", isAuthenticated, isAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const usersWithSpecialty = await db.select({ id: users.id }).from(users)
+        .where(eq(users.medicalSpecialtyId, id)).limit(1);
+      if (usersWithSpecialty.length > 0) {
+        return res.status(409).json({ error: "Não é possível remover esta especialidade pois existem médicos associados a ela" });
+      }
+
+      const [deleted] = await db.delete(medicalSpecialties)
+        .where(eq(medicalSpecialties.id, id))
+        .returning();
+      if (!deleted) return res.status(404).json({ error: "Especialidade não encontrada" });
+      res.json({ message: "Especialidade removida com sucesso" });
+    } catch (error) {
+      console.error("Erro ao remover especialidade:", error);
+      res.status(500).json({ error: "Erro ao remover especialidade médica" });
     }
   });
 

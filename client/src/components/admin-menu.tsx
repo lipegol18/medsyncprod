@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, ChevronDown, ScanLine, Hospital, Building, UserCog, Shield, MessageSquare, Heart, Link2, Package, FileText, Activity, Target, CreditCard, Ticket, Bone } from "lucide-react";
+import { Settings, ChevronDown, ScanLine, Hospital, Building, UserCog, Shield, MessageSquare, Heart, Link2, Package, FileText, Activity, Target, CreditCard, Ticket, Bone, Stethoscope } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { t } from "@/lib/i18n";
@@ -156,6 +156,15 @@ export function AdminMenu() {
               <div className="flex items-center w-full">
                 <Bone className="mr-2 h-4 w-4" />
                 <span className="header-text">Regiões Anatômicas</span>
+              </div>
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem asChild>
+            <Link href="/admin/medical-specialties">
+              <div className="flex items-center w-full">
+                <Stethoscope className="mr-2 h-4 w-4" />
+                <span className="header-text">Especialidades Médicas</span>
               </div>
             </Link>
           </DropdownMenuItem>

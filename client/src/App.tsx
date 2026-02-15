@@ -41,6 +41,7 @@ import AdminSubscriptionPlans from "@/pages/admin/subscription-plans";
 import AdminDiscountCodes from "@/pages/admin/discount-codes";
 import ImportStripeCodes from "@/pages/admin/import-stripe-codes";
 import AnatomicalRegions from "@/pages/admin/anatomical-regions";
+import MedicalSpecialties from "@/pages/admin/medical-specialties";
 
 import { useEffect } from "react";
 import { AuthProvider } from "@/hooks/use-auth";
@@ -86,6 +87,7 @@ function Router() {
       <ProtectedRoute path="/admin/discount-codes" component={AdminDiscountCodes} />
       <ProtectedRoute path="/admin/import-stripe-codes" component={ImportStripeCodes} />
       <ProtectedRoute path="/admin/anatomical-regions" component={AnatomicalRegions} />
+      <ProtectedRoute path="/admin/medical-specialties" component={MedicalSpecialties} />
       <ProtectedRoute path="/manufacturer-demo" component={ManufacturerDemo} />
       <ProtectedRoute path="/font-demo" component={FontDemo} />
       <ProtectedRoute path="/logo-test" component={LogoTest} />

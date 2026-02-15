@@ -588,15 +588,16 @@ export default function AnatomicalRegionsPage() {
             {(allSpecialties as MedicalSpecialty[]).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhuma especialidade médica cadastrada.</p>
             ) : (
-              (allSpecialties as MedicalSpecialty[]).filter(s => s.isActive).map((specialty) => (
+              (allSpecialties as MedicalSpecialty[]).map((specialty) => (
                 <div key={specialty.id} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-muted transition-colors">
                   <Checkbox
                     id={`spec-${specialty.id}`}
                     checked={selectedSpecialtyIds.includes(specialty.id)}
                     onCheckedChange={() => toggleSpecialty(specialty.id)}
                   />
-                  <Label htmlFor={`spec-${specialty.id}`} className="cursor-pointer flex-1 text-sm">
+                  <Label htmlFor={`spec-${specialty.id}`} className={`cursor-pointer flex-1 text-sm ${!specialty.isActive ? "text-muted-foreground" : ""}`}>
                     {specialty.name}
+                    {!specialty.isActive && <span className="ml-2 text-xs text-orange-500">(Inativa)</span>}
                   </Label>
                 </div>
               ))
