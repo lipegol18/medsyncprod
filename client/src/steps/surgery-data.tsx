@@ -2,6 +2,7 @@ import * as React from "react";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { sendToN8NWebhook } from "@shared/config";
 import RoboMedSyncIcon from "@/assets/icons/MedSync_Icones_Robo Medsync_Sem_Borda.svg";
 import {
   Card,
@@ -1450,15 +1451,8 @@ export function SurgeryData({
       // Log dos dados sendo enviados para debug
       console.log('📤 Enviando dados para IA:', webhookData);
 
-      // Chamar o webhook
-      const response = await fetch('https://hook-prod.iotninja.com.br/webhook/medsync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer f9a2b8e3-c1d5-4e7f-a6b0-9c8d7e6f5a4b',
-        },
-        body: JSON.stringify(webhookData)
-      });
+      // Chamar o webhook usando configuração centralizada
+      const response = await sendToN8NWebhook('generateJustification', webhookData);
 
       console.log('📥 Status da resposta:', response.status);
       console.log('📥 Headers da resposta:', Object.fromEntries(response.headers.entries()));

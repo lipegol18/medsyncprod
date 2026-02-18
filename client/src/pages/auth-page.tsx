@@ -202,7 +202,7 @@ export default function AuthPage() {
     script.textContent = `
       import { createChat } from 'https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js';
       createChat({
-        webhookUrl: 'https://hook-prod.iotninja.com.br/webhook/9c294984-76bd-43a1-b93f-7a10a390bbd5/chat',
+        webhookUrl: 'https://hook.medsync.med.br/webhook/9c294984-76bd-43a1-b93f-7a10a390bbd5/chat',
         target: '#n8n-chat',
         mode: 'window',
         defaultLanguage: 'pt',

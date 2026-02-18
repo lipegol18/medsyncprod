@@ -38,7 +38,7 @@ export function getSupportWhatsAppNumber(context?: SupportContextType): string {
 
 // Configurações de webhooks N8N
 export const N8N_WEBHOOKS = {
-  baseUrl: "https://hook-prod.iotninja.com.br/webhook",
+  baseUrl: "https://hook.medsync.med.br/webhook",
   
   endpoints: {
     // Formulário "Fale Conosco"
@@ -88,6 +88,13 @@ export const N8N_WEBHOOKS = {
       path: "/resposta-glosa",
       token: "f9a2b8e3-c1d5-4e7f-a6b0-9c8d7e6f5a4b",
       requiredFields: ["motivo_glosa"] as const
+    },
+
+    // Chat Widget N8N
+    chat: {
+      path: "/9c294984-76bd-43a1-b93f-7a10a390bbd5/chat",
+      token: "",
+      requiredFields: [] as const
     }
   }
 } as const;

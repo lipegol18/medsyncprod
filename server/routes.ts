@@ -3,7 +3,7 @@ import { createServer, Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, hasPermission, isAuthenticated, checkTrialStatus } from "./auth";
 import Stripe from "stripe";
-import { WHATSAPP_CONFIG } from "../shared/config";
+import { WHATSAPP_CONFIG, N8N_WEBHOOKS } from "../shared/config";
 
 // Middleware personalizado para relatórios que funciona com autenticação
 function reportAuth(req: any, res: any, next: any) {
@@ -9009,9 +9009,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("🤖 Gerando recurso de glosa com IA...");
       console.log("📋 Payload completo:", JSON.stringify(req.body, null, 2));
 
-      // URL da API externa MedSync Glosa Response
-      const API_URL = "https://hook-prod.iotninja.com.br/webhook/resposta-glosa";
-      const API_TOKEN = "Bearer f9a2b8e3-c1d5-4e7f-a6b0-9c8d7e6f5a4b";
+      // URL da API externa MedSync Glosa Response (via config centralizado)
+      const API_URL = `${N8N_WEBHOOKS.baseUrl}${N8N_WEBHOOKS.endpoints.generateGlossAppeal.path}`;
+      const API_TOKEN = `Bearer ${N8N_WEBHOOKS.endpoints.generateGlossAppeal.token}`;
 
       // Construir payload para API externa (padronizado com pedido cirúrgico)
       const payload = {
