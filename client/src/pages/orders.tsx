@@ -1623,7 +1623,7 @@ export default function Orders() {
                             )}
                             
                             {/* Botão de deletar */}
-                            {order.status === "em_preenchimento" && (
+                            {(order.status === "em_preenchimento" || order.status === "aguardando_envio") && (
                               <Button
                                 variant="outline"
                                 size="sm"
