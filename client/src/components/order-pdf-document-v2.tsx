@@ -602,15 +602,21 @@ export function OrderPDFDocumentV2({
                 </View>
               </View>
               <View style={styles.patientColumn}>
-                <View style={styles.patientRow}>
-                  <Text><Text style={styles.patientLabel}>Plano de Saúde: </Text><Text style={styles.patientValue}>{selectedPatient.insurance || ''}</Text></Text>
-                </View>
-                <View style={styles.patientRow}>
-                  <Text><Text style={styles.patientLabel}>Número da Carteirinha: </Text><Text style={styles.patientValue}>{selectedPatient.insuranceNumber || ''}</Text></Text>
-                </View>
-                <View style={styles.patientRow}>
-                  <Text><Text style={styles.patientLabel}>Tipo do Plano: </Text><Text style={styles.patientValue}>{selectedPatient.plan || ''}</Text></Text>
-                </View>
+                {selectedPatient.insurance ? (
+                  <View style={styles.patientRow}>
+                    <Text><Text style={styles.patientLabel}>Plano de Saúde: </Text><Text style={styles.patientValue}>{selectedPatient.insurance}</Text></Text>
+                  </View>
+                ) : null}
+                {selectedPatient.insuranceNumber ? (
+                  <View style={styles.patientRow}>
+                    <Text><Text style={styles.patientLabel}>Número da Carteirinha: </Text><Text style={styles.patientValue}>{selectedPatient.insuranceNumber}</Text></Text>
+                  </View>
+                ) : null}
+                {selectedPatient.plan ? (
+                  <View style={styles.patientRow}>
+                    <Text><Text style={styles.patientLabel}>Tipo do Plano: </Text><Text style={styles.patientValue}>{selectedPatient.plan}</Text></Text>
+                  </View>
+                ) : null}
               </View>
             </View>
           </View>
@@ -706,7 +712,7 @@ export function OrderPDFDocumentV2({
                   style={groupIndex > 0 ? styles.groupHeader : styles.groupHeaderFirst}
                   break={shouldBreakBefore(`group-header-${key}`)}
                 >
-                  {group.procedureName} → {group.approachName}
+                  Procedimento {groupIndex + 1}
                 </Text>
               )}
 

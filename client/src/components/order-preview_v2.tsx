@@ -126,7 +126,7 @@ const FOOTER_HEIGHT_PX = 60;
 // A4 em pixels (96dpi): 297mm = 1123px, 83.4% = ~936px
 // Margem de segurança de 10% para compensar diferenças de renderização HTML vs react-pdf
 // Reduzido para evitar corte de conteúdo na primeira página
-const PAGE_CONTENT_HEIGHT_PX = 840;
+const PAGE_CONTENT_HEIGHT_PX = 1100;
 
 const formatDateBR = (dateString: string | null | undefined): string => {
   if (!dateString) return "";
@@ -449,18 +449,24 @@ export function OrderPreviewV2({
               <div
                 style={{ fontSize: "9pt", color: "#334155", lineHeight: 1.3 }}
               >
-                <p className="mb-0.5">
-                  <span className="font-bold">Plano de Saúde:</span>{" "}
-                  {selectedPatient.insurance || ""}
-                </p>
-                <p className="mb-0.5">
-                  <span className="font-bold">Número da Carteirinha:</span>{" "}
-                  {selectedPatient.insuranceNumber || ""}
-                </p>
-                <p className="mb-0.5">
-                  <span className="font-bold">Tipo do Plano:</span>{" "}
-                  {selectedPatient.plan || ""}
-                </p>
+                {selectedPatient.insurance && (
+                  <p className="mb-0.5">
+                    <span className="font-bold">Plano de Saúde:</span>{" "}
+                    {selectedPatient.insurance}
+                  </p>
+                )}
+                {selectedPatient.insuranceNumber && (
+                  <p className="mb-0.5">
+                    <span className="font-bold">Número da Carteirinha:</span>{" "}
+                    {selectedPatient.insuranceNumber}
+                  </p>
+                )}
+                {selectedPatient.plan && (
+                  <p className="mb-0.5">
+                    <span className="font-bold">Tipo do Plano:</span>{" "}
+                    {selectedPatient.plan}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -494,12 +500,6 @@ export function OrderPreviewV2({
       const referencesSection = parts.length > 2 ? parts[2] : (parts.length > 1 ? parts[1] : "");
       const hasReferences = referencesPattern.test(clinicalJustification);
       
-      // Divide o texto principal em parágrafos (por linhas vazias ou dupla quebra)
-      const paragraphs = mainText
-        .split(/\n\s*\n/)
-        .map(p => p.trim())
-        .filter(p => p.length > 0);
-      
       // Adiciona cabeçalho da seção de Indicação Clínica
       blocks.push({
         id: "justification-header",
@@ -522,34 +522,52 @@ export function OrderPreviewV2({
         ),
       });
       
-      // Adiciona cada parágrafo como bloco separado
-      paragraphs.forEach((paragraph, index) => {
-        const paragraphLines = Math.ceil(paragraph.length / 115);
-        const paragraphHeight = paragraphLines * 17;
-        blocks.push({
-          id: `justification-paragraph-${index}`,
-          type: "justification-paragraph",
-          estimatedHeight: Math.max(30, paragraphHeight + 10),
-          content: (
-            <div
-              className="text-justify"
-              style={{
-                fontSize: "9pt",
-                color: "#000000",
-                lineHeight: 1.4,
-                fontFamily: "Helvetica, Arial, sans-serif",
-                paddingLeft: "5pt",
-                paddingRight: "5pt",
-                marginBottom: "10px",
-              }}
-            >
-              <MarkdownViewer
-                content={paragraph}
-                className="prose-xs"
-              />
-            </div>
-          ),
-        });
+      // Divide o texto em linhas individuais para permitir quebra de página fluida
+      // (mesmo comportamento do PDF que quebra parágrafos entre páginas)
+      const allLines = mainText.split(/\n/).map(l => l.replace(/\s+$/, ''));
+      let lineBlockIndex = 0;
+      
+      allLines.forEach((line, idx) => {
+        const isBlankLine = line.trim().length === 0;
+        
+        if (isBlankLine) {
+          // Espaço entre parágrafos
+          blocks.push({
+            id: `justification-line-${lineBlockIndex}`,
+            type: "justification-paragraph",
+            estimatedHeight: 10,
+            content: <div style={{ height: "10px" }} />,
+          });
+        } else {
+          // Linha de texto — estimar altura baseado no comprimento
+          const lineWraps = Math.ceil(line.length / 115);
+          const lineHeight = lineWraps * 17;
+          blocks.push({
+            id: `justification-line-${lineBlockIndex}`,
+            type: "justification-paragraph",
+            estimatedHeight: Math.max(17, lineHeight),
+            content: (
+              <div
+                className="text-justify"
+                style={{
+                  fontSize: "9pt",
+                  color: "#000000",
+                  lineHeight: 1.4,
+                  fontFamily: "Helvetica, Arial, sans-serif",
+                  paddingLeft: "5pt",
+                  paddingRight: "5pt",
+                  paddingBottom: "15pt",
+                }}
+              >
+                <MarkdownViewer
+                  content={line}
+                  className="prose-xs"
+                />
+              </div>
+            ),
+          });
+        }
+        lineBlockIndex++;
       });
       
       // Adiciona seção de referências bibliográficas como bloco separado
@@ -675,7 +693,7 @@ export function OrderPreviewV2({
                 className="font-bold mb-2"
                 style={{ fontSize: "12pt", color: "#2ca8e0" }}
               >
-                {group.procedureName} → {group.approachName}
+                Procedimento {groupIndex + 1}
               </p>
             </div>
           ),
@@ -1089,6 +1107,7 @@ export function OrderPreviewV2({
 
   const measurementRef = useRef<HTMLDivElement>(null);
   const [isMeasuring, setIsMeasuring] = useState(true);
+  const [hoverBreakBlockId, setHoverBreakBlockId] = useState<string | null>(null);
 
   useEffect(() => {
     const measureAllElements = () => {
@@ -1121,7 +1140,9 @@ export function OrderPreviewV2({
     let currentPageBlocks: ContentBlock[] = [];
     let currentPageHeight = 0;
 
-    contentBlocks.forEach((block) => {
+    const headerTypes = new Set(["justification-header", "group-header"]);
+
+    contentBlocks.forEach((block, index) => {
       const blockHeight =
         measuredHeights.get(block.id) || block.estimatedHeight;
       const hasForcedBreak = forcedPageBreaks.has(block.id);
@@ -1137,9 +1158,20 @@ export function OrderPreviewV2({
         currentPageHeight + blockHeight > PAGE_CONTENT_HEIGHT_PX &&
         currentPageBlocks.length > 0
       ) {
-        result.push(currentPageBlocks);
-        currentPageBlocks = [];
-        currentPageHeight = 0;
+        // Anti-órfão: se o último bloco da página atual é um header (ex: "INDICAÇÃO CLÍNICA:"),
+        // mover esse header para a próxima página junto com o conteúdo que não coube
+        const lastBlock = currentPageBlocks[currentPageBlocks.length - 1];
+        if (lastBlock && headerTypes.has(lastBlock.type) && currentPageBlocks.length > 1) {
+          const orphanHeader = currentPageBlocks.pop()!;
+          const orphanHeight = measuredHeights.get(orphanHeader.id) || orphanHeader.estimatedHeight;
+          result.push(currentPageBlocks);
+          currentPageBlocks = [orphanHeader];
+          currentPageHeight = orphanHeight;
+        } else {
+          result.push(currentPageBlocks);
+          currentPageBlocks = [];
+          currentPageHeight = 0;
+        }
       }
 
       currentPageBlocks.push(block);
@@ -1268,19 +1300,20 @@ export function OrderPreviewV2({
       style={{
         height: `${HEADER_HEIGHT_PX}px`,
         fontFamily: "Helvetica, Arial, sans-serif",
+        marginTop: "30px",
       }}
     >
       {/* Logo Hospital: PDF usa 80pt x 60pt = ~107px x 80px - centralizado verticalmente */}
       <div
         className="flex items-center justify-start overflow-hidden"
-        style={{ width: "107px", height: "80px" }}
+        style={{ width: "137px", height: "80px", marginLeft: "24px" }}
       >
         {selectedHospital?.logoUrl ? (
           <img
             src={selectedHospital.logoUrl}
             alt={`Logo do ${selectedHospital.name}`}
             style={{
-              maxWidth: "107px",
+              maxWidth: "137px",
               maxHeight: "80px",
               objectFit: "contain",
             }}
@@ -1300,14 +1333,14 @@ export function OrderPreviewV2({
       {/* Logo Médico: PDF usa 160pt x 120pt = ~213px x 160px - centralizado verticalmente */}
       <div
         className="flex items-center justify-end overflow-visible"
-        style={{ width: "256px", height: "96px" }}
+        style={{ width: "286px", height: "96px", marginRight: "24px" }}
       >
         {user?.logoUrl && (
           <img
             src={user.logoUrl}
             alt="Logo do Médico"
             style={{
-              maxWidth: "256px",
+              maxWidth: "286px",
               maxHeight: "192px",
               objectFit: "contain",
             }}
@@ -1439,7 +1472,7 @@ export function OrderPreviewV2({
           style={{
             //width: "210mm", // Mudei para alagargar um pouco mais a pagina
             width: "260mm",
-            height: "297mm",
+            height: "350mm",
             overflow: "hidden",
           }}
         >
@@ -1483,7 +1516,7 @@ export function OrderPreviewV2({
 
                   {/* Botões de mover - aparecem no hover (exceto para blocos fixos) */}
                   {!isFixedBlock && (
-                    <div className="absolute -right-1 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <div className="absolute -right-1 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-30 group-hover:opacity-100 transition-opacity z-10">
                       <TooltipProvider delayDuration={200}>
                         {/* Botão mover para página anterior */}
                         <Tooltip>
@@ -1521,6 +1554,8 @@ export function OrderPreviewV2({
                               size="sm"
                               onClick={() => moveBlockToNextPage(block.id)}
                               disabled={!canMoveNext}
+                              onMouseEnter={() => canMoveNext && setHoverBreakBlockId(block.id)}
+                              onMouseLeave={() => setHoverBreakBlockId(null)}
                               className={`h-7 w-7 p-0 bg-white shadow-md border ${
                                 canMoveNext
                                   ? "border-blue-300 hover:bg-blue-50 hover:border-blue-400"
@@ -1541,6 +1576,22 @@ export function OrderPreviewV2({
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
+                    </div>
+                  )}
+
+                  {hoverBreakBlockId === block.id && (
+                    <div
+                      className="absolute -top-1 left-0 right-0 z-20 pointer-events-none"
+                      style={{
+                        borderTop: "2px dashed #ef4444",
+                      }}
+                    >
+                      <span
+                        className="absolute right-0 -top-4 text-xs text-red-500 bg-white px-1 rounded"
+                        style={{ fontSize: "8pt" }}
+                      >
+                        quebra de página
+                      </span>
                     </div>
                   )}
 
