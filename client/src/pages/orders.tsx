@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import RoboMedSyncIcon from "@/assets/icons/MedSync_Icones_Robo Medsync_Sem_Borda.svg";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -86,6 +86,7 @@ export default function Orders() {
   
   // Estados para filtros
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [selectedHospital, setSelectedHospital] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   
@@ -293,6 +294,16 @@ export default function Orders() {
     }
   }, []);
   
+  // Debounce do searchTerm: só aplica filtro 300ms após o usuário parar de digitar
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const hasActiveFilters = !!(selectedStatus || selectedHospital || debouncedSearchTerm.trim());
+
   // Função para buscar pedidos reais do banco de dados com paginação
   const fetchOrders = async (loadMore = false) => {
     if (!user) return;
@@ -306,16 +317,47 @@ export default function Orders() {
       }
       setIsError(false);
       
-      // Calcular offset para paginação
-      const currentOffset = loadMore ? ordersData.length : 0;
-      
       // Construir URL com parâmetros de paginação e ordenação
       const params = new URLSearchParams();
       if (!isAdmin) params.append('userId', user.id.toString());
-      params.append('limit', ORDERS_PER_PAGE.toString());
-      params.append('offset', currentOffset.toString());
       params.append('sortBy', sortBy);
       params.append('sortOrder', 'desc');
+      
+      // Quando há filtros ativos, buscar todos os pedidos do backend (sem paginação)
+      // para que a filtragem client-side funcione corretamente sobre o conjunto completo
+      if (hasActiveFilters) {
+        // Filtros de status que correspondem a um único statusId — enviar ao backend
+        if (selectedStatus && selectedStatus !== 'needs_scheduling' && selectedStatus !== 'authorized_orders') {
+          const statusCodeToId: Record<string, number> = {
+            "em_preenchimento": 1,
+            "em_avaliacao": 2,
+            "aceito": 3,
+            "autorizado_parcial": 4,
+            "pendencia": 5,
+            "cirurgia_realizada": 6,
+            "cancelado": 7,
+            "aguardando_envio": 8,
+            "recebido": 9,
+            "aguardando_recurso": 10,
+          };
+          const statusIdValue = statusCodeToId[selectedStatus];
+          if (statusIdValue) {
+            params.append('statusId', statusIdValue.toString());
+          }
+        }
+        
+        // Filtro de hospital — enviar ao backend
+        if (selectedHospital) {
+          params.append('hospitalId', selectedHospital);
+        }
+        
+        // Sem limit/offset — retornar todos os pedidos que correspondem ao filtro
+      } else {
+        // Sem filtro ativo: usar paginação normal de 10 em 10
+        const currentOffset = loadMore ? ordersData.length : 0;
+        params.append('limit', ORDERS_PER_PAGE.toString());
+        params.append('offset', currentOffset.toString());
+      }
       
       const url = `/api/medical-orders?${params.toString()}`;
         
@@ -389,10 +431,11 @@ export default function Orders() {
     fetchOrders(true);
   };
 
-  // Buscar pedidos quando o componente carrega ou quando a ordenação muda
+  // Buscar pedidos quando o componente carrega, ordenação muda, ou filtros mudam
+  // hasActiveFilters controla se buscamos com paginação (false) ou todos (true)
   useEffect(() => {
     fetchOrders();
-  }, [user, isAdmin, sortBy]);
+  }, [user, isAdmin, sortBy, selectedStatus, selectedHospital, hasActiveFilters]);
 
   // Função para buscar e atualizar apenas um pedido específico (otimização)
   const fetchOrder = async (orderId: number) => {
@@ -453,9 +496,9 @@ export default function Orders() {
   const applyFilters = () => {
     let filtered = [...ordersData];
 
-    // Filtro por termo de busca (nome do paciente)
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
+    // Filtro por termo de busca (nome do paciente) - usa debouncedSearchTerm
+    if (debouncedSearchTerm.trim()) {
+      const term = debouncedSearchTerm.toLowerCase().trim();
       filtered = filtered.filter(order => 
         order.patientName?.toLowerCase().includes(term) ||
         order.id.toString().includes(term)
@@ -505,10 +548,10 @@ export default function Orders() {
     setFilteredOrdersData(filtered);
   };
 
-  // Aplicar filtros quando os critérios mudarem
+  // Aplicar filtros quando os critérios mudarem (usa debouncedSearchTerm)
   useEffect(() => {
     applyFilters();
-  }, [searchTerm, selectedHospital, selectedStatus, ordersData, appointmentsByOrder]);
+  }, [debouncedSearchTerm, selectedHospital, selectedStatus, ordersData, appointmentsByOrder]);
 
   // Função para formatação de moeda (memoizada)
   const formatCurrency = useMemo(() => (valueInCents: number | null) => {
@@ -526,11 +569,6 @@ export default function Orders() {
     setSelectedStatus("");
   };
 
-  // Memoizar controles de filtro para evitar re-renderização desnecessária
-  const hasActiveFilters = useMemo(() => 
-    searchTerm || selectedHospital || selectedStatus, 
-    [searchTerm, selectedHospital, selectedStatus]
-  );
 
   // Função para agendar procedimento
   const scheduleProcedure = async (orderId: number, date: string) => {
@@ -1709,8 +1747,8 @@ export default function Orders() {
                     </Card>
                   ))}
                   
-                  {/* Botão Carregar Mais */}
-                  {hasMore && !isLoadingMore && (
+                  {/* Botão Carregar Mais - apenas quando não há filtros ativos */}
+                  {hasMore && !isLoadingMore && !hasActiveFilters && (
                     <div className="flex justify-center pt-4">
                       <Button
                         variant="outline"
