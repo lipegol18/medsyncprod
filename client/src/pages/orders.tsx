@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { openWhatsAppChat } from "@/lib/whatsapp";
 import { LoadingLogo } from "@/components/loading-logo";
 import { AppealGenerator } from "@/components/appeal-generator";
+import { MedicalReportGenerator } from "@/components/medical-report-generator";
 import { OrderHistoryTimeline } from "@/components/order-history-timeline";
 
 // Adicionar traduções
@@ -208,6 +209,10 @@ export default function Orders() {
   // Estados para recursos (appeals)
   const [showAppealDialog, setShowAppealDialog] = useState<boolean>(false);
   const [selectedOrderForAppeal, setSelectedOrderForAppeal] = useState<number | null>(null);
+
+  // Estados para laudo médico
+  const [showReportDialog, setShowReportDialog] = useState<boolean>(false);
+  const [selectedOrderForReport, setSelectedOrderForReport] = useState<number | null>(null);
 
   // Estados para modal de agendamento cirúrgico
   const [showAppointmentModal, setShowAppointmentModal] = useState<boolean>(false);
@@ -1659,6 +1664,21 @@ export default function Orders() {
                                 <span className="sm:hidden">Recurso</span>
                               </Button>
                             )}
+
+                            {/* Botão Gerar Laudo */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-sky-200 text-sky-700 hover:bg-sky-50 h-8 sm:h-9 text-xs sm:text-sm font-medium justify-center hover:shadow-sm"
+                              onClick={() => {
+                                setSelectedOrderForReport(order.id);
+                                setShowReportDialog(true);
+                              }}
+                            >
+                              <FileText className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                              <span className="hidden sm:inline">Gerar Laudo</span>
+                              <span className="sm:hidden">Laudo</span>
+                            </Button>
                             
                             {/* Botão de deletar */}
                             {(order.status === "em_preenchimento" || order.status === "aguardando_envio") && (
@@ -1852,6 +1872,28 @@ export default function Orders() {
         onSuccess={() => {
           if (selectedOrderForAppeal) {
             fetchOrder(selectedOrderForAppeal);
+          }
+        }}
+        user={user ? {
+          name: user.name,
+          crm: user.crm?.toString() || undefined,
+          logoUrl: user.logoUrl || undefined,
+          signatureUrl: user.signatureUrl || undefined,
+          signatureNote: user.signatureNote || undefined,
+        } : undefined}
+      />
+
+      {/* Componente Gerador de Laudo Médico */}
+      <MedicalReportGenerator
+        orderId={selectedOrderForReport}
+        isOpen={showReportDialog}
+        onClose={() => {
+          setShowReportDialog(false);
+          setSelectedOrderForReport(null);
+        }}
+        onSuccess={() => {
+          if (selectedOrderForReport) {
+            fetchOrder(selectedOrderForReport);
           }
         }}
         user={user ? {

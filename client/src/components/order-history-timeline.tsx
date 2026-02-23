@@ -235,6 +235,10 @@ export function OrderHistoryTimeline({ isOpen, onClose, orderId }: OrderHistoryT
                         <div className="relative z-10 h-4 w-4 rounded-full bg-purple-100 dark:bg-purple-900/30 ring-4 ring-background flex items-center justify-center">
                           <FileText className="h-2.5 w-2.5 text-purple-600 dark:text-purple-400" />
                         </div>
+                      ) : record.recordType === 'report_pdf_version' ? (
+                        <div className="relative z-10 h-4 w-4 rounded-full bg-teal-100 dark:bg-teal-900/30 ring-4 ring-background flex items-center justify-center">
+                          <FileText className="h-2.5 w-2.5 text-teal-600 dark:text-teal-400" />
+                        </div>
                       ) : record.recordType === 'status_undo' ? (
                         <div className="relative z-10 h-4 w-4 rounded-full bg-orange-100 dark:bg-orange-900/30 ring-4 ring-background flex items-center justify-center">
                           <Undo2 className="h-2.5 w-2.5 text-orange-600 dark:text-orange-400" />
@@ -317,8 +321,29 @@ export function OrderHistoryTimeline({ isOpen, onClose, orderId }: OrderHistoryT
                                 </div>
                                 {(() => {
                                   const notes = record.notes || '';
+                                  const linkMatch = notes.match(/\[(.+?)\]\((.+?)\)/);
                                   const versionMatch = notes.match(/\(v(\d+)\)/);
                                   const fileMatch = notes.match(/Arquivo: (.+\.pdf)/);
+                                  
+                                  if (linkMatch) {
+                                    const textBeforeLink = notes.substring(0, notes.indexOf('[')).trim();
+                                    return (
+                                      <div className="text-sm text-foreground">
+                                        <span>{textBeforeLink}</span>
+                                        <a
+                                          href={linkMatch[2]}
+                                          download
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-1 mt-1 text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 hover:underline"
+                                        >
+                                          <Download className="h-3 w-3" />
+                                          <span>{linkMatch[1]}</span>
+                                        </a>
+                                      </div>
+                                    );
+                                  }
+                                  
                                   const version = versionMatch ? versionMatch[1] : '?';
                                   const fileName = fileMatch ? fileMatch[1] : null;
                                   const filePath = fileName ? `/uploads/orders/${orderId}/documentos/${fileName}` : null;
@@ -336,6 +361,42 @@ export function OrderHistoryTimeline({ isOpen, onClose, orderId }: OrderHistoryT
                                         >
                                           <Download className="h-3 w-3" />
                                           <span>{fileName}</span>
+                                        </a>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            ) : record.recordType === 'report_pdf_version' ? (
+                              <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg p-3">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300">
+                                    Laudo Médico
+                                  </span>
+                                  {record.changedByName && (
+                                    <span className="text-xs text-muted-foreground">
+                                      por {record.changedByName}
+                                    </span>
+                                  )}
+                                </div>
+                                {(() => {
+                                  const notes = record.notes || '';
+                                  const linkMatch = notes.match(/\[(.+?)\]\((.+?)\)/);
+                                  const textBeforeLink = linkMatch ? notes.substring(0, notes.indexOf('[')).trim() : notes;
+                                  
+                                  return (
+                                    <div className="text-sm text-foreground">
+                                      <span>{textBeforeLink}</span>
+                                      {linkMatch && (
+                                        <a
+                                          href={linkMatch[2]}
+                                          download
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-1 mt-1 text-teal-600 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300 hover:underline"
+                                        >
+                                          <Download className="h-3 w-3" />
+                                          <span>{linkMatch[1]}</span>
                                         </a>
                                       )}
                                     </div>

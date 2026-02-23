@@ -579,6 +579,7 @@ export function AppealGenerator({
       if (orderId) {
         queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}`] });
         queryClient.invalidateQueries({ queryKey: ['/api/medical-orders'] });
+        queryClient.invalidateQueries({ queryKey: [`/api/medical-orders/${orderId}/status-history`] });
       }
       
     } catch (error) {

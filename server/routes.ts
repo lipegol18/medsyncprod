@@ -2998,14 +2998,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // **CRÍTICO**: Incluir attachments para correção do bug de finalização
           attachments: order.attachments || [],
           // ✅ DADOS COMPLETOS: patient e hospital para preview de recursos
-          patient: patientData ? {
-            fullName: patientData.fullName,
-            birthDate: patientData.birthDate,
-            gender: patientData.gender,
-            insuranceProviderId: patientData.insuranceProviderId,
-            insuranceNumber: patientData.insuranceNumber,
-            plan: patientData.plan
-          } : null,
+          patient: patientData ? await (async () => {
+            let insuranceName: string | null = null;
+            if (patientData.insuranceProviderId) {
+              const provider = await storage.getHealthInsuranceProvider(patientData.insuranceProviderId);
+              insuranceName = provider?.name || null;
+            }
+            return {
+              fullName: patientData.fullName,
+              birthDate: patientData.birthDate,
+              gender: patientData.gender,
+              insuranceProviderId: patientData.insuranceProviderId,
+              insuranceNumber: patientData.insuranceNumber,
+              plan: patientData.plan,
+              insurance: insuranceName
+            };
+          })() : null,
           hospital: hospitalData ? {
             name: hospitalData.name,
             logoUrl: hospitalData.logoUrl
@@ -8648,11 +8656,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Adicionar nota ao histórico do pedido
+  // Adicionar nota ou registro de documento ao histórico do pedido
   app.post('/api/medical-orders/:id/notes', async (req, res) => {
     try {
       const orderId = parseInt(req.params.id);
-      const { notes } = req.body;
+      const { notes, recordType: customRecordType } = req.body;
       const userId = req.user?.id;
 
       if (isNaN(orderId)) {
@@ -8669,15 +8677,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Pedido não encontrado" });
       }
 
-      // Inserir nota no histórico (sem status_id, é apenas uma nota)
+      const allowedRecordTypes = ['note', 'report_pdf_version', 'appeal_pdf_version', 'pdf_version'];
+      const finalRecordType = customRecordType && allowedRecordTypes.includes(customRecordType) ? customRecordType : 'note';
+
+      // Inserir nota no histórico (sem status_id, é apenas uma nota/registro)
       const [newNote] = await db
         .insert(medicalOrderStatusHistory)
         .values({
           orderId: orderId,
-          statusId: null, // Notas não têm status associado
+          statusId: null,
           changedBy: userId || null,
           notes: notes.trim(),
-          recordType: 'note',
+          recordType: finalRecordType,
         })
         .returning();
 
@@ -8913,6 +8924,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Atualizar o status do pedido para "aguardando_recurso" (ID 10)
       await storage.updateMedicalOrderStatus(orderId, 10);
+
+      // Registrar no histórico que um recurso foi gerado
+      const { pdfUrl } = req.body;
+      if (pdfUrl) {
+        await db
+          .insert(medicalOrderStatusHistory)
+          .values({
+            orderId: orderId,
+            statusId: null,
+            changedBy: userId || null,
+            notes: `Recurso de glosa gerado. [Baixar Recurso](${pdfUrl})`,
+            recordType: 'appeal_pdf_version',
+          });
+      }
 
       console.log(`Recurso criado: ID ${appeal.id} para pedido ${orderId}`);
       console.log(`Status do pedido ${orderId} alterado para: aguardando_recurso`);
