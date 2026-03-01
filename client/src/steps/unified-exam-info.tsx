@@ -84,10 +84,13 @@ export function UnifiedExamInfo({
         orderId={orderId}
       />
 
-      {/* Observações Adicionais */}
+      {/* REMOVIDO TEMPORARIAMENTE — Observações Adicionais
+           Motivo: sem necessidade nem uso actual pelos utilizadores do sistema.
+           Será validado e, se realmente não for de interesse geral,
+           será apagado completamente nas próximas actualizações.
+
       <div className="mb-6 text-foreground" data-testid="order-additional-notes">
         <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
-          {/* Título com fundo azul */}
           <div className="bg-medsync-blue px-4 py-3">
             <div className="flex items-center">
               <StickyNote className="mr-2 h-5 w-5 text-white" />
@@ -96,8 +99,6 @@ export function UnifiedExamInfo({
               </div>
             </div>
           </div>
-          
-          {/* Campo de entrada */}
           <div className="p-5">
             <div className="space-y-2">
               <Textarea
@@ -110,6 +111,7 @@ export function UnifiedExamInfo({
           </div>
         </div>
       </div>
+      */}
 
       {/* Status de salvamento */}
       {isUpdating && (

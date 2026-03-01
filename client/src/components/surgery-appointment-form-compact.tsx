@@ -558,6 +558,11 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                   )}
                 />
 
+                {/* REMOVIDO TEMPORARIAMENTE — Observações Gerais
+                     Motivo: sem necessidade nem uso actual pelos utilizadores do sistema.
+                     Será validado e, se realmente não for de interesse geral,
+                     será apagado completamente nas próximas actualizações.
+
                 <FormField
                   control={form.control}
                   name="notes"
@@ -565,7 +570,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                     <FormItem className="space-y-2">
                       <FormLabel className="text-sm font-medium">Observações Gerais</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <Textarea
                           placeholder="Informações adicionais..."
                           className="min-h-[100px] resize-vertical text-sm focus:border-medsync-blue focus:ring-medsync-blue"
                           {...field}
@@ -575,6 +580,7 @@ export function SurgeryAppointmentFormCompact({ appointment, mode, preSelectedOr
                     </FormItem>
                   )}
                 />
+                */}
 
                 {/* Campo de cancelamento só aparece se status for cancelado */}
                 {form.watch('status') === 'cancelado' && (
