@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,8 @@ import {
   AlertCircle,
   Plus,
   Search,
-  Scissors
+  Scissors,
+  X
 } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -255,7 +255,7 @@ export function SupplierApprovalModal({
             Pedido Aprovado - Selecionar Fornecedores
           </DialogTitle>
           <DialogDescription className="text-muted-foreground text-base">
-            Pedido médico #{orderId} foi aprovado pela operadora.
+            Pedido foi aprovado integralmente pela operadora.
             <br />
             Selecione os fornecedores que foram aprovados para este pedido (você pode selecionar mais de um):
           </DialogDescription>
@@ -278,90 +278,69 @@ export function SupplierApprovalModal({
               </div>
             ) : (
               <>
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {supplierGroups.map((group) => (
-                    <div key={group.key} className="space-y-3">
-                      {/* Cabeçalho do grupo: Procedimento → Conduta */}
-                      <div className="flex items-center gap-2 pb-2 border-b border-accent/30">
-                        <Scissors className="h-5 w-5 text-accent" />
-                        <h3 className="font-semibold text-accent text-base">
-                          {group.procedureName || 'Sem Procedimento'} 
-                          <span className="mx-2 text-muted-foreground">→</span> 
+                    <div key={group.key} className="space-y-2">
+                      {/* Cabeçalho do grupo */}
+                      <div className="flex items-center gap-2 pb-1.5 border-b border-accent/30">
+                        <Scissors className="h-4 w-4 text-accent shrink-0" />
+                        <span className="font-semibold text-accent text-sm">
+                          {group.procedureName || 'Sem Procedimento'}
+                          <span className="mx-1.5 text-muted-foreground">→</span>
                           {group.approachName || 'Sem Conduta'}
-                        </h3>
-                        <Badge variant="outline" className="ml-auto border-accent/50 text-accent text-xs">
+                        </span>
+                        <Badge variant="outline" className="ml-auto border-accent/50 text-accent text-xs shrink-0">
                           {group.suppliers.length} fornecedor{group.suppliers.length > 1 ? 'es' : ''}
                         </Badge>
                       </div>
 
-                      {/* Lista de fornecedores do grupo */}
-                      <div className="grid gap-3 pl-4">
+                      {/* Cards compactos de fornecedores */}
+                      <div className="flex flex-col gap-1.5 pl-3">
                         {group.suppliers.map((orderSupplier: OrderSupplier) => {
                           const supplier = orderSupplier.supplier;
                           const isSelected = selectedSupplierIds.includes(supplier.id);
                           const isAlreadyApproved = orderSupplier.isApproved;
 
                           return (
-                            <Card 
+                            <div
                               key={orderSupplier.id}
-                              className={`cursor-pointer transition-all duration-200 ${
-                                isSelected 
-                                  ? 'border-green-500 bg-green-100/20 dark:bg-green-900/20 shadow-lg' 
-                                  : 'border-border bg-muted/50 hover:bg-muted/80'
-                              }`}
                               onClick={() => handleSupplierSelect(supplier.id)}
                               data-testid={`supplier-card-${orderSupplier.id}`}
+                              className={`flex items-center gap-2 sm:gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all duration-150
+                                ${isSelected
+                                  ? 'border-green-500 bg-green-50/50 dark:bg-green-900/20'
+                                  : 'border-border bg-card hover:bg-muted/30'}
+                              `}
                             >
-                              <CardContent className="p-4">
-                                <div className="flex items-start justify-between">
-                                  <div className="flex items-start gap-4 flex-1">
-                                    {/* Checkbox de seleção múltipla */}
-                                    <div className={`flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center mt-1 ${
-                                      isSelected 
-                                        ? 'border-green-500 bg-green-500' 
-                                        : 'border-muted-foreground'
-                                    }`}>
-                                      {isSelected && (
-                                        <Check className="h-4 w-4 text-white" />
-                                      )}
-                                    </div>
+                              {/* Checkbox */}
+                              <div className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center
+                                ${isSelected ? 'border-green-500 bg-green-500' : 'border-muted-foreground'}`}
+                              >
+                                {isSelected && <Check className="h-3 w-3 text-white" />}
+                              </div>
 
-                                    {/* Informações do fornecedor */}
-                                    <div className="flex-1">
-                                      <div className="flex items-center gap-3">
-                                        <Building2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                                        <div>
-                                          <h3 className="font-semibold text-foreground text-lg">{supplier.name}</h3>
-                                          <p className="text-sm text-muted-foreground">CNPJ: {supplier.cnpj}</p>
-                                          {isAlreadyApproved && !isSelected && (
-                                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                                              (foi aprovado anteriormente)
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
+                              {/* Ícone + nome + CNPJ */}
+                              <Building2 className={`h-4 w-4 shrink-0 ${isSelected ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                              <div className="flex-1 min-w-0 flex items-center gap-2">
+                                <span className="text-sm font-medium text-foreground truncate">{supplier.name}</span>
+                                <span className="text-xs text-muted-foreground hidden sm:inline shrink-0">CNPJ: {supplier.cnpj}</span>
+                              </div>
 
-                                  {/* Badge de status */}
-                                  <div className="flex-shrink-0 ml-4">
-                                    {isSelected ? (
-                                      <Badge variant="outline" className="border-green-500 text-green-600 dark:text-green-400">
-                                        Selecionado
-                                      </Badge>
-                                    ) : isAlreadyApproved ? (
-                                      <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400">
-                                        Clique para selecionar
-                                      </Badge>
-                                    ) : (
-                                      <Badge variant="outline" className="border-border text-muted-foreground">
-                                        Disponível
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
+                              {/* Badge de estado */}
+                              {isSelected ? (
+                                <Badge variant="outline" className="shrink-0 border-green-500 text-green-600 dark:text-green-400 text-xs">
+                                  Selecionado
+                                </Badge>
+                              ) : isAlreadyApproved ? (
+                                <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-600 dark:text-amber-400 text-xs">
+                                  Aprovado antes
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="shrink-0 border-border text-muted-foreground text-xs">
+                                  Disponível
+                                </Badge>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
@@ -371,16 +350,16 @@ export function SupplierApprovalModal({
 
                 {/* Botão para adicionar novo fornecedor */}
                 {!showAddSupplier && (
-                  <div className="mt-4 pt-4 border-t border-border">
-                    <Button
-                      variant="outline"
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <button
+                      type="button"
                       onClick={() => setShowAddSupplier(true)}
-                      className="w-full border-accent text-accent hover:bg-accent/10"
+                      className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-medsync-blue hover:bg-medsync-blue-dark text-white text-sm font-medium rounded-md transition-colors"
                     >
-                      <Plus className="h-4 w-4 mr-2" />
+                      <Plus className="h-4 w-4" />
                       Adicionar Outro Fornecedor
-                    </Button>
-                    <p className="text-xs text-muted-foreground mt-2 text-center">
+                    </button>
+                    <p className="text-xs text-muted-foreground mt-1.5 text-center">
                       Use esta opção se a operadora aprovou um fornecedor que não estava na lista original
                     </p>
                   </div>
@@ -390,104 +369,83 @@ export function SupplierApprovalModal({
 
             {/* Seção para adicionar novo fornecedor */}
             {showAddSupplier && (
-              <div className="mt-6 p-4 bg-amber-50/20 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800/50 rounded-lg">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-400">Adicionar Novo Fornecedor</h3>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setShowAddSupplier(false);
-                      setSupplierSearchTerm('');
-                    }}
-                    className="text-muted-foreground hover:text-foreground"
+              <div className="mt-3 p-3 bg-muted/40 border border-border rounded-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-foreground">Adicionar Fornecedor</span>
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddSupplier(false); setSupplierSearchTerm(''); }}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    ✕
-                  </Button>
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-                
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Digite o nome ou CNPJ do fornecedor..."
-                      value={supplierSearchTerm}
-                      onChange={(e) => setSupplierSearchTerm(e.target.value)}
-                      className="pl-10 bg-input border-border text-foreground placeholder:text-muted-foreground"
-                    />
+
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Nome ou CNPJ do fornecedor..."
+                    value={supplierSearchTerm}
+                    onChange={(e) => setSupplierSearchTerm(e.target.value)}
+                    className="pl-9 h-9 text-sm bg-input border-border text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+
+                {supplierSearchTerm.length >= 2 && (
+                  <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
+                    {isLoadingSuppliers ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-sm text-muted-foreground">Buscando...</span>
+                      </div>
+                    ) : allSuppliers.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-3">
+                        Nenhum fornecedor encontrado para "{supplierSearchTerm}"
+                      </p>
+                    ) : (
+                      allSuppliers
+                        .filter((supplier: Supplier) =>
+                          !orderSuppliers.some((os: OrderSupplier) => os.supplier.id === supplier.id)
+                        )
+                        .map((supplier: Supplier) => (
+                          <div
+                            key={supplier.id}
+                            onClick={() => handleAddNewSupplier(supplier.id)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted/40 cursor-pointer transition-colors"
+                          >
+                            <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                              <span className="text-sm font-medium text-foreground truncate">
+                                {supplier.name || supplier.companyName}
+                              </span>
+                              <span className="text-xs text-muted-foreground hidden sm:inline shrink-0">
+                                CNPJ: {supplier.cnpj}
+                              </span>
+                            </div>
+                            <Badge variant="outline" className="shrink-0 border-medsync-blue text-medsync-blue text-xs">
+                              Adicionar
+                            </Badge>
+                          </div>
+                        ))
+                    )}
                   </div>
+                )}
 
-                  {supplierSearchTerm.length >= 2 && (
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {isLoadingSuppliers ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="h-5 w-5 animate-spin text-amber-600 dark:text-amber-400" />
-                          <span className="ml-2 text-muted-foreground">Buscando fornecedores...</span>
-                        </div>
-                      ) : allSuppliers.length === 0 ? (
-                        <p className="text-muted-foreground text-center py-4">
-                          Nenhum fornecedor encontrado para "{supplierSearchTerm}"
-                        </p>
-                      ) : (
-                        allSuppliers
-                          .filter((supplier: Supplier) => 
-                            !orderSuppliers.some((os: OrderSupplier) => os.supplier.id === supplier.id)
-                          )
-                          .map((supplier: Supplier) => (
-                            <Card
-                              key={supplier.id}
-                              className="cursor-pointer transition-all duration-200 border-amber-300 dark:border-amber-800/50 bg-amber-50/10 dark:bg-amber-900/10 hover:bg-amber-100/20 dark:hover:bg-amber-900/20"
-                              onClick={() => handleAddNewSupplier(supplier.id)}
-                            >
-                              <CardContent className="p-3">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                                    <div>
-                                      <h4 className="font-medium text-foreground">
-                                        {supplier.name || supplier.companyName}
-                                      </h4>
-                                      <p className="text-xs text-muted-foreground">
-                                        {supplier.companyName && supplier.name !== supplier.companyName && (
-                                          <span>{supplier.companyName} • </span>
-                                        )}
-                                        CNPJ: {supplier.cnpj}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400">
-                                    Adicionar
-                                  </Badge>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))
-                      )}
-                    </div>
-                  )}
-
-                  {supplierSearchTerm.length < 2 && supplierSearchTerm.length > 0 && (
-                    <p className="text-muted-foreground text-sm">
-                      Digite pelo menos 2 caracteres para buscar
-                    </p>
-                  )}
-                </div>
+                {supplierSearchTerm.length > 0 && supplierSearchTerm.length < 2 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Digite pelo menos 2 caracteres para buscar
+                  </p>
+                )}
               </div>
             )}
 
             {/* Informações adicionais */}
-            <div className="mt-6 p-4 bg-accent/10 border border-accent/30 rounded-lg">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-accent flex-shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className="text-accent font-medium mb-1">Informação Importante:</p>
-                  <p className="text-muted-foreground">
-                    Selecione o fornecedor que foi oficialmente aprovado pela operadora de saúde. 
-                    Você pode alterar sua seleção a qualquer momento antes de confirmar.
-                    Esta informação será registrada no sistema para controle e auditoria.
-                  </p>
-                </div>
-              </div>
+            <div className="mt-3 p-3 bg-accent/10 border border-accent/30 rounded-lg flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-accent shrink-0 mt-0.5" />
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-accent">Atenção: </span>
+                Selecione o fornecedor aprovado pela operadora. A seleção pode ser alterada antes de confirmar e será registrada para controle e auditoria.
+              </p>
             </div>
           </div>
         )}

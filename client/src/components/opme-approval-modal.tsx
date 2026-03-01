@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { CheckCircle, XCircle, Package, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -162,17 +161,6 @@ export function OpmeApprovalModal({
 
   const canSave = opmeApprovals.every(item => item.status !== null);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'aprovado':
-        return <CheckCircle className="h-4 w-4 text-emerald-600" />;
-      case 'negado':
-        return <XCircle className="h-4 w-4 text-destructive" />;
-      default:
-        return null;
-    }
-  };
-
   if (!isOpen) return null;
 
   const hasOpmeItems = opmeItems && opmeItems.length > 0;
@@ -239,138 +227,82 @@ export function OpmeApprovalModal({
             </button>
           </div>
         ) : (
-          <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+          <div className="mb-4 sm:mb-6 flex flex-col gap-2">
             {opmeApprovals.map((item) => (
               <div
                 key={item.id}
-                className="border border-border rounded-lg p-3 sm:p-4 bg-muted/50"
+                className={`flex items-center gap-2 sm:gap-3 px-3 py-2.5 rounded-lg border transition-colors
+                  ${item.status === 'aprovado'
+                    ? 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800'
+                    : item.status === 'negado'
+                    ? 'bg-red-50/50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
+                    : 'bg-card border-border hover:bg-muted/30'}
+                `}
               >
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-6">
-                  {/* Informações do Item */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <div className="flex items-center gap-1">
-                        <Package className="h-3 w-3 sm:h-4 sm:w-4 text-accent" />
-                        <span className="text-xs sm:text-sm font-bold text-accent">
-                          OPME
-                        </span>
-                      </div>
-                      {/* Status Visual - Mobile inline */}
-                      <div className="sm:hidden ml-auto">
-                        {item.status && (
-                          <div className="flex items-center gap-1">
-                            {getStatusIcon(item.status)}
-                            <span className={`text-xs font-medium ${
-                              item.status === 'aprovado' ? 'text-green-600 dark:text-green-400' : 'text-destructive'
-                            }`}>
-                              {item.status === 'aprovado' 
-                                ? `${item.quantityApproved}/${item.quantityRequested}` 
-                                : 'Negado'}
-                            </span>
-                          </div>
-                        )}
-                        {!item.status && (
-                          <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">
-                            Pendente
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <h4 className="font-medium text-foreground text-sm sm:text-base mb-1 sm:mb-2 line-clamp-2">
-                      {item.technicalName}
-                    </h4>
-                    {item.commercialName && (
-                      <p className="text-xs text-muted-foreground mb-1">
-                        {item.commercialName}
-                      </p>
-                    )}
-                    <div className="text-xs sm:text-sm text-muted-foreground">
-                      Qtd. solicitada: <span className="font-medium">{item.quantityRequested}</span>
-                    </div>
+                {/* Ícone OPME */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <Package className="h-3 w-3 text-accent" />
+                  <span className="text-xs font-bold text-accent">OPME</span>
+                </div>
+
+                {/* Nome técnico + nome comercial */}
+                <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                  <span className="text-sm text-foreground truncate">{item.technicalName}</span>
+                  {item.commercialName && (
+                    <span className="shrink-0 text-xs text-muted-foreground truncate hidden sm:inline">
+                      · {item.commercialName}
+                    </span>
+                  )}
+                </div>
+
+                {/* Qtd solicitada */}
+                <span className="shrink-0 text-xs text-muted-foreground hidden sm:inline">
+                  Qtd: <span className="font-medium text-foreground">{item.quantityRequested}</span>
+                </span>
+
+                {/* Input de quantidade aprovada (inline, só quando aprovado) */}
+                {item.status === 'aprovado' && (
+                  <div className="shrink-0 flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground hidden sm:inline">Aprv:</span>
+                    <Input
+                      type="number"
+                      min="1"
+                      max={item.quantityRequested}
+                      value={item.quantityApproved}
+                      onChange={(e) =>
+                        handleQuantityChange(item.id, parseInt(e.target.value) || 1)
+                      }
+                      className="h-7 w-14 text-xs text-center bg-input border-border focus:border-accent px-1"
+                    />
                   </div>
+                )}
 
-                  {/* Controles de Aprovação */}
-                  <div className="flex flex-col gap-3 sm:gap-4 sm:min-w-[280px]">
-                    {/* Botões de Status */}
-                    <div>
-                      <Label className="text-xs sm:text-sm text-foreground mb-1.5 sm:mb-2 block">Status</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(item.id, 'aprovado')}
-                          className={`
-                            px-2 sm:px-3 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 border-2
-                            ${item.status === 'aprovado'
-                              ? "bg-emerald-600 border-emerald-500 text-destructive-foreground shadow-lg"
-                              : "bg-muted border-border text-muted-foreground hover:bg-muted/80 hover:border-border"
-                            }
-                          `}
-                        >
-                          Aprovado
-                        </button>
-                        
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(item.id, 'negado')}
-                          className={`
-                            px-2 sm:px-3 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 border-2
-                            ${item.status === 'negado'
-                              ? "bg-destructive border-destructive text-destructive-foreground shadow-lg shadow-destructive/30"
-                              : "bg-muted border-border text-muted-foreground hover:bg-muted/80 hover:border-border"
-                            }
-                          `}
-                        >
-                          Negado
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Campo de Quantidade (só aparece se aprovado) */}
-                    {item.status === 'aprovado' && (
-                      <div>
-                        <Label className="text-xs sm:text-sm text-foreground mb-1.5 sm:mb-2 block">
-                          Qtd. Aprovada
-                        </Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          max={item.quantityRequested}
-                          value={item.quantityApproved}
-                          onChange={(e) => 
-                            handleQuantityChange(item.id, parseInt(e.target.value) || 1)
-                          }
-                          className="bg-input text-foreground border-border focus:border-accent h-9"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Máx: {item.quantityRequested}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Status Visual - Desktop only */}
-                    <div className="hidden sm:flex items-center">
-                      {item.status && (
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(item.status)}
-                          <span className={`text-sm font-medium ${
-                            item.status === 'aprovado' ? 'text-green-600 dark:text-green-400' : 'text-destructive'
-                          }`}>
-                            {item.status === 'aprovado' ? 'Autorizado' : 'Negado'}
-                            {item.status === 'aprovado' && (
-                              <span className="text-muted-foreground ml-1">
-                                ({item.quantityApproved}/{item.quantityRequested})
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                      )}
-                      {!item.status && (
-                        <span className="text-sm text-orange-600 dark:text-orange-400 font-medium">
-                          Aguardando decisão
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                {/* Botões Aprovado / Negado */}
+                <div className="shrink-0 flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(item.id, 'aprovado')}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-all duration-150
+                      ${item.status === 'aprovado'
+                        ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
+                        : 'bg-muted border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-700'
+                      }`}
+                  >
+                    <CheckCircle className="h-3 w-3" />
+                    <span className="hidden sm:inline">Aprovado</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(item.id, 'negado')}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-all duration-150
+                      ${item.status === 'negado'
+                        ? 'bg-destructive border-destructive text-white shadow-sm'
+                        : 'bg-muted border-border text-muted-foreground hover:border-red-400 hover:text-red-700'
+                      }`}
+                  >
+                    <XCircle className="h-3 w-3" />
+                    <span className="hidden sm:inline">Negado</span>
+                  </button>
                 </div>
               </div>
             ))}

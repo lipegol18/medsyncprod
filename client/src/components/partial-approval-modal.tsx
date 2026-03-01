@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { CheckCircle, XCircle, Hash, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -175,17 +173,6 @@ export function PartialApprovalModal({
 
   // Verificar se todos os procedimentos têm status definido para habilitar o botão salvar
   const canSave = procedureApprovals.every(proc => proc.status !== null);
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'aprovado':
-        return <CheckCircle className="h-4 w-4 text-emerald-600" />;
-      case 'negado':
-        return <XCircle className="h-4 w-4 text-destructive" />;
-      default:
-        return null;
-    }
-  };
 
   // Calcular estatísticas para o modal de decisão (procedimentos + OPME)
   const approvedItems = procedureApprovals.filter(proc => proc.status === 'aprovado').length + opmeApprovedCount;
@@ -382,142 +369,86 @@ export function PartialApprovalModal({
         )}
 
         {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="text-muted-foreground">Carregando procedimentos...</div>
+          <div className="flex justify-center py-8">
+            <div className="text-muted-foreground text-sm">Carregando procedimentos...</div>
           </div>
         ) : (
-          <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+          <div className="mb-4 sm:mb-6 flex flex-col gap-2">
             {procedureApprovals.map((procedure) => (
               <div
                 key={procedure.id}
-                className="border border-border rounded-lg p-3 sm:p-4 bg-muted/50"
+                className={`flex items-center gap-2 sm:gap-3 px-3 py-2.5 rounded-lg border transition-colors
+                  ${procedure.status === 'aprovado'
+                    ? 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800'
+                    : procedure.status === 'negado'
+                    ? 'bg-red-50/50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
+                    : 'bg-card border-border hover:bg-muted/30'}
+                `}
               >
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-6">
-                  {/* Informações do Procedimento */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                      <div className="flex items-center gap-1">
-                        <Hash className="h-3 w-3 sm:h-4 sm:w-4 text-accent" />
-                        <span className="text-xs sm:text-sm font-bold text-accent">
-                          {procedure.code}
-                        </span>
-                      </div>
-                      {procedure.isMain && (
-                        <span className="inline-block px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 text-xs rounded-full">
-                          Principal
-                        </span>
-                      )}
-                      {/* Status Visual - Mobile inline */}
-                      <div className="sm:hidden ml-auto">
-                        {procedure.status && (
-                          <div className="flex items-center gap-1">
-                            {getStatusIcon(procedure.status)}
-                            <span className={`text-xs font-medium ${
-                              procedure.status === 'aprovado' ? 'text-green-600 dark:text-green-400' : 'text-destructive'
-                            }`}>
-                              {procedure.status === 'aprovado' 
-                                ? `${procedure.quantityApproved}/${procedure.quantityRequested}` 
-                                : 'Negado'}
-                            </span>
-                          </div>
-                        )}
-                        {!procedure.status && (
-                          <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">
-                            Pendente
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <h4 className="font-medium text-foreground text-sm sm:text-base mb-1 sm:mb-2 line-clamp-2">
-                      {procedure.name}
-                    </h4>
-                    <div className="text-xs sm:text-sm text-muted-foreground">
-                      Qtd. solicitada: <span className="font-medium">{procedure.quantityRequested}</span>
-                    </div>
+                {/* Código */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <Hash className="h-3 w-3 text-accent" />
+                  <span className="text-xs font-bold text-accent">{procedure.code}</span>
+                </div>
+
+                {/* Nome + badge Principal */}
+                <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                  <span className="text-sm text-foreground truncate">{procedure.name}</span>
+                  {procedure.isMain && (
+                    <span className="shrink-0 inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 text-[10px] rounded-full leading-none">
+                      Principal
+                    </span>
+                  )}
+                </div>
+
+                {/* Qtd solicitada */}
+                <span className="shrink-0 text-xs text-muted-foreground hidden sm:inline">
+                  Qtd: <span className="font-medium text-foreground">{procedure.quantityRequested}</span>
+                </span>
+
+                {/* Input de quantidade aprovada (inline, só quando aprovado) */}
+                {procedure.status === 'aprovado' && (
+                  <div className="shrink-0 flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground hidden sm:inline">Aprv:</span>
+                    <Input
+                      type="number"
+                      min="1"
+                      max={procedure.quantityRequested}
+                      value={procedure.quantityApproved}
+                      onChange={(e) =>
+                        handleQuantityChange(procedure.id, parseInt(e.target.value) || 1)
+                      }
+                      className="h-7 w-14 text-xs text-center bg-input border-border focus:border-accent px-1"
+                    />
                   </div>
+                )}
 
-                  {/* Controles de Aprovação */}
-                  <div className="flex flex-col gap-3 sm:gap-4 sm:min-w-[280px]">
-                    {/* Botões de Status */}
-                    <div>
-                      <Label className="text-xs sm:text-sm text-foreground mb-1.5 sm:mb-2 block">Status</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(procedure.id, 'aprovado')}
-                          className={`
-                            px-2 sm:px-3 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 border-2
-                            ${procedure.status === 'aprovado'
-                              ? "bg-emerald-600 border-emerald-500 text-destructive-foreground shadow-lg"
-                              : "bg-muted border-border text-muted-foreground hover:bg-muted/80 hover:border-border"
-                            }
-                          `}
-                        >
-                          Aprovado
-                        </button>
-                        
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(procedure.id, 'negado')}
-                          className={`
-                            px-2 sm:px-3 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 border-2
-                            ${procedure.status === 'negado'
-                              ? "bg-destructive border-destructive text-destructive-foreground shadow-lg shadow-destructive/30"
-                              : "bg-muted border-border text-muted-foreground hover:bg-muted/80 hover:border-border"
-                            }
-                          `}
-                        >
-                          Negado
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Campo de Quantidade (só aparece se aprovado) */}
-                    {procedure.status === 'aprovado' && (
-                      <div>
-                        <Label className="text-xs sm:text-sm text-foreground mb-1.5 sm:mb-2 block">
-                          Qtd. Aprovada
-                        </Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          max={procedure.quantityRequested}
-                          value={procedure.quantityApproved}
-                          onChange={(e) => 
-                            handleQuantityChange(procedure.id, parseInt(e.target.value) || 1)
-                          }
-                          className="bg-input text-foreground border-border focus:border-accent h-9"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Máx: {procedure.quantityRequested}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Status Visual - Desktop only */}
-                    <div className="hidden sm:flex items-center">
-                      {procedure.status && (
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(procedure.status)}
-                          <span className={`text-sm font-medium ${
-                            procedure.status === 'aprovado' ? 'text-green-600 dark:text-green-400' : 'text-destructive'
-                          }`}>
-                            {procedure.status === 'aprovado' ? 'Autorizado' : 'Negado'}
-                            {procedure.status === 'aprovado' && (
-                              <span className="text-muted-foreground ml-1">
-                                ({procedure.quantityApproved}/{procedure.quantityRequested})
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                      )}
-                      {!procedure.status && (
-                        <span className="text-sm text-orange-600 dark:text-orange-400 font-medium">
-                          Aguardando decisão
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                {/* Botões Aprovado / Negado */}
+                <div className="shrink-0 flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(procedure.id, 'aprovado')}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-all duration-150
+                      ${procedure.status === 'aprovado'
+                        ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
+                        : 'bg-muted border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-700'
+                      }`}
+                  >
+                    <CheckCircle className="h-3 w-3" />
+                    <span className="hidden sm:inline">Aprovado</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStatusChange(procedure.id, 'negado')}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-all duration-150
+                      ${procedure.status === 'negado'
+                        ? 'bg-destructive border-destructive text-white shadow-sm'
+                        : 'bg-muted border-border text-muted-foreground hover:border-red-400 hover:text-red-700'
+                      }`}
+                  >
+                    <XCircle className="h-3 w-3" />
+                    <span className="hidden sm:inline">Negado</span>
+                  </button>
                 </div>
               </div>
             ))}
