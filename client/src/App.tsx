@@ -26,6 +26,7 @@ import LgpdPage from "@/pages/lgpd";
 import ContactMessages from "@/pages/admin/contact-messages";
 import ManufacturerDemo from "@/pages/manufacturer-demo";
 import FontDemo from "@/pages/font-demo";
+import PreviewLab from "@/pages/preview-lab";
 import CheckoutSuccess from "@/pages/checkout-success";
 import CheckoutCancel from "@/pages/checkout-cancel";
 import StripeTest from "@/pages/stripe-test";
@@ -90,6 +91,7 @@ function Router() {
       <ProtectedRoute path="/admin/medical-specialties" component={MedicalSpecialties} />
       <ProtectedRoute path="/manufacturer-demo" component={ManufacturerDemo} />
       <ProtectedRoute path="/font-demo" component={FontDemo} />
+      <ProtectedRoute path="/preview-lab" component={PreviewLab} />
       <ProtectedRoute path="/logo-test" component={LogoTest} />
       <ProtectedRoute path="/admin/ocr-validator" component={OcrValidator} />
       

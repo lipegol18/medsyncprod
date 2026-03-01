@@ -19,19 +19,36 @@ export function parseMarkdownToPdf(markdown: string): MarkdownLine[] {
   
   const lines = markdown.split('\n');
   const result: MarkdownLine[] = [];
+  let pendingParagraphParts: string[] = [];
+
+  const flushParagraph = () => {
+    if (pendingParagraphParts.length > 0) {
+      const joined = pendingParagraphParts.join(' ');
+      result.push({
+        type: 'paragraph',
+        segments: parseInlineFormatting(joined),
+      });
+      pendingParagraphParts = [];
+    }
+  };
   
   for (const line of lines) {
     const trimmedLine = line.trim();
     
-    if (!trimmedLine) continue;
+    if (!trimmedLine) {
+      flushParagraph();
+      continue;
+    }
     
     if (trimmedLine === '---' || trimmedLine === '***' || trimmedLine === '___') {
+      flushParagraph();
       result.push({ type: 'horizontalRule', segments: [] });
       continue;
     }
     
     const headingMatch = trimmedLine.match(/^(#{1,3})\s+(.+)$/);
     if (headingMatch) {
+      flushParagraph();
       const level = headingMatch[1].length;
       const content = headingMatch[2];
       result.push({ 
@@ -44,6 +61,7 @@ export function parseMarkdownToPdf(markdown: string): MarkdownLine[] {
     
     const bulletListMatch = trimmedLine.match(/^[-*]\s+(.+)$/);
     if (bulletListMatch) {
+      flushParagraph();
       const content = bulletListMatch[1];
       result.push({ 
         type: 'listItem', 
@@ -54,6 +72,7 @@ export function parseMarkdownToPdf(markdown: string): MarkdownLine[] {
     
     const numberedListMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
     if (numberedListMatch) {
+      flushParagraph();
       const num = parseInt(numberedListMatch[1], 10);
       const content = numberedListMatch[2];
       result.push({ 
@@ -64,12 +83,10 @@ export function parseMarkdownToPdf(markdown: string): MarkdownLine[] {
       continue;
     }
     
-    result.push({ 
-      type: 'paragraph', 
-      segments: parseInlineFormatting(trimmedLine) 
-    });
+    pendingParagraphParts.push(trimmedLine);
   }
   
+  flushParagraph();
   return result;
 }
 

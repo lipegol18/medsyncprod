@@ -1,4 +1,6 @@
+import { Fragment } from 'react';
 import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer';
+import MedSyncLogoPng from '../assets/medsync-logo-new.png';
 
 interface CidItemWithAssociation {
   cid: {
@@ -116,7 +118,7 @@ Font.register({
 const styles = StyleSheet.create({
   page: {
     paddingTop: 95,
-    paddingBottom: 55,
+    paddingBottom: 40,
     paddingHorizontal: 20,
     fontFamily: 'Helvetica',
     fontSize: 9,
@@ -145,7 +147,7 @@ const styles = StyleSheet.create({
   },
   fixedFooter: {
     position: 'absolute',
-    bottom: 15,
+    bottom: 0,
     left: 20,
     right: 20,
     height: 40,
@@ -156,6 +158,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  footerLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  footerLogoImg: {
+    width: 40,
+    height: 13,
+    objectFit: 'contain',
+  },
+  footerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  footerRight: {
+    flex: 1,
+    alignItems: 'flex-end',
   },
   footerText: {
     fontSize: 8,
@@ -211,13 +232,15 @@ const styles = StyleSheet.create({
   justificationText: {
     fontSize: 9,
     color: '#000000',
-    lineHeight: 1.4,
+    lineHeight: 1.6,
     textAlign: 'justify',
-    marginBottom: 15,
+    marginBottom: 0,
     paddingHorizontal: 5,
+    wordBreak: 'break-all',
   },
   procedureInfoRow: {
     flexDirection: 'row',
+    marginTop: 15,
     marginBottom: 15,
     gap: 20,
     paddingHorizontal: 5,
@@ -344,6 +367,13 @@ const parsePorteValue = (porte: string | null | undefined): number => {
   return (numero * 100) + (letra.charCodeAt(0) - 'A'.charCodeAt(0) + 1);
 };
 
+const breakLongWords = (text: string, maxLen = 50): string =>
+  text.split(' ').map(word =>
+    word.length <= maxLen
+      ? word
+      : (word.match(new RegExp(`.{1,${maxLen}}`, 'g')) ?? [word]).join('\u200B')
+  ).join(' ');
+
 const parseMarkdownToPdf = (text: string): { type: 'text' | 'listItem'; segments: { text: string; bold?: boolean; italic?: boolean }[] }[] => {
   const lines = text.split('\n');
   return lines.filter(line => line.trim()).map(line => {
@@ -355,17 +385,17 @@ const parseMarkdownToPdf = (text: string): { type: 'text' | 'listItem'; segments
     let match;
     while ((match = boldItalicRegex.exec(cleanLine)) !== null) {
       if (match.index > lastIndex) {
-        segments.push({ text: cleanLine.slice(lastIndex, match.index) });
+        segments.push({ text: breakLongWords(cleanLine.slice(lastIndex, match.index)) });
       }
-      if (match[1]) segments.push({ text: match[1], bold: true, italic: true });
-      else if (match[2]) segments.push({ text: match[2], bold: true });
-      else if (match[3]) segments.push({ text: match[3], italic: true });
+      if (match[1]) segments.push({ text: breakLongWords(match[1]), bold: true, italic: true });
+      else if (match[2]) segments.push({ text: breakLongWords(match[2]), bold: true });
+      else if (match[3]) segments.push({ text: breakLongWords(match[3]), italic: true });
       lastIndex = match.index + match[0].length;
     }
     if (lastIndex < cleanLine.length) {
-      segments.push({ text: cleanLine.slice(lastIndex) });
+      segments.push({ text: breakLongWords(cleanLine.slice(lastIndex)) });
     }
-    if (segments.length === 0) segments.push({ text: cleanLine });
+    if (segments.length === 0) segments.push({ text: breakLongWords(cleanLine) });
     return { type: isListItem ? 'listItem' : 'text', segments };
   });
 };
@@ -548,12 +578,20 @@ export function OrderPDFDocumentV2({
 
   const PageFooter = () => (
     <View style={styles.fixedFooter} fixed>
-      <Text style={styles.footerText}>
-        Pedido #{orderId} - Gerado em {new Date().toLocaleDateString('pt-BR')}
-      </Text>
-      <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => 
-        `Página ${pageNumber} de ${totalPages}`
-      } />
+      <View style={styles.footerLeft}>
+        <Image style={styles.footerLogoImg} src={MedSyncLogoPng} />
+        <Text style={styles.footerText}>v2.5.3</Text>
+      </View>
+      <View style={styles.footerCenter}>
+        <Text style={styles.footerText}>
+          {orderId ? `Pedido #${orderId}` : ''} - Gerado em {new Date().toLocaleDateString('pt-BR')}
+        </Text>
+      </View>
+      <View style={styles.footerRight}>
+        <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) =>
+          `Página ${pageNumber} de ${totalPages}`
+        } />
+      </View>
     </View>
   );
 
@@ -583,10 +621,7 @@ export function OrderPDFDocumentV2({
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <PageHeader />
-        <PageFooter />
-
-        {selectedPatient && (
+        <PageHeader /><PageFooter />{selectedPatient && (
           <View style={styles.patientSection} wrap={false}>
             <Text style={styles.patientTitle}>Dados do Paciente</Text>
             <View style={styles.patientGrid}>
@@ -620,13 +655,9 @@ export function OrderPDFDocumentV2({
               </View>
             </View>
           </View>
-        )}
-
-        <Text style={styles.mainTitle} break={shouldBreakBefore('title')}>
+        )}<Text style={styles.mainTitle} break={shouldBreakBefore('title')}>
           SOLICITAÇÃO DE PROCEDIMENTO CIRÚRGICO
-        </Text>
-
-        {clinicalJustification && (() => {
+        </Text>{clinicalJustification && (() => {
           const referencesPattern = /^(REFERÊNCIAS BIBLIOGRÁFICAS|REFERÊNCIAS|REFERENCIAS|BIBLIOGRAFIA|REFERENCES):\s*$/im;
           const parts = clinicalJustification.split(referencesPattern);
           const mainText = parts[0] || "";
@@ -638,19 +669,15 @@ export function OrderPDFDocumentV2({
             .map(p => p.trim())
             .filter(p => p.length > 0);
           
-          return (
-            <>
-              <Text 
+          return (<><Text
                 style={{ fontSize: 10, fontWeight: 'bold', color: '#374151', marginBottom: 6 }}
                 break={shouldBreakBefore('justification-header')}
               >
                 INDICAÇÃO CLÍNICA:
-              </Text>
-              
-              {paragraphs.map((paragraph, index) => (
+              </Text>{paragraphs.map((paragraph, index) => (
                 <View 
                   key={index} 
-                  style={{ marginBottom: 8 }}
+                  style={{ marginBottom: 7 }}
                   break={shouldBreakBefore(`justification-paragraph-${index}`)}
                 >
                   {parseMarkdownToPdf(paragraph).map((line, idx) => (
@@ -665,9 +692,7 @@ export function OrderPDFDocumentV2({
                     </Text>
                   ))}
                 </View>
-              ))}
-              
-              {hasReferences && referencesSection.trim() && (
+              ))}{hasReferences && referencesSection.trim() && (
                 <View 
                   style={{ marginBottom: 8 }}
                   break={shouldBreakBefore('justification-references')}
@@ -681,12 +706,8 @@ export function OrderPDFDocumentV2({
                     </Text>
                   ))}
                 </View>
-              )}
-            </>
-          );
-        })()}
-
-        <View style={styles.procedureInfoRow} break={shouldBreakBefore('procedure-info')}>
+              )}</>);
+        })()}<View style={styles.procedureInfoRow} break={shouldBreakBefore('procedure-info')}>
           <View style={styles.procedureInfoColumn}>
             <Text style={styles.procedureInfoLabel}>Caráter do Procedimento:</Text>
             <Text style={styles.procedureInfoValue}>{getProcedureTypeLabel()}</Text>
@@ -695,9 +716,7 @@ export function OrderPDFDocumentV2({
             <Text style={styles.procedureInfoLabel}>Lateralidade do Procedimento:</Text>
             <Text style={styles.procedureInfoValue}>{getLateralityLabel()}</Text>
           </View>
-        </View>
-
-        {groupedItems.map(([key, group], groupIndex) => {
+        </View>{groupedItems.map(([key, group], groupIndex) => {
           const cbhpmNote = cbhpmNotes.sections.get(`name:${group.procedureName}-${group.approachName}`);
           const opmeNote = opmeNotes.sections.get(`name:${group.procedureName}-${group.approachName}`);
           const supplierNote = supplierNotes.sections.get(`name:${group.procedureName}-${group.approachName}`);
@@ -706,17 +725,14 @@ export function OrderPDFDocumentV2({
           );
 
           return (
-            <View key={key}>
-              {hasMultipleGroups && group.approachId && (
+            <Fragment key={key}>{hasMultipleGroups && group.approachId && (
                 <Text 
                   style={groupIndex > 0 ? styles.groupHeader : styles.groupHeaderFirst}
                   break={shouldBreakBefore(`group-header-${key}`)}
                 >
                   Procedimento {groupIndex + 1}
                 </Text>
-              )}
-
-              {group.cids.length > 0 && (
+              )}{group.cids.length > 0 && (
                 <View style={styles.sectionContainer} wrap={false} break={shouldBreakBefore(`cids-${key}`)}>
                   <Text style={styles.sectionTitle}>Códigos CID-10:</Text>
                   <View style={styles.sectionContent}>
@@ -727,9 +743,7 @@ export function OrderPDFDocumentV2({
                     ))}
                   </View>
                 </View>
-              )}
-
-              {sortedProcs.length > 0 && (
+              )}{sortedProcs.length > 0 && (
                 <View style={styles.sectionContainer} wrap={false} break={shouldBreakBefore(`cbhpm-${key}`)}>
                   <Text style={styles.sectionTitle}>Procedimentos Cirúrgicos Necessários:</Text>
                   <View style={styles.sectionContent}>
@@ -742,9 +756,7 @@ export function OrderPDFDocumentV2({
                   </View>
                   {renderObservation(cbhpmNote)}
                 </View>
-              )}
-
-              {group.opmeItems.length > 0 && (
+              )}{group.opmeItems.length > 0 && (
                 <View style={styles.sectionContainer} wrap={false} break={shouldBreakBefore(`opme-${key}`)}>
                   <Text style={styles.sectionTitle}>Lista de Materiais Necessários:</Text>
                   <View style={styles.sectionContent}>
@@ -756,9 +768,7 @@ export function OrderPDFDocumentV2({
                   </View>
                   {renderObservation(opmeNote)}
                 </View>
-              )}
-
-              {group.suppliers.length > 0 && (
+              )}{group.suppliers.length > 0 && (
                 <View style={styles.sectionContainer} wrap={false} break={shouldBreakBefore(`suppliers-${key}`)}>
                   <Text style={styles.sectionTitle}>Fornecedores:</Text>
                   <View style={styles.sectionContent}>
@@ -771,11 +781,9 @@ export function OrderPDFDocumentV2({
                   {renderObservation(supplierNote)}
                 </View>
               )}
-            </View>
+            </Fragment>
           );
-        })}
-
-        {(cbhpmNotes.general || opmeNotes.general || supplierNotes.general) && (
+        })}{(cbhpmNotes.general || opmeNotes.general || supplierNotes.general) && (
           <View style={styles.sectionContainer} break={shouldBreakBefore('general-notes')}>
             {cbhpmNotes.general && (
               <View style={{ marginBottom: 8 }}>
@@ -796,9 +804,7 @@ export function OrderPDFDocumentV2({
               </View>
             )}
           </View>
-        )}
-
-        <View style={styles.signatureSection} wrap={false} break={shouldBreakBefore('signature')}>
+        )}<View style={styles.signatureSection} wrap={false} break={shouldBreakBefore('signature')}>
           <Text style={styles.dateText}>
             {selectedHospital?.name?.includes('Niterói') ? 'Niterói' : 'Rio de Janeiro'}, {new Date().toLocaleDateString('pt-BR')}
           </Text>
@@ -818,10 +824,7 @@ export function OrderPDFDocumentV2({
             <Text style={styles.doctorInfo}>CRM {user?.crm}</Text>
           </View>
         </View>
-      </Page>
-
-      {/* Páginas dos anexos de imagem */}
-      {attachments?.length > 0 && 
+      </Page>{attachments?.length > 0 && 
         attachments
           .filter((attachment: any) => 
             attachment.type === 'image' || 
@@ -838,10 +841,7 @@ export function OrderPDFDocumentV2({
             
             return (
               <Page size="A4" style={styles.page} key={`attachment-${index}`}>
-                <PageHeader />
-                
-                {/* Imagem do anexo */}
-                <View style={{ 
+                <PageHeader /><View style={{ 
                   flex: 1, 
                   alignItems: 'center', 
                   justifyContent: 'center', 
@@ -859,10 +859,7 @@ export function OrderPDFDocumentV2({
                     }} 
                     src={attachment.url} 
                   />
-                </View>
-                
-                {/* Legenda na parte inferior */}
-                <View style={{ 
+                </View><View style={{ 
                   marginTop: 10, 
                   marginBottom: 20,
                   paddingTop: 10, 
@@ -877,9 +874,7 @@ export function OrderPDFDocumentV2({
                   }}>
                     Pedido nº {orderId} - Paciente: {selectedPatient?.fullName} - Anexo {index + 1} / {totalImageAttachments}
                   </Text>
-                </View>
-                
-                <PageFooter />
+                </View><PageFooter />
               </Page>
             );
           })

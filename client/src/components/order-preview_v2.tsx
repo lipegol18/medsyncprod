@@ -5,16 +5,11 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  ChevronUp,
-  ChevronDown,
+  Scissors,
+  X,
+  Trash2,
 } from "lucide-react";
 import { MarkdownViewer } from "@/components/markdown-editor";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import MedSyncLogo from "../assets/medsync-logo-new.svg";
 
 interface CidItemWithAssociation {
@@ -116,17 +111,18 @@ export interface OrderPreviewV2Props {
   cbhpmAdditionalNotes?: string;
   opmeAdditionalNotes?: string;
   supplierAdditionalNotes?: string;
+  orderId?: number;
   onForcedPageBreaksChange?: (breaks: Set<string>) => void;
 }
 
 const HEADER_HEIGHT_PX = 107; // PDF usa 80pt = ~107px
-const FOOTER_HEIGHT_PX = 60;
+const FOOTER_HEIGHT_PT = 40; // igual ao PDF: fixedFooter height: 40pt
 // A4 PDF: 842 pontos total, 702 pontos de conteúdo (80 topo + 60 base)
 // Proporção conteúdo = 702/842 = 83.4%
 // A4 em pixels (96dpi): 297mm = 1123px, 83.4% = ~936px
 // Margem de segurança de 10% para compensar diferenças de renderização HTML vs react-pdf
 // Reduzido para evitar corte de conteúdo na primeira página
-const PAGE_CONTENT_HEIGHT_PX = 1100;
+const PAGE_CONTENT_HEIGHT_PX = 923;
 
 const formatDateBR = (dateString: string | null | undefined): string => {
   if (!dateString) return "";
@@ -145,6 +141,7 @@ interface ContentBlock {
     | "title"
     | "justification-header"
     | "justification-paragraph"
+    | "justification-spacer"
     | "justification-references"
     | "procedure-info"
     | "group-header"
@@ -172,6 +169,7 @@ export function OrderPreviewV2({
   cbhpmAdditionalNotes,
   opmeAdditionalNotes,
   supplierAdditionalNotes,
+  orderId,
   onForcedPageBreaksChange,
 }: OrderPreviewV2Props) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -418,8 +416,11 @@ export function OrderPreviewV2({
         estimatedHeight: 100,
         content: (
           <div
-            className="mb-5 p-3 bg-[#f8fafc] rounded border border-[#e2e8f0]"
-            style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
+            className="mb-5 bg-[#f8fafc] rounded border border-[#e2e8f0]"
+            style={{
+              fontFamily: "Helvetica, Arial, sans-serif",
+              padding: "11px",
+            }}
           >
             <h3
               className="font-bold mb-2 border-b border-[#d1d5db] pb-2"
@@ -480,11 +481,13 @@ export function OrderPreviewV2({
       estimatedHeight: 30,
       content: (
         <h2
-          className="font-bold text-center pb-1 mb-2 uppercase"
+          className="font-bold text-center uppercase"
           style={{
             fontSize: "13pt",
             color: "#1e3a8a",
             fontFamily: "Helvetica, Arial, sans-serif",
+            marginBottom: "7px",
+            paddingBottom: "8pt",
           }}
         >
           SOLICITAÇÃO DE PROCEDIMENTO CIRÚRGICO
@@ -494,12 +497,14 @@ export function OrderPreviewV2({
 
     if (clinicalJustification) {
       // Divide o texto em seções: parágrafos normais e referências bibliográficas
-      const referencesPattern = /^(REFERÊNCIAS BIBLIOGRÁFICAS|REFERÊNCIAS|REFERENCIAS|BIBLIOGRAFIA|REFERENCES):\s*$/im;
+      const referencesPattern =
+        /^(REFERÊNCIAS BIBLIOGRÁFICAS|REFERÊNCIAS|REFERENCIAS|BIBLIOGRAFIA|REFERENCES):\s*$/im;
       const parts = clinicalJustification.split(referencesPattern);
       const mainText = parts[0] || "";
-      const referencesSection = parts.length > 2 ? parts[2] : (parts.length > 1 ? parts[1] : "");
+      const referencesSection =
+        parts.length > 2 ? parts[2] : parts.length > 1 ? parts[1] : "";
       const hasReferences = referencesPattern.test(clinicalJustification);
-      
+
       // Adiciona cabeçalho da seção de Indicação Clínica
       blocks.push({
         id: "justification-header",
@@ -514,65 +519,71 @@ export function OrderPreviewV2({
               fontFamily: "Helvetica, Arial, sans-serif",
               paddingLeft: "5pt",
               paddingRight: "5pt",
-              marginBottom: "8px",
+              lineHeight: "1",
+              marginBottom: "9px",
             }}
           >
             INDICAÇÃO CLÍNICA:
           </div>
         ),
       });
-      
+
       // Divide o texto em linhas individuais para permitir quebra de página fluida
       // (mesmo comportamento do PDF que quebra parágrafos entre páginas)
-      const allLines = mainText.split(/\n/).map(l => l.replace(/\s+$/, ''));
+      const allLines = mainText.split(/\n/).map((l) => l.replace(/\s+$/, ""));
       let lineBlockIndex = 0;
-      
+      let prevWasBlank = false;
+
       allLines.forEach((line, idx) => {
         const isBlankLine = line.trim().length === 0;
-        
+
         if (isBlankLine) {
-          // Espaço entre parágrafos
-          blocks.push({
-            id: `justification-line-${lineBlockIndex}`,
-            type: "justification-paragraph",
-            estimatedHeight: 10,
-            content: <div style={{ height: "10px" }} />,
-          });
+          // Colapsa linhas em branco consecutivas num único spacer (igual ao PDF: split /\n\s*\n/)
+          // PDF: Text marginBottom 15pt + View marginBottom 8pt = ~31px; HTML: 8px (marginBottom do texto) + 23px = 31px
+          if (!prevWasBlank) {
+            blocks.push({
+              id: `justification-line-${lineBlockIndex}`,
+              type: "justification-spacer",
+              estimatedHeight: 0,
+              content: <div style={{ height: "0" }} />,
+            });
+          }
+          prevWasBlank = true;
         } else {
-          // Linha de texto — estimar altura baseado no comprimento
-          const lineWraps = Math.ceil(line.length / 115);
-          const lineHeight = lineWraps * 17;
+          prevWasBlank = false;
+          const lineWraps = Math.ceil(line.length / 95);
+          const lineHeight = lineWraps * 14;
           blocks.push({
             id: `justification-line-${lineBlockIndex}`,
             type: "justification-paragraph",
-            estimatedHeight: Math.max(17, lineHeight),
+            estimatedHeight: Math.max(14, lineHeight),
             content: (
               <div
                 className="text-justify"
                 style={{
                   fontSize: "9pt",
                   color: "#000000",
-                  lineHeight: 1.4,
+                  lineHeight: 1.54,
                   fontFamily: "Helvetica, Arial, sans-serif",
                   paddingLeft: "5pt",
                   paddingRight: "5pt",
-                  paddingBottom: "15pt",
+                  marginBottom: "4pt",
+                  overflowWrap: "break-word",
+                  wordBreak: "break-word",
+                  wordSpacing: "-1px",
                 }}
               >
-                <MarkdownViewer
-                  content={line}
-                  className="prose-xs"
-                />
+                {line}
               </div>
             ),
           });
         }
         lineBlockIndex++;
       });
-      
+
       // Adiciona seção de referências bibliográficas como bloco separado
       if (hasReferences && referencesSection.trim()) {
-        const refLines = referencesSection.split('\n').filter(l => l.trim());
+        const refLines = referencesSection.split("\n").filter((l) => l.trim());
         const refHeight = refLines.length * 22 + 35;
         blocks.push({
           id: "justification-references",
@@ -625,17 +636,19 @@ export function OrderPreviewV2({
       estimatedHeight: 60,
       content: (
         <div
-          className="flex mb-3 gap-5"
+          className="flex gap-5"
           style={{
             fontFamily: "Helvetica, Arial, sans-serif",
             paddingLeft: "5pt",
             paddingRight: "5pt",
+            marginTop: "18pt",
+            marginBottom: "8pt",
           }}
         >
           <div className="flex-1">
             <p
-              className="font-bold mb-1"
-              style={{ fontSize: "9pt", color: "#374151" }}
+              className="font-bold"
+              style={{ fontSize: "9pt", color: "#374151", marginBottom: "4pt" }}
             >
               Caráter do Procedimento:
             </p>
@@ -707,11 +720,11 @@ export function OrderPreviewV2({
           estimatedHeight: 30 + group.cids.length * 20,
           content: (
             <div
-              className="mb-3"
               style={{
                 fontFamily: "Helvetica, Arial, sans-serif",
                 paddingLeft: "5pt",
                 paddingRight: "5pt",
+                marginBottom: "8pt",
               }}
             >
               <p
@@ -751,11 +764,11 @@ export function OrderPreviewV2({
           estimatedHeight: 30 + sortedProcs.length * 16 + (cbhpmNote ? 40 : 0),
           content: (
             <div
-              className="mb-3"
               style={{
                 fontFamily: "Helvetica, Arial, sans-serif",
                 paddingLeft: "5pt",
                 paddingRight: "5pt",
+                marginBottom: "8pt",
               }}
             >
               <p
@@ -815,16 +828,20 @@ export function OrderPreviewV2({
             30 + group.opmeItems.length * 16 + (opmeNote ? 40 : 0),
           content: (
             <div
-              className="mb-3"
               style={{
                 fontFamily: "Helvetica, Arial, sans-serif",
                 paddingLeft: "5pt",
                 paddingRight: "5pt",
+                marginBottom: "5pt",
               }}
             >
               <p
-                className="font-bold mb-1"
-                style={{ fontSize: "9pt", color: "#374151" }}
+                className="font-bold "
+                style={{
+                  fontSize: "9pt",
+                  color: "#374151",
+                  marginBottom: "1pt",
+                }}
               >
                 Lista de Materiais Necessários:
               </p>
@@ -878,11 +895,11 @@ export function OrderPreviewV2({
             30 + group.suppliers.length * 16 + (supplierNote ? 40 : 0),
           content: (
             <div
-              className="mb-3"
               style={{
                 fontFamily: "Helvetica, Arial, sans-serif",
                 paddingLeft: "5pt",
                 paddingRight: "5pt",
+                marginBottom: "16px",
               }}
             >
               <p
@@ -1011,11 +1028,11 @@ export function OrderPreviewV2({
       content: (
         <div
           style={{
-            marginTop: "30px",
+            marginTop: "40px",
             fontFamily: "Helvetica, Arial, sans-serif",
           }}
         >
-          <div className="text-right" style={{ marginBottom: "25px" }}>
+          <div className="text-right" style={{ marginBottom: "33px" }}>
             <p style={{ fontSize: "9pt", color: "#1f2937" }}>
               {selectedHospital?.name?.includes("Niterói")
                 ? "Niterói"
@@ -1044,7 +1061,7 @@ export function OrderPreviewV2({
               <>
                 <div
                   className="border-t border-gray-500"
-                  style={{ width: "150px", marginBottom: "4px" }}
+                  style={{ width: "200px", marginBottom: "4px" }}
                 ></div>
                 <p
                   className="font-bold"
@@ -1107,19 +1124,26 @@ export function OrderPreviewV2({
 
   const measurementRef = useRef<HTMLDivElement>(null);
   const [isMeasuring, setIsMeasuring] = useState(true);
-  const [hoverBreakBlockId, setHoverBreakBlockId] = useState<string | null>(null);
+  const [hoverDividerId, setHoverDividerId] = useState<string | null>(null);
 
   useEffect(() => {
     const measureAllElements = () => {
       if (!measurementRef.current) return;
 
       const newHeights = new Map<string, number>();
-      const elements =
-        measurementRef.current.querySelectorAll("[data-block-id]");
+      const elements = Array.from(
+        measurementRef.current.querySelectorAll("[data-block-id]"),
+      ) as HTMLElement[];
 
-      elements.forEach((el) => {
+      elements.forEach((el, index) => {
         const blockId = el.getAttribute("data-block-id");
-        if (blockId) {
+        if (!blockId) return;
+        if (index < elements.length - 1) {
+          // Diferença de offsetTop entre elementos consecutivos captura
+          // a altura real do bloco incluindo todas as margens CSS
+          newHeights.set(blockId, elements[index + 1].offsetTop - el.offsetTop);
+        } else {
+          // Último bloco: usa getBoundingClientRect (sem margem inferior necessária)
           newHeights.set(blockId, el.getBoundingClientRect().height);
         }
       });
@@ -1161,9 +1185,15 @@ export function OrderPreviewV2({
         // Anti-órfão: se o último bloco da página atual é um header (ex: "INDICAÇÃO CLÍNICA:"),
         // mover esse header para a próxima página junto com o conteúdo que não coube
         const lastBlock = currentPageBlocks[currentPageBlocks.length - 1];
-        if (lastBlock && headerTypes.has(lastBlock.type) && currentPageBlocks.length > 1) {
+        if (
+          lastBlock &&
+          headerTypes.has(lastBlock.type) &&
+          currentPageBlocks.length > 1
+        ) {
           const orphanHeader = currentPageBlocks.pop()!;
-          const orphanHeight = measuredHeights.get(orphanHeader.id) || orphanHeader.estimatedHeight;
+          const orphanHeight =
+            measuredHeights.get(orphanHeader.id) ||
+            orphanHeader.estimatedHeight;
           result.push(currentPageBlocks);
           currentPageBlocks = [orphanHeader];
           currentPageHeight = orphanHeight;
@@ -1185,105 +1215,67 @@ export function OrderPreviewV2({
     return result.length > 0 ? result : [[]];
   }, [contentBlocks, measuredHeights, forcedPageBreaks]);
 
-  // Função para calcular espaço disponível em uma página
-  const getPageRemainingSpace = useCallback(
-    (pageIndex: number): number => {
-      if (pageIndex < 0 || pageIndex >= pages.length)
-        return PAGE_CONTENT_HEIGHT_PX;
-      const pageBlocks = pages[pageIndex];
-      const usedHeight = pageBlocks.reduce((sum, block) => {
-        return sum + (measuredHeights.get(block.id) || block.estimatedHeight);
-      }, 0);
-      return PAGE_CONTENT_HEIGHT_PX - usedHeight;
-    },
-    [pages, measuredHeights],
-  );
-
-  // Função para encontrar em qual página um bloco está
-  const findBlockPage = useCallback(
-    (blockId: string): number => {
-      for (let i = 0; i < pages.length; i++) {
-        if (pages[i].some((b) => b.id === blockId)) return i;
+  const firstEligibleBreakIndex = useMemo(() => {
+    let inJustification = false;
+    let firstTextLineIndex = -1;
+    for (let i = 0; i < contentBlocks.length; i++) {
+      const block = contentBlocks[i];
+      if (block.type === "justification-header") {
+        inJustification = true;
+        continue;
       }
-      return -1;
-    },
-    [pages],
-  );
+      if (
+        inJustification &&
+        (block.type === "justification-paragraph" ||
+          block.type === "justification-spacer")
+      ) {
+        if (
+          firstTextLineIndex === -1 &&
+          block.estimatedHeight > 10 &&
+          block.type !== "justification-spacer"
+        ) {
+          firstTextLineIndex = i;
+        } else if (
+          firstTextLineIndex >= 0 &&
+          block.type !== "justification-spacer"
+        ) {
+          return i;
+        }
+        continue;
+      }
+      if (
+        inJustification &&
+        block.type !== "justification-paragraph" &&
+        block.type !== "justification-spacer"
+      ) {
+        return i;
+      }
+    }
+    return contentBlocks.length;
+  }, [contentBlocks]);
 
-  // Mover bloco para próxima página (adicionar quebra forçada)
-  const moveBlockToNextPage = useCallback(
+  const togglePageBreak = useCallback(
     (blockId: string) => {
       const blockIndex = contentBlocks.findIndex((b) => b.id === blockId);
-      if (blockIndex <= 0) return; // Não pode mover o primeiro bloco
+      if (blockIndex <= 0) return;
+      if (blockIndex < firstEligibleBreakIndex) return;
 
       setForcedPageBreaks((prev) => {
         const newSet = new Set(prev);
-        newSet.add(blockId);
+        if (newSet.has(blockId)) {
+          newSet.delete(blockId);
+        } else {
+          newSet.add(blockId);
+        }
         return newSet;
       });
     },
-    [contentBlocks],
+    [contentBlocks, firstEligibleBreakIndex],
   );
 
-  // Mover bloco para página anterior (remover quebra forçada e verificar espaço)
-  const moveBlockToPreviousPage = useCallback(
-    (blockId: string) => {
-      const currentPageIndex = findBlockPage(blockId);
-      if (currentPageIndex <= 0) return; // Já está na primeira página
-
-      const blockHeight =
-        measuredHeights.get(blockId) ||
-        contentBlocks.find((b) => b.id === blockId)?.estimatedHeight ||
-        0;
-      const remainingSpace = getPageRemainingSpace(currentPageIndex - 1);
-
-      // Só permite mover se houver espaço na página anterior
-      if (blockHeight <= remainingSpace) {
-        setForcedPageBreaks((prev) => {
-          const newSet = new Set(prev);
-          newSet.delete(blockId);
-          return newSet;
-        });
-      }
-    },
-    [findBlockPage, getPageRemainingSpace, measuredHeights, contentBlocks],
-  );
-
-  // Verificar se o bloco pode ser movido para a página anterior
-  const canMoveToPrevisouPage = useCallback(
-    (blockId: string): boolean => {
-      const currentPageIndex = findBlockPage(blockId);
-      if (currentPageIndex <= 0) return false;
-
-      // Se o bloco tem quebra forçada, pode remover
-      if (forcedPageBreaks.has(blockId)) {
-        const blockHeight =
-          measuredHeights.get(blockId) ||
-          contentBlocks.find((b) => b.id === blockId)?.estimatedHeight ||
-          0;
-        const remainingSpace = getPageRemainingSpace(currentPageIndex - 1);
-        return blockHeight <= remainingSpace;
-      }
-      return false;
-    },
-    [
-      findBlockPage,
-      forcedPageBreaks,
-      measuredHeights,
-      contentBlocks,
-      getPageRemainingSpace,
-    ],
-  );
-
-  // Verificar se o bloco pode ser movido para a próxima página
-  const canMoveToNextPage = useCallback(
-    (blockId: string): boolean => {
-      const blockIndex = contentBlocks.findIndex((b) => b.id === blockId);
-      // Não pode mover o primeiro bloco, nem blocos que já têm quebra forçada
-      return blockIndex > 0 && !forcedPageBreaks.has(blockId);
-    },
-    [contentBlocks, forcedPageBreaks],
-  );
+  const clearAllPageBreaks = useCallback(() => {
+    setForcedPageBreaks(new Set());
+  }, []);
 
   const totalPages = pages.length;
   const currentPageBlocks = pages[currentPage - 1] || [];
@@ -1296,24 +1288,24 @@ export function OrderPreviewV2({
 
   const Header = () => (
     <div
-      className="flex items-center justify-between p-3 border-b border-gray-200"
+      className="flex items-center justify-between overflow-hidden"
       style={{
         height: `${HEADER_HEIGHT_PX}px`,
         fontFamily: "Helvetica, Arial, sans-serif",
-        marginTop: "30px",
+        marginTop: "20px",
       }}
     >
-      {/* Logo Hospital: PDF usa 80pt x 60pt = ~107px x 80px - centralizado verticalmente */}
+      {/* Logo Hospital: PDF usa 80pt x 60pt → 107px x 80px na tela (794px/595pt=1.334) */}
       <div
         className="flex items-center justify-start overflow-hidden"
-        style={{ width: "137px", height: "80px", marginLeft: "24px" }}
+        style={{ width: "107px", height: "80px", marginLeft: "24px" }}
       >
         {selectedHospital?.logoUrl ? (
           <img
             src={selectedHospital.logoUrl}
             alt={`Logo do ${selectedHospital.name}`}
             style={{
-              maxWidth: "137px",
+              maxWidth: "107px",
               maxHeight: "80px",
               objectFit: "contain",
             }}
@@ -1330,17 +1322,17 @@ export function OrderPreviewV2({
           </div>
         )}
       </div>
-      {/* Logo Médico: PDF usa 160pt x 120pt = ~213px x 160px - centralizado verticalmente */}
+      {/* Logo Médico: PDF usa 192pt x 144pt → 256px x 192px na tela (794px/595pt=1.334) */}
       <div
         className="flex items-center justify-end overflow-visible"
-        style={{ width: "286px", height: "96px", marginRight: "24px" }}
+        style={{ width: "256px", height: "96px", marginRight: "24px" }}
       >
         {user?.logoUrl && (
           <img
             src={user.logoUrl}
             alt="Logo do Médico"
             style={{
-              maxWidth: "286px",
+              maxWidth: "256px",
               maxHeight: "192px",
               objectFit: "contain",
             }}
@@ -1355,21 +1347,47 @@ export function OrderPreviewV2({
 
   const Footer = ({ pageNum, total }: { pageNum: number; total: number }) => (
     <div
-      className="flex items-center justify-between px-4 border-t border-gray-200"
       style={{
-        height: `${FOOTER_HEIGHT_PX}px`,
+        height: `${FOOTER_HEIGHT_PT}pt`,
+        paddingTop: "8pt",
+        paddingLeft: "0pt",
+        paddingRight: "0pt",
+        borderTop: "1pt solid #e0e0e0",
+        display: "flex",
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
         fontFamily: "Helvetica, Arial, sans-serif",
+        backgroundColor: "#ffffff",
       }}
     >
-      <div className="flex items-center">
-        <img src={MedSyncLogo} alt="Logo MedSync" className="h-4 mr-2" />
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "4pt",
+        }}
+      >
+        <img
+          src={MedSyncLogo}
+          alt="Logo MedSync"
+          style={{ height: "13pt", objectFit: "contain" }}
+        />
+        <span style={{ fontSize: "8pt", color: "#6b7280" }}>v2.5.3</span>
+      </div>
+      <div style={{ flex: 1, textAlign: "center" }}>
         <span style={{ fontSize: "8pt", color: "#6b7280" }}>
-          MedSync v2.5.3
+          {orderId ? `Pedido #${orderId}` : ""} - Gerado em{" "}
+          {new Date().toLocaleDateString("pt-BR")}
         </span>
       </div>
-      <span style={{ fontSize: "8pt", color: "#6b7280" }}>
-        Página {pageNum} de {total}
-      </span>
+      <div style={{ flex: 1, textAlign: "right" }}>
+        <span style={{ fontSize: "8pt", color: "#6b7280" }}>
+          Página {pageNum} de {total}
+        </span>
+      </div>
     </div>
   );
 
@@ -1380,10 +1398,9 @@ export function OrderPreviewV2({
         ref={measurementRef}
         className="absolute opacity-0 pointer-events-none"
         style={{
-          width: "260mm",
-          paddingLeft: "24pt",
-          paddingRight: "24pt",
-          left: "-9999px",
+          width: "210mm",
+          paddingLeft: "20pt",
+          paddingRight: "20pt",
           fontFamily: "Helvetica, Arial, sans-serif",
         }}
         aria-hidden="true"
@@ -1401,9 +1418,24 @@ export function OrderPreviewV2({
       <p className="text-sm text-muted-foreground">
         Revise os dados do pedido antes de finalizar
       </p>
-      <p className="text-xs text-muted-foreground mt-1">
-        Prévia A4 (210 x 297 mm) - Página {currentPage} de {totalPages}
-        {isMeasuring && " (calculando...)"}
+      <div className="flex items-center justify-between mt-1">
+        <p className="text-xs text-muted-foreground">
+          Prévia A4 (210 x 297 mm) - Página {currentPage} de {totalPages}
+          {isMeasuring && " (calculando...)"}
+        </p>
+        {forcedPageBreaks.size > 0 && (
+          <button
+            onClick={clearAllPageBreaks}
+            className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-full px-2.5 py-0.5 transition-colors"
+          >
+            <Trash2 className="h-3 w-3" />
+            Limpar {forcedPageBreaks.size} quebra
+            {forcedPageBreaks.size > 1 ? "s" : ""}
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground/60 mt-0.5 italic">
+        Passe o mouse entre as seções para inserir uma quebra de página
       </p>
 
       <div className="flex items-center justify-center gap-2 my-4">
@@ -1471,8 +1503,8 @@ export function OrderPreviewV2({
           className="bg-white shadow-xl border border-gray-300 flex flex-col"
           style={{
             //width: "210mm", // Mudei para alagargar um pouco mais a pagina
-            width: "260mm",
-            height: "350mm",
+            width: "210mm",
+            height: "297mm",
             overflow: "hidden",
           }}
         >
@@ -1483,15 +1515,12 @@ export function OrderPreviewV2({
             className="flex-1 overflow-hidden"
             style={{
               height: `${PAGE_CONTENT_HEIGHT_PX}px`,
-              paddingLeft: "24pt",
-              paddingRight: "24pt",
-              paddingTop: "12px",
+              paddingLeft: "20pt",
+              paddingRight: "20pt",
               paddingBottom: "12px",
             }}
           >
             {currentPageBlocks.map((block, blockIndex) => {
-              const canMovePrev = canMoveToPrevisouPage(block.id);
-              const canMoveNext = canMoveToNextPage(block.id);
               const isFirstBlockOnPage = blockIndex === 0;
               const blockHasForcedBreak = forcedPageBreaks.has(block.id);
               const isFixedBlock =
@@ -1499,103 +1528,127 @@ export function OrderPreviewV2({
                 block.type === "title" ||
                 block.type === "signature";
 
+              const nextBlock =
+                blockIndex < currentPageBlocks.length - 1
+                  ? currentPageBlocks[blockIndex + 1]
+                  : null;
+
+              // Se nextBlock é um spacer, encontra o próximo bloco não-spacer
+              // para ser o alvo real da quebra de página (suporte ao Enter no richtext)
+              const breakTargetBlock =
+                nextBlock?.type === "justification-spacer"
+                  ? (() => {
+                      for (
+                        let k = blockIndex + 2;
+                        k < currentPageBlocks.length;
+                        k++
+                      ) {
+                        if (
+                          currentPageBlocks[k].type !== "justification-spacer"
+                        ) {
+                          return currentPageBlocks[k];
+                        }
+                      }
+                      return null;
+                    })()
+                  : nextBlock;
+
+              const nextBlockIsFixed =
+                nextBlock &&
+                (nextBlock.type === "patient-data" ||
+                  nextBlock.type === "title" ||
+                  nextBlock.type === "signature");
+              const nextGlobalIndex = nextBlock
+                ? contentBlocks.findIndex((b) => b.id === nextBlock.id)
+                : -1;
+              const breakTargetGlobalIndex = breakTargetBlock
+                ? contentBlocks.findIndex((b) => b.id === breakTargetBlock.id)
+                : nextGlobalIndex;
+              const nextBlockHasBreak = breakTargetBlock
+                ? forcedPageBreaks.has(breakTargetBlock.id)
+                : false;
+              const nextBlockInProtectedZone =
+                breakTargetGlobalIndex < firstEligibleBreakIndex;
+              const showDividerAfter =
+                nextBlock &&
+                breakTargetBlock &&
+                !nextBlockIsFixed &&
+                nextGlobalIndex > 0 &&
+                !nextBlockHasBreak &&
+                !nextBlockInProtectedZone &&
+                block.type !== "justification-spacer" &&
+                !(
+                  block.type === "justification-paragraph" &&
+                  breakTargetBlock.type === "procedure-info"
+                ) &&
+                !(
+                  block.type === "justification-references" &&
+                  breakTargetBlock.type === "procedure-info"
+                );
+
               return (
                 <div
                   key={block.id}
                   data-block-id={block.id}
-                  className="relative group"
+                  className="relative"
                 >
-                  {/* Indicador de quebra forçada */}
                   {isFirstBlockOnPage && blockHasForcedBreak && (
-                    <div className="absolute -top-1 left-0 right-0 flex items-center justify-center">
-                      <div className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full border border-amber-300">
-                        Quebra de página forçada
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Botões de mover - aparecem no hover (exceto para blocos fixos) */}
-                  {!isFixedBlock && (
-                    <div className="absolute -right-1 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-30 group-hover:opacity-100 transition-opacity z-10">
-                      <TooltipProvider delayDuration={200}>
-                        {/* Botão mover para página anterior */}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => moveBlockToPreviousPage(block.id)}
-                              disabled={!canMovePrev}
-                              className={`h-7 w-7 p-0 bg-white shadow-md border ${
-                                canMovePrev
-                                  ? "border-blue-300 hover:bg-blue-50 hover:border-blue-400"
-                                  : "border-gray-200 opacity-40 cursor-not-allowed"
-                              }`}
-                            >
-                              <ChevronUp
-                                className={`h-4 w-4 ${canMovePrev ? "text-blue-600" : "text-gray-400"}`}
-                              />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="text-xs">
-                            {canMovePrev
-                              ? "Mover para página anterior"
-                              : currentPage === 1
-                                ? "Já está na primeira página"
-                                : "Sem espaço na página anterior"}
-                          </TooltipContent>
-                        </Tooltip>
-
-                        {/* Botão mover para próxima página */}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => moveBlockToNextPage(block.id)}
-                              disabled={!canMoveNext}
-                              onMouseEnter={() => canMoveNext && setHoverBreakBlockId(block.id)}
-                              onMouseLeave={() => setHoverBreakBlockId(null)}
-                              className={`h-7 w-7 p-0 bg-white shadow-md border ${
-                                canMoveNext
-                                  ? "border-blue-300 hover:bg-blue-50 hover:border-blue-400"
-                                  : "border-gray-200 opacity-40 cursor-not-allowed"
-                              }`}
-                            >
-                              <ChevronDown
-                                className={`h-4 w-4 ${canMoveNext ? "text-blue-600" : "text-gray-400"}`}
-                              />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="text-xs">
-                            {canMoveNext
-                              ? "Mover para próxima página"
-                              : blockIndex === 0 && currentPage === 1
-                                ? "Primeiro bloco não pode ser movido"
-                                : "Já movido para esta página"}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  )}
-
-                  {hoverBreakBlockId === block.id && (
-                    <div
-                      className="absolute -top-1 left-0 right-0 z-20 pointer-events-none"
-                      style={{
-                        borderTop: "2px dashed #ef4444",
-                      }}
-                    >
-                      <span
-                        className="absolute right-0 -top-4 text-xs text-red-500 bg-white px-1 rounded"
-                        style={{ fontSize: "8pt" }}
+                    <div className="flex items-center gap-2 -mt-1 mb-1">
+                      <div className="flex-1 border-t-2 border-dashed border-amber-400" />
+                      <button
+                        onClick={() => togglePageBreak(block.id)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition-colors cursor-pointer group/break"
+                        title="Clique para remover esta quebra de página"
                       >
-                        quebra de página
-                      </span>
+                        <Scissors className="h-3 w-3" />
+                        <span className="text-xs font-medium">
+                          Quebra de página
+                        </span>
+                        <X className="h-3 w-3 opacity-0 group-hover/break:opacity-100 transition-opacity text-amber-600" />
+                      </button>
+                      <div className="flex-1 border-t-2 border-dashed border-amber-400" />
                     </div>
                   )}
 
                   {block.content}
+
+                  {showDividerAfter &&
+                    (() => {
+                      const isEnterBased =
+                        nextBlock?.type === "justification-spacer";
+                      return (
+                        <div
+                          className={`relative ${isEnterBased ? "divider-paragraph-enter" : "divider-paragraph-shift"}`}
+                          style={
+                            isEnterBased
+                              ? { marginTop: "1.5pt", marginBottom: "1.5pt" }
+                              : { marginTop: "-5pt", marginBottom: "-5pt" }
+                          }
+                          onMouseEnter={() =>
+                            setHoverDividerId(breakTargetBlock!.id)
+                          }
+                          onMouseLeave={() => setHoverDividerId(null)}
+                        >
+                          {hoverDividerId === breakTargetBlock!.id ? (
+                            <button
+                              onClick={() =>
+                                togglePageBreak(breakTargetBlock!.id)
+                              }
+                              className="w-full flex items-center gap-2 py-1 cursor-pointer group/btn"
+                            >
+                              <div className="flex-1 border-t-2 border-dashed border-blue-300 group-hover/btn:border-blue-400 transition-colors" />
+                              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-600 text-xs font-medium hover:bg-blue-100 hover:border-blue-300 transition-colors whitespace-nowrap">
+                                <Scissors className="h-3 w-3" />
+                                Inserir quebra de página
+                              </span>
+                              <div className="flex-1 border-t-2 border-dashed border-blue-300 group-hover/btn:border-blue-400 transition-colors" />
+                            </button>
+                          ) : (
+                            <div style={{ height: "6pt" }} />
+                          )}
+                        </div>
+                      );
+                    })()}
                 </div>
               );
             })}

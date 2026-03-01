@@ -28,6 +28,8 @@ Preferred communication style: Simple, everyday language.
 - **Subscription Uniqueness (Feb 2026)**: `createUserSubscription` in storage.ts checks for existing subscription before inserting. If one exists for the user, it updates instead of creating a duplicate. Guarantees one subscription per user.
 - **Incomplete Registration Merge (Feb 2026)**: `createIncompleteRegistration` performs intelligent merge when updating existing records by email. All table fields (password, regToken, leadStatus, billingInterval, CRM, address, etc.) are explicitly preserved during merge — not lost to JSON overflow. Uses allowlist-based field separation.
 - **Checkout Success (Feb 2026)**: `/api/payments/checkout-success` endpoint supports both `userId` and `regToken` metadata lookup from Stripe sessions, enabling the new registration flow to find materialized users after webhook processing.
+- **PDF-based Preview V3 (Feb 2026)**: Order preview replaced HTML-based V2 with PDF-based V3 (`order-preview_v3.tsx`). Uses `usePdfPreview` hook to generate actual PDF blob client-side via `@react-pdf/renderer`'s `pdf()` function with debounce (500ms), cancellation, and URL cleanup. Displays PDF in iframe via `PdfViewer` component. Guarantees 100% visual parity between preview and downloaded PDF. Page break controls use collapsible section list with IDs matching `OrderPDFDocumentV2`'s `shouldBreakBefore` block IDs. V2 preserved as fallback.
+
 
 ### Database Architecture
 - **ORM**: Drizzle with full TypeScript support.
