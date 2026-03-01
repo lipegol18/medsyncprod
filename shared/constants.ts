@@ -85,7 +85,8 @@ export const ORDER_STATUS_IDS = {
   AGUARDANDO_ENVIO: 8,      // "Aguardando Envio"
   RECEBIDO: 9,              // "Recebido"
   AGUARDANDO_RECURSO: 10,   // "Aguardando Recurso"
-  AUTORIZACAO_POS: 11       // "Autorização Pós" (urgência)
+  AUTORIZACAO_POS: 11,      // "Autorização Pós" (urgência)
+  ANALISE_POS: 12           // "Análise Pós-Cirúrgica" (urgência)
 };
 
 // Caráter do procedimento para exibição

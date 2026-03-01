@@ -1142,7 +1142,8 @@ const orderStatus = {
   "cancelado": { label: "Cancelada", color: "bg-destructive/20 text-destructive" },
   "aguardando_envio": { label: "Aguardando Envio", color: "bg-purple-700/70 text-purple-200" },
   "recebido": { label: "Recebido", color: "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600" },
-  "aguardando_recurso": { label: "Aguardando Recurso", color: "bg-rose-100 dark:bg-rose-900/20 text-rose-600" }
+  "aguardando_recurso": { label: "Aguardando Recurso", color: "bg-rose-100 dark:bg-rose-900/20 text-rose-600" },
+  "analise_pos": { label: "Análise Pós-Cirúrgica", color: "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600" }
 };
 
 // Formatação de data
@@ -1360,7 +1361,8 @@ export default function OrderDetails() {
     const now = new Date();
     
     switch (order.statusCode) {
-      case 'em_avaliacao': // Em análise
+      case 'em_avaliacao': // Em análise (eletiva)
+      case 'analise_pos': // Análise Pós-Cirúrgica (urgência)
         const analysisStart = new Date(order.updatedAt);
         const deadline = addBusinessDays(analysisStart, 21);
         const businessDaysElapsed = calculateBusinessDays(analysisStart, now);

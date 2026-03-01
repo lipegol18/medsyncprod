@@ -191,7 +191,7 @@ const workflowStepsEletivo: Record<string, StatusOption[]> = {
 
 // =====================================================
 // WORKFLOW URGÊNCIA - Cirurgias de emergência (retrospectivo)
-// Fluxo: Incompleto → Pós Autorizado → [Cirurgia pode já ter acontecido] → Em Análise → Autorizado → Recebido
+// Fluxo: Incompleto → Pós Autorizado → Cirurgia Realizada → Análise Pós-Cirúrgica → Autorizado → Recebido
 // A cirurgia pode ocorrer ANTES da autorização da operadora
 // =====================================================
 const workflowStepsUrgencia: Record<string, StatusOption[]> = {
@@ -214,14 +214,14 @@ const workflowStepsUrgencia: Record<string, StatusOption[]> = {
   ],
   'cirurgia_realizada': [
     { 
-      key: 'em_avaliacao', 
-      label: 'Enviar para Análise Pós Cirúrgica', 
+      key: 'analise_pos', 
+      label: 'Enviar para Análise Pós-Cirúrgica', 
       description: 'Operadora irá analisar o pedido após a cirurgia ter sido realizada', 
       icon: Clock, 
       color: 'text-accent' 
     }
   ],
-  'em_avaliacao': [
+  'analise_pos': [
     { 
       key: 'aceito', 
       label: 'Autorizar Integralmente', 
@@ -306,9 +306,9 @@ const workflowStepsUrgencia: Record<string, StatusOption[]> = {
   ],
   'aguardando_recurso': [
     { 
-      key: 'em_avaliacao', 
+      key: 'analise_pos', 
       label: 'Recurso enviado para análise', 
-      description: 'Recurso enviado para análise por parte da operadora', 
+      description: 'Recurso enviado para análise pós-cirúrgica por parte da operadora', 
       icon: Clock, 
       color: 'text-accent' 
     },

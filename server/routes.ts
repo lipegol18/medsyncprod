@@ -2601,7 +2601,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               8: 'aguardando_envio',   // Aguardando Envio
               9: 'recebido',           // Recebido
               10: 'aguardando_recurso', // Aguardando Recurso
-              11: 'autorizacao_pos'    // Autorização Pós (urgência)
+              11: 'autorizacao_pos',   // Autorização Pós (urgência)
+              12: 'analise_pos'        // Análise Pós-Cirúrgica (urgência)
             };
 
             // Buscar informações de cor do cache
@@ -2925,7 +2926,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           8: 'aguardando_envio',   // Aguardando Envio
           9: 'recebido',           // Recebido
           10: 'aguardando_recurso', // Aguardando Recurso
-          11: 'autorizacao_pos'    // Autorização Pós (urgência)
+          11: 'autorizacao_pos',   // Autorização Pós (urgência)
+          12: 'analise_pos'        // Análise Pós-Cirúrgica (urgência)
         };
 
         // Buscar informações de cor do cache

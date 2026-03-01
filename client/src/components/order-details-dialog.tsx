@@ -48,6 +48,7 @@ export function OrderDetailsDialog({ orderId, isOpen, onClose }: OrderDetailsDia
     const statusMap: Record<string, { label: string, variant: "default" | "secondary" | "destructive" | "outline" }> = {
       "em_preenchimento": { label: "Em preenchimento", variant: "outline" },
       "em_avaliacao": { label: "Em avaliação", variant: "secondary" },
+      "analise_pos": { label: "Análise Pós-Cirúrgica", variant: "secondary" },
       "aceito": { label: "Aceito", variant: "default" },
       "recusado": { label: "Recusado", variant: "destructive" },
     };

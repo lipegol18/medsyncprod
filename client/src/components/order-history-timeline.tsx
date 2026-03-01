@@ -44,6 +44,7 @@ const getStatusDotColor = (statusCode: string | null): string => {
     'recebido': 'bg-purple-500',
     'cancelado': 'bg-gray-500',
     'autorizacao_pos': 'bg-green-500',
+    'analise_pos': 'bg-yellow-400',
   };
   return colors[statusCode] || 'bg-gray-400';
 };
@@ -76,6 +77,7 @@ const getActionDescription = (record: StatusHistoryRecord): string => {
     'recebido': 'Valores recebidos',
     'cancelado': 'Pedido cancelado',
     'autorizacao_pos': 'Autorização pós-cirurgia',
+    'analise_pos': 'Enviado para análise pós-cirúrgica',
   };
   
   if (record.notes && record.notes.includes('Status desfeito')) {

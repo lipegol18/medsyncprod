@@ -2261,6 +2261,8 @@ export class DatabaseStorage implements IStorage {
         8: "aguardando_envio", // Aguardando Envio
         9: "recebido", // Recebido
         10: "aguardando_recurso", // Aguardando Recurso
+        11: "autorizacao_pos",   // Autorização Pós (urgência)
+        12: "analise_pos",       // Análise Pós-Cirúrgica (urgência)
       };
 
       // Adicionar campos de status baseado no statusId usando cache de cores
@@ -4323,6 +4325,9 @@ export class DatabaseStorage implements IStorage {
           cancelado: 7,
           aguardando_envio: 8,
           recebido: 9,
+          aguardando_recurso: 10,
+          autorizacao_pos: 11,
+          analise_pos: 12,
         };
         const statusId = statusMapping[statusCode] || null;
         if (statusId) {

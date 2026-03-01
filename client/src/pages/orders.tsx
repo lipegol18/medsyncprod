@@ -51,6 +51,7 @@ const defaultOrderStatus: Record<string, { label: string; color: string }> = {
   "pendencia": { label: "Pendência", color: "bg-amber-100/80 text-amber-700" },
   "aguardando_recurso": { label: "Aguardando Recurso", color: "bg-rose-100/80 text-rose-700" },
   "autorizacao_pos": { label: "Autorização Pós", color: "bg-sky-100/80 text-sky-700" },
+  "analise_pos": { label: "Análise Pós-Cirúrgica", color: "bg-yellow-100/80 text-yellow-700" },
   "needs_scheduling": { label: "Aguardando Agendamento", color: "bg-orange-100/80 text-orange-700" },
   "authorized_orders": { label: "Pedidos Autorizados", color: "bg-green-100/80 text-green-700" }
 };
@@ -255,7 +256,9 @@ export default function Orders() {
     7: "cancelado",
     8: "aguardando_envio",
     9: "recebido",
-    10: "aguardando_recurso"
+    10: "aguardando_recurso",
+    11: "autorizacao_pos",
+    12: "analise_pos"
   };
   
   // Ler parâmetros da URL no carregamento da página
@@ -831,13 +834,13 @@ export default function Orders() {
     return Math.floor(timeDiff / (1000 * 3600 * 24));
   };
 
-  // Função para obter informações de contagem regressiva (em_avaliacao e cirurgia_realizada)
+  // Função para obter informações de contagem regressiva (em_avaliacao, analise_pos e cirurgia_realizada)
   const getCountdownInfo = (order: any) => {
-    if (!order || (order.status !== 'em_avaliacao' && order.status !== 'cirurgia_realizada')) return null;
+    if (!order || (order.status !== 'em_avaliacao' && order.status !== 'analise_pos' && order.status !== 'cirurgia_realizada')) return null;
     
     const now = new Date();
     
-    if (order.status === 'em_avaliacao') {
+    if (order.status === 'em_avaliacao' || order.status === 'analise_pos') {
       // Lógica original para "em_avaliacao" - 21 dias úteis
       const analysisStart = new Date(order.updatedAt);
       const businessDaysElapsed = calculateBusinessDays(analysisStart, now);
@@ -1512,8 +1515,8 @@ export default function Orders() {
                                 </div>
                               </div>
                               
-                              {order.status === 'em_avaliacao' ? (
-                                // Para estado "em_avaliacao", mostrar informações completas com contagem regressiva
+                              {(order.status === 'em_avaliacao' || order.status === 'analise_pos') ? (
+                                // Para estados "em_avaliacao" e "analise_pos", mostrar informações completas com contagem regressiva
                                 (() => {
                                   const countdownInfo = getCountdownInfo(order);
                                   return (
