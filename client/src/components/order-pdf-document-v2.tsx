@@ -673,7 +673,7 @@ export function OrderPDFDocumentV2({
                 style={{ fontSize: 10, fontWeight: 'bold', color: '#374151', marginBottom: 6 }}
                 break={shouldBreakBefore('justification-header')}
               >
-                INDICAÇÃO CLÍNICA:
+                JUSTIFICATIVA CLÍNICA:
               </Text>{paragraphs.map((paragraph, index) => (
                 <View 
                   key={index} 

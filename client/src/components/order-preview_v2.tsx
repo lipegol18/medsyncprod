@@ -505,7 +505,7 @@ export function OrderPreviewV2({
         parts.length > 2 ? parts[2] : parts.length > 1 ? parts[1] : "";
       const hasReferences = referencesPattern.test(clinicalJustification);
 
-      // Adiciona cabeçalho da seção de Indicação Clínica
+      // Adiciona cabeçalho da seção de Justificativa Clínica
       blocks.push({
         id: "justification-header",
         type: "justification-header",
@@ -523,7 +523,7 @@ export function OrderPreviewV2({
               marginBottom: "9px",
             }}
           >
-            INDICAÇÃO CLÍNICA:
+            JUSTIFICATIVA CLÍNICA:
           </div>
         ),
       });

@@ -701,7 +701,7 @@ export function AppealGenerator({
         procedimento_cirurgico: procedimentoCirurgico,
         
         // Campos recomendados (contexto da glosa)
-        motivo_glosa: rejectionReason,
+        motivo_glosa: rejectionReason.trim() || 'Necessito recorrer aos procedimentos CBHPM e itens OPME que foram negados.',
         justificativa_enviada: appealOrderData?.clinicalJustification || "",
         conduta_cirurgica: condutaCirurgica,
         observacoes_adicionais: appealOrderData?.additionalNotes || "",
@@ -827,27 +827,27 @@ export function AppealGenerator({
                         </span>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5">
                     {/* Procedimentos CBHPM */}
                     {deniedItems.filter(item => item.type === 'cbhpm').length > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-1.5 text-sm font-medium text-blue-700 dark:text-blue-400">
-                          <Stethoscope className="h-4 w-4" />
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 dark:text-blue-400 pt-1 pb-0.5">
+                          <Stethoscope className="h-3.5 w-3.5" />
                           <span>Procedimentos CBHPM</span>
                         </div>
                         {deniedItems.filter(item => item.type === 'cbhpm').map((item) => {
                           const itemKey = `cbhpm-${item.id}`;
                           const isSelected = selectedDeniedItemIds.has(itemKey);
                           return (
-                            <label 
+                            <label
                               key={itemKey}
-                              className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-start gap-2.5 ${
-                                isSelected
-                                  ? item.status === 'negado' 
-                                    ? 'bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700 ring-1 ring-red-300 dark:ring-red-700' 
-                                    : 'bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700 ring-1 ring-amber-300 dark:ring-amber-700'
-                                  : 'bg-muted/30 border-muted-foreground/20 opacity-60'
-                              }`}
+                              className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150
+                                ${isSelected
+                                  ? item.status === 'negado'
+                                    ? 'bg-red-50/60 border-red-300 dark:bg-red-900/20 dark:border-red-700'
+                                    : 'bg-amber-50/60 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700'
+                                  : 'bg-card border-border opacity-60 hover:opacity-80'}
+                              `}
                             >
                               <Checkbox
                                 checked={isSelected}
@@ -859,50 +859,50 @@ export function AppealGenerator({
                                     return next;
                                   });
                                 }}
-                                className="mt-0.5"
+                                className="shrink-0"
                               />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium text-muted-foreground">{item.code}</p>
-                                <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
-                                  item.status === 'negado'
-                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
-                                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
-                                }`}>
-                                  {item.status === 'negado' ? 'Negado' : 'Parcial'}
+                              {item.code && (
+                                <span className="shrink-0 text-xs font-medium text-muted-foreground hidden sm:inline">
+                                  {item.code}
                                 </span>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {item.quantityApproved ?? 0}/{item.quantityRequested}
-                                </p>
-                              </div>
+                              )}
+                              <span className="flex-1 min-w-0 text-sm text-foreground truncate">{item.name}</span>
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {item.quantityApproved ?? 0}/{item.quantityRequested}
+                              </span>
+                              <span className={`shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded ${
+                                item.status === 'negado'
+                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+                              }`}>
+                                {item.status === 'negado' ? 'Negado' : 'Parcial'}
+                              </span>
                             </label>
                           );
                         })}
                       </div>
                     )}
-                    
+
                     {/* Itens OPME */}
                     {deniedItems.filter(item => item.type === 'opme').length > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-1.5 text-sm font-medium text-purple-700 dark:text-purple-400">
-                          <Package className="h-4 w-4" />
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 dark:text-purple-400 pt-1 pb-0.5">
+                          <Package className="h-3.5 w-3.5" />
                           <span>Materiais OPME</span>
                         </div>
                         {deniedItems.filter(item => item.type === 'opme').map((item) => {
                           const itemKey = `opme-${item.id}`;
                           const isSelected = selectedDeniedItemIds.has(itemKey);
                           return (
-                            <label 
+                            <label
                               key={itemKey}
-                              className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-start gap-2.5 ${
-                                isSelected
-                                  ? item.status === 'negado' 
-                                    ? 'bg-red-50 border-red-300 dark:bg-red-900/20 dark:border-red-700 ring-1 ring-red-300 dark:ring-red-700' 
-                                    : 'bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700 ring-1 ring-amber-300 dark:ring-amber-700'
-                                  : 'bg-muted/30 border-muted-foreground/20 opacity-60'
-                              }`}
+                              className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150
+                                ${isSelected
+                                  ? item.status === 'negado'
+                                    ? 'bg-red-50/60 border-red-300 dark:bg-red-900/20 dark:border-red-700'
+                                    : 'bg-amber-50/60 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700'
+                                  : 'bg-card border-border opacity-60 hover:opacity-80'}
+                              `}
                             >
                               <Checkbox
                                 checked={isSelected}
@@ -914,24 +914,19 @@ export function AppealGenerator({
                                     return next;
                                   });
                                 }}
-                                className="mt-0.5"
+                                className="shrink-0"
                               />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium text-muted-foreground">{item.code}</p>
-                                <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
-                                  item.status === 'negado'
-                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
-                                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
-                                }`}>
-                                  {item.status === 'negado' ? 'Negado' : 'Parcial'}
-                                </span>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {item.quantityApproved ?? 0}/{item.quantityRequested}
-                                </p>
-                              </div>
+                              <span className="flex-1 min-w-0 text-sm text-foreground truncate">{item.name}</span>
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {item.quantityApproved ?? 0}/{item.quantityRequested}
+                              </span>
+                              <span className={`shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded ${
+                                item.status === 'negado'
+                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+                                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+                              }`}>
+                                {item.status === 'negado' ? 'Negado' : 'Parcial'}
+                              </span>
                             </label>
                           );
                         })}
@@ -950,7 +945,12 @@ export function AppealGenerator({
                   className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
                 >
                   <Paperclip className="h-4 w-4" />
-                  <span>Anexos do Recurso (opcional)</span>
+                  <span className="flex flex-col items-start">
+                    <span>Anexos do Recurso (opcional)</span>
+                    {!showAttachmentSection && (
+                      <span className="text-xs font-bold text-muted-foreground/70">Clique para Habilitar essa opção</span>
+                    )}
+                  </span>
                   {appealAttachments.length > 0 && (
                     <span className="ml-1 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded-full">
                       {appealAttachments.length}
@@ -1059,16 +1059,37 @@ export function AppealGenerator({
               {/* Campo de Motivo da Recusa */}
               <div>
                 <Label htmlFor="rejectionReason" className="text-muted-foreground">
-                  Motivo da Recusa (Operadora)
+                  Motivo da Recusa (Opcional)
                 </Label>
                 <Textarea
                   id="rejectionReason"
-                  placeholder="Cole aqui a mensagem de recusa enviada pela operadora..."
+                  placeholder="Cole aqui a mensagem de recusa enviada pela operadora ou qualquer informação que considere necessária."
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
                   className="bg-input border-gray-200 text-foreground mt-1 min-h-[100px]"
                   rows={4}
                 />
+                <div className="mt-2 flex justify-center">
+                  <button
+                    type="button"
+                    disabled={isGeneratingAppealAI}
+                    className="btn-medsync-dark disabled:opacity-50 min-w-[240px] flex items-center justify-center gap-2 whitespace-nowrap"
+                    onClick={generateWithAI}
+                    data-testid="button-generate-appeal-ai"
+                  >
+                    {isGeneratingAppealAI ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Gerando...
+                      </>
+                    ) : (
+                      <>
+                        <img src={RoboMedSyncIcon} alt="IA" className="w-5 h-5" />
+                        Gerar Recurso de Glosa com IA
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Campo de Justificativa Médica */}
@@ -1092,27 +1113,6 @@ export function AppealGenerator({
                   </p>
                 </div>
                 
-                <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    disabled={isGeneratingAppealAI || !rejectionReason.trim()}
-                    className="btn-medsync-dark disabled:opacity-50"
-                    onClick={generateWithAI}
-                    data-testid="button-generate-appeal-ai"
-                  >
-                    {isGeneratingAppealAI ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Gerando...
-                      </>
-                    ) : (
-                      <>
-                        <img src={RoboMedSyncIcon} alt="IA" className="w-5 h-5 mr-2 inline-block" />
-                        Gerar Recurso de Glosa com IA
-                      </>
-                    )}
-                  </button>
-                </div>
               </div>
             </div>
           )}

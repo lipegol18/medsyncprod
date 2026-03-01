@@ -1867,10 +1867,9 @@ export default function OrderDetails() {
                   </div>
                 </div>
 
-                {/* Observações Médicas */}
-                <div className="mb-6 text-foreground">
+                {/* [DESATIVADO] Card de Observações Médicas removido do formulário de pedido — não exibir aqui enquanto não for reativado */}
+                {/* <div className="mb-6 text-foreground">
                   <div className="bg-card/70 border border-border rounded-md shadow-md overflow-hidden">
-                    {/* Título com fundo azul */}
                     <div className="bg-medsync-blue px-4 py-2">
                       <div className="flex items-center">
                         <StickyNote className="mr-2 h-5 w-5 text-white" />
@@ -1879,8 +1878,6 @@ export default function OrderDetails() {
                         </div>
                       </div>
                     </div>
-                    
-                    {/* Conteúdo */}
                     <div className="p-5">
                       {order.additionalNotes ? (
                         <p className="text-foreground whitespace-pre-line">{order.additionalNotes}</p>
@@ -1889,7 +1886,7 @@ export default function OrderDetails() {
                       )}
                     </div>
                   </div>
-                </div>
+                </div> */}
               </div>
             </CardContent>
           </Card>
