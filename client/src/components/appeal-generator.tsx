@@ -659,9 +659,10 @@ export function AppealGenerator({
       ).filter((code: string) => code) || [];
       
       // Extrair TODOS os códigos CBHPM do pedido (estrutura: cbhpmProcedures[].procedureCode)
-      const codigosCbhpm: string[] = appealOrderData?.cbhpmProcedures?.map((proc: any) => 
-        proc.procedureCode || ''
-      ).filter((code: string) => code) || [];
+      const codigosCbhpm = appealOrderData?.cbhpmProcedures?.map((proc: any) => ({
+        codigo: proc.procedureCode || '',
+        descricao: proc.procedureName || proc.name || ''
+      })).filter((item: { codigo: string; descricao: string }) => item.codigo) || [];
       
       // Extrair TODOS os itens OPME do pedido (estrutura: opmeItems[].opmeTechnicalName)
       const itensOpme: string[] = appealOrderData?.opmeItems?.map((item: any) => 
@@ -719,7 +720,7 @@ export function AppealGenerator({
         // Itens selecionados para recurso (negados/glosados)
         codigos_cbhpm_neg: deniedItems
           .filter(item => item.type === 'cbhpm' && selectedDeniedItemIds.has(`cbhpm-${item.id}`))
-          .map(item => item.code),
+          .map(item => ({ codigo: item.code, descricao: item.name })),
         itens_opme_neg: deniedItems
           .filter(item => item.type === 'opme' && selectedDeniedItemIds.has(`opme-${item.id}`))
           .map(item => item.name),

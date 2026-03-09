@@ -1425,8 +1425,8 @@ export function SurgeryData({
         lateralidade: procedureLaterality || "",
         carater_procedimento: procedureType || "",
         codigos_cbhpm: [
-          ...(selectedProcedure ? [selectedProcedure.code] : []),
-          ...secondaryProcedures.map(sp => sp.procedure.code)
+          ...(selectedProcedure ? [{ codigo: selectedProcedure.code, descricao: selectedProcedure.name }] : []),
+          ...secondaryProcedures.map(sp => ({ codigo: sp.procedure.code, descricao: sp.procedure.name }))
         ],
         itens_opme: selectedOpmeItems?.map(item => item.item.technicalName || item.item.commercialName) || [],
         fornecedores: supplierDetails?.map(supplier => supplier.companyName || supplier.tradeName) || [],
