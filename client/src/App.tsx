@@ -43,6 +43,7 @@ import AdminDiscountCodes from "@/pages/admin/discount-codes";
 import ImportStripeCodes from "@/pages/admin/import-stripe-codes";
 import AnatomicalRegions from "@/pages/admin/anatomical-regions";
 import MedicalSpecialties from "@/pages/admin/medical-specialties";
+import AdminAnalytics from "@/pages/admin/analytics";
 
 import { useEffect } from "react";
 import { AuthProvider } from "@/hooks/use-auth";
@@ -94,6 +95,7 @@ function Router() {
       <ProtectedRoute path="/preview-lab" component={PreviewLab} />
       <ProtectedRoute path="/logo-test" component={LogoTest} />
       <ProtectedRoute path="/admin/ocr-validator" component={OcrValidator} />
+      <ProtectedRoute path="/admin/analytics" component={AdminAnalytics} />
       
       {/* Checkout success/cancel pages - não precisam de autenticação */}
       <Route path="/checkout/success" component={CheckoutSuccess} />

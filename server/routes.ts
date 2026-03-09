@@ -46,6 +46,7 @@ import { registerHospitalImageRoutes } from "./hospital-images-routes";
 import relationalRoutes from "./relational-routes";
 import { relationalOrderService } from "./relational-services";
 import documentProcessingRoutes from "./routes/document-processing";
+import analyticsRoutes from "./routes/analytics";
 import { randomUUID } from "crypto";
 import { getPaymentProvider } from "./payments";
 import { db, pool } from "./db";
@@ -804,6 +805,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Configurar os endpoints de autenticação
   setupAuth(app);
+
+  // Registrar rotas de analytics com IA (após setupAuth para req.user estar disponível)
+  app.use('/api', analyticsRoutes);
 
   // Endpoint principal para relatório de valores recebidos (após setupAuth)
   app.get("/api/reports/received-values",  async (req: Request, res: Response) => {

@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, ChevronDown, ScanLine, Hospital, Building, UserCog, Shield, MessageSquare, Heart, Link2, Package, FileText, Activity, Target, CreditCard, Ticket, Bone, Stethoscope } from "lucide-react";
+import { Settings, ChevronDown, ScanLine, Hospital, Building, UserCog, Shield, MessageSquare, Heart, Link2, Package, FileText, Activity, Target, CreditCard, Ticket, Bone, Stethoscope, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { t } from "@/lib/i18n";
@@ -198,6 +198,15 @@ export function AdminMenu() {
 
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="header-text">Ferramentas de Teste</DropdownMenuLabel>
+
+          <DropdownMenuItem asChild>
+            <Link href="/admin/analytics">
+              <div className="flex items-center w-full">
+                <Sparkles className="mr-2 h-4 w-4 text-primary" />
+                <span className="header-text">Analytics com IA</span>
+              </div>
+            </Link>
+          </DropdownMenuItem>
           
           <DropdownMenuItem asChild>
             <Link href="/admin/ocr-validator">
