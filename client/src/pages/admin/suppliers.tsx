@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -56,6 +58,12 @@ const supplierFormSchema = z.object({
 type SupplierFormValues = z.infer<typeof supplierFormSchema>;
 
 export default function SuppliersPage() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  if (user && user.roleId !== 1) {
+    setLocation('/welcome');
+    return null;
+  }
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);

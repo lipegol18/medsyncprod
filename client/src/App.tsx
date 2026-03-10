@@ -11,11 +11,11 @@ import OrderDetails from "@/pages/order-details";
 import OpmeCatalog from "@/pages/opme-catalog";
 import SurgeryAppointments from "@/pages/surgery-appointments";
 import Reports from "@/pages/reports";
-import Hospitals from "@/pages/hospitals";
-import Users from "@/pages/users";
-import Roles from "@/pages/roles";
-import Suppliers from "@/pages/suppliers";
-import Procedures from "@/pages/procedures";
+import AdminHospitals from "@/pages/admin/hospitals";
+import Users from "@/pages/admin/users";
+import Roles from "@/pages/admin/roles";
+import Suppliers from "@/pages/admin/suppliers";
+import Procedures from "@/pages/admin/procedures";
 import InsuranceProviders from "@/pages/admin/insurance-providers";
 import InsurancePlans from "@/pages/admin/insurance-plans";
 import Profile from "@/pages/profile";
@@ -69,13 +69,13 @@ function Router() {
       <ProtectedRoute path="/opme-catalog" component={OpmeCatalog} />
       <ProtectedRoute path="/surgery-appointments" component={SurgeryAppointments} />
       <ProtectedRoute path="/reports" component={Reports} />
-      <ProtectedRoute path="/hospitals" component={Hospitals} />
-      <ProtectedRoute path="/suppliers" component={Suppliers} />
-      <ProtectedRoute path="/procedures" component={Procedures} />
+      <ProtectedRoute path="/admin/hospitals" component={AdminHospitals} />
+      <ProtectedRoute path="/admin/suppliers" component={Suppliers} />
+      <ProtectedRoute path="/admin/procedures" component={Procedures} />
       <ProtectedRoute path="/admin/insurance-providers" component={InsuranceProviders} />
       <ProtectedRoute path="/admin/insurance-plans" component={InsurancePlans} />
-      <ProtectedRoute path="/users" component={Users} />
-      <ProtectedRoute path="/roles" component={Roles} />
+      <ProtectedRoute path="/admin/users" component={Users} />
+      <ProtectedRoute path="/admin/roles" component={Roles} />
       <ProtectedRoute path="/profile" component={Profile} />
       <ProtectedRoute path="/notifications" component={Notifications} />
       <ProtectedRoute path="/admin/contact-messages" component={ContactMessages} />

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Pencil, Trash2, UserPlus, Check, X, Shield, XCircle, Building2 as BuildingHospital, Eye, Search, Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { queryClient } from '@/lib/queryClient';
@@ -215,8 +215,13 @@ function UserHospitalsTab({ userId }: { userId?: number }) {
 }
 
 export default function UsersPage() {
-  const { toast } = useToast();
   const { user: currentUser } = useAuth();
+  const [, setLocation] = useLocation();
+  if (currentUser && currentUser.roleId !== 1) {
+    setLocation('/welcome');
+    return null;
+  }
+  const { toast } = useToast();
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
   const [isEditUserDialogOpen, setIsEditUserDialogOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);

@@ -28,7 +28,7 @@ export function AdminMenu() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <span className={`py-1 px-3 inline-block whitespace-nowrap cursor-pointer text-primary-foreground border-b-2 text-sm flex items-center header-text ${
-            location.startsWith('/admin') || location.startsWith('/users') || location.startsWith('/roles') || location.startsWith('/hospitals') || location.startsWith('/suppliers') || location.startsWith('/procedures')
+            location.startsWith('/admin')
               ? "border-primary-foreground"
               : "border-transparent hover:border-primary-foreground/60"
           }`}>
@@ -42,7 +42,7 @@ export function AdminMenu() {
           <DropdownMenuSeparator />
           
           <DropdownMenuItem asChild>
-            <Link href="/users">
+            <Link href="/admin/users">
               <div className="flex items-center w-full">
                 <UserCog className="mr-2 h-4 w-4" />
                 <span className="header-text">{t('nav.users')}</span>
@@ -51,7 +51,7 @@ export function AdminMenu() {
           </DropdownMenuItem>
           
           <DropdownMenuItem asChild>
-            <Link href="/roles">
+            <Link href="/admin/roles">
               <div className="flex items-center w-full">
                 <Shield className="mr-2 h-4 w-4" />
                 <span className="header-text">{t('nav.roles')}</span>
@@ -87,7 +87,7 @@ export function AdminMenu() {
           </DropdownMenuItem>
           
           <DropdownMenuItem asChild>
-            <Link href="/hospitals">
+            <Link href="/admin/hospitals">
               <div className="flex items-center w-full">
                 <Hospital className="mr-2 h-4 w-4" />
                 <span className="header-text">{t('nav.hospitals')}</span>
@@ -96,7 +96,7 @@ export function AdminMenu() {
           </DropdownMenuItem>
           
           <DropdownMenuItem asChild>
-            <Link href="/suppliers">
+            <Link href="/admin/suppliers">
               <div className="flex items-center w-full">
                 <Building className="mr-2 h-4 w-4" />
                 <span className="header-text">{t('nav.suppliers')}</span>
@@ -105,7 +105,7 @@ export function AdminMenu() {
           </DropdownMenuItem>
           
           <DropdownMenuItem asChild>
-            <Link href="/procedures">
+            <Link href="/admin/procedures">
               <div className="flex items-center w-full">
                 <FileText className="mr-2 h-4 w-4" />
                 <span className="header-text">Procedimentos CBHPM</span>

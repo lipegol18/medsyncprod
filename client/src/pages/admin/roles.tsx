@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useAuth } from '@/hooks/use-auth';
+import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Pencil, Trash2, Plus, ShieldCheck, X } from 'lucide-react';
 import { queryClient } from '@/lib/queryClient';
@@ -37,6 +39,12 @@ import { format } from 'date-fns';
 import { TranslatedText } from '@/components/ui/translated-text';
 
 export default function RolesPage() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  if (user && user.roleId !== 1) {
+    setLocation('/welcome');
+    return null;
+  }
   const { toast } = useToast();
   const [isAddRoleDialogOpen, setIsAddRoleDialogOpen] = useState(false);
   const [isEditRoleDialogOpen, setIsEditRoleDialogOpen] = useState(false);

@@ -110,13 +110,13 @@ const navItems: NavItem[] = [
   { name: "contato", path: "/contact", translationKey: 'nav.contact', category: 'main' },
   
   // Items que serão agrupados sob "Administração"
-  { name: "hospitais", path: "/hospitals", translationKey: 'nav.hospitals', category: 'admin' },
+  { name: "hospitais", path: "/admin/hospitals", translationKey: 'nav.hospitals', category: 'admin' },
   { name: "catalogo", path: "/opme-catalog", translationKey: 'nav.catalog', category: 'admin' },
-  { name: "fornecedores", path: "/suppliers", translationKey: 'nav.suppliers', category: 'admin' },
+  { name: "fornecedores", path: "/admin/suppliers", translationKey: 'nav.suppliers', category: 'admin' },
   { name: "operadoras", path: "/admin/insurance-providers", translationKey: 'nav.insurance_providers', category: 'admin' },
   { name: "planos", path: "/admin/insurance-plans", translationKey: 'nav.insurance_plans', category: 'admin' },
-  { name: "usuarios", path: "/users", translationKey: 'nav.users', category: 'admin' },
-  { name: "papeis", path: "/roles", translationKey: 'nav.roles', category: 'admin' },
+  { name: "usuarios", path: "/admin/users", translationKey: 'nav.users', category: 'admin' },
+  { name: "papeis", path: "/admin/roles", translationKey: 'nav.roles', category: 'admin' },
   { name: "mensagens", path: "/admin/contact-messages", translationKey: 'nav.contact_messages', category: 'admin' },
 ];
 

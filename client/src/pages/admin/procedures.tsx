@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -54,6 +56,12 @@ const procedureFormSchema = z.object({
 type ProcedureFormValues = z.infer<typeof procedureFormSchema>;
 
 export default function ProceduresPage() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  if (user && user.roleId !== 1) {
+    setLocation('/welcome');
+    return null;
+  }
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   
