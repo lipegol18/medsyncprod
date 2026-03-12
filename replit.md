@@ -49,5 +49,5 @@ Preferred communication style: Simple, everyday language.
 
 - **Google Cloud Services**: Vision API (for OCR).
 - **Database Services**: Neon Database (PostgreSQL hosting).
-- **Email Services**: SendGrid (for email notifications).
+- **Email Services**: Mailto-based (opens user's local email client; SendGrid removed Mar 2026).
 - **UI Libraries**: Radix UI (primitives), React-beautiful-dnd (drag and drop).
