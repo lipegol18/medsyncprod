@@ -84,7 +84,7 @@
     "html2canvas": "^1.4.1",
     "i18next": "^25.1.2",
     "input-otp": "^1.4.2",
-    "jspdf": "^4.2.0",
+    "jspdf": "^3.0.1",
     "lucide-react": "^0.453.0",
     "memorystore": "^1.6.7",
     "moment": "^2.30.1",
