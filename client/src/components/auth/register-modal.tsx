@@ -13,7 +13,7 @@ import { ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
 interface RegisterModalProps {
   onSwitchToLogin: () => void;
   validationErrors: Record<string, string>;
-  onFieldValidation: (field: 'crm' | 'email', value: string) => void;
+  onFieldValidation: (field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string) => void;
 }
 
 export function RegisterModal({
@@ -160,19 +160,35 @@ export function RegisterModal({
   });
 
   const handleFormSubmit = async (data: RegisterFormType) => {
+    // Salvar dados do formulário e prosseguir para seleção de planos
     setFormData(data);
     
+    // Tracking: registrar que usuário completou o formulário
     try {
       await fetch('/api/track-lead', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // Dados básicos
           email: data.email,
           firstName: data.firstName,
           lastName: data.lastName,
+          cpf: data.cpf,
+          phone: data.phone,
+          username: data.username,
+          // Dados CRM
           medicalSpecialtyId: data.medicalSpecialtyId,
           crm: data.crm,
           crmUf: data.crmUf,
+          // Dados de endereço
+          cep: data.cep,
+          address: data.address,
+          number: data.number,
+          complement: data.complement,
+          neighborhood: data.neighborhood,
+          city: data.city,
+          state: data.state,
+          // Tracking
           currentStep: 'form_completed',
           userAgent: navigator.userAgent,
           source: 'direct'
@@ -180,8 +196,10 @@ export function RegisterModal({
       });
     } catch (error) {
       console.log('Erro ao registrar lead:', error);
+      // Não bloquear o fluxo por erro de tracking
     }
     
+    // Fazer scroll para o topo do modal quando transita para escolha de planos
     window.scrollTo({ top: 0, behavior: 'smooth' });
     
     setCurrentStep('pricing');
@@ -455,8 +473,24 @@ export function RegisterModal({
             <h3 className="font-bold text-gray-900 mb-3">Dados Pessoais</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div><span className="text-gray-600">Nome:</span> <span className="font-medium">{formData?.firstName} {formData?.lastName}</span></div>
+              <div><span className="text-gray-600">CPF:</span> <span className="font-medium">{formData?.cpf}</span></div>
               <div><span className="text-gray-600">E-mail:</span> <span className="font-medium">{formData?.email}</span></div>
+              <div><span className="text-gray-600">Telefone:</span> <span className="font-medium">{formData?.phone}</span></div>
               <div><span className="text-gray-600">CRM:</span> <span className="font-medium">{formData?.crm} / {formData?.crmUf}</span></div>
+              <div><span className="text-gray-600">Username:</span> <span className="font-medium">{formData?.username}</span></div>
+            </div>
+          </div>
+
+          {/* Endereço */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-bold text-gray-900 mb-3">Endereço</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div><span className="text-gray-600">CEP:</span> <span className="font-medium">{formData?.cep}</span></div>
+              <div><span className="text-gray-600">Endereço:</span> <span className="font-medium">{formData?.address}, {formData?.number}</span></div>
+              <div><span className="text-gray-600">Complemento:</span> <span className="font-medium">{formData?.complement || '—'}</span></div>
+              <div><span className="text-gray-600">Bairro:</span> <span className="font-medium">{formData?.neighborhood}</span></div>
+              <div><span className="text-gray-600">Cidade:</span> <span className="font-medium">{formData?.city}</span></div>
+              <div><span className="text-gray-600">Estado:</span> <span className="font-medium">{formData?.state}</span></div>
             </div>
           </div>
 

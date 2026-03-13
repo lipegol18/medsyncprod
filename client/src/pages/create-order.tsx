@@ -136,7 +136,6 @@ import { LoadingLogo } from "@/components/loading-logo";
 import { MarkdownViewer } from "@/components/markdown-editor";
 import { OrderPreview } from "@/components/order-preview";
 import { OrderPreviewV2 } from "@/components/order-preview_v2";
-import { EmailSenderModal, type EmailRecipient } from "@/components/email-sender-modal";
 
 const USE_PAGINATED_PREVIEW = true;
 
@@ -309,7 +308,16 @@ export default function CreateOrder() {
 
   // Estado para dialog de envio por email
   const [showEmailDialog, setShowEmailDialog] = useState(false);
-  const [initialEmailRecipients, setInitialEmailRecipients] = useState<EmailRecipient[]>([]);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailRecipients, setEmailRecipients] = useState<Array<{
+    id: string;
+    name: string;
+    email: string;
+    type: 'hospital' | 'fornecedor' | 'custom';
+    selected: boolean;
+  }>>([]);
+  const [newRecipientName, setNewRecipientName] = useState('');
+  const [newRecipientEmail, setNewRecipientEmail] = useState('');
 
   // Estado para quebras de página forçadas do preview (IDs dos blocos que devem iniciar nova página)
   const [forcedPageBreaks, setForcedPageBreaks] = useState<Set<string>>(new Set());
@@ -2590,9 +2598,8 @@ export default function CreateOrder() {
     }
   };
 
-  // Monta a lista de destinatários iniciais a partir do hospital e fornecedores do pedido
   const handleOpenEmailDialog = () => {
-    const recipients: EmailRecipient[] = [];
+    const recipients: typeof emailRecipients = [];
     const seenEmails = new Set<string>();
 
     if (selectedHospital && (selectedHospital as any).email) {
@@ -2603,6 +2610,7 @@ export default function CreateOrder() {
         name: selectedHospital.name,
         email,
         type: 'hospital',
+        selected: true,
       });
     }
 
@@ -2614,43 +2622,108 @@ export default function CreateOrder() {
           name: supplier.tradeName || supplier.companyName,
           email: supplier.email,
           type: 'fornecedor',
+          selected: true,
         });
       }
     }
 
-    setInitialEmailRecipients(recipients);
+    setEmailRecipients(recipients);
+    setNewRecipientName('');
+    setNewRecipientEmail('');
     setShowEmailDialog(true);
   };
 
-  // Busca o PDF do pedido nos attachments e retorna em base64 (usado pelo EmailSenderModal)
-  const getOrderPdf = async (): Promise<{ base64: string; filename: string }> => {
-    const orderResponse = await fetch(`/api/medical-orders/${orderId}`, { credentials: 'include' });
-    if (!orderResponse.ok) throw new Error('Erro ao buscar pedido');
-    const orderData = await orderResponse.json();
-
-    const systemPdfs = (orderData.attachments || []).filter((att: any) => {
-      if (att.type !== 'pdf') return false;
-      const filename = att.filename || '';
-      return filename.includes(`pedido_${orderId}_`) || filename.includes(`order_${orderId}_`);
-    });
-
-    if (systemPdfs.length === 0) {
-      throw new Error('Nenhum PDF do pedido foi gerado. Por favor, gere o PDF primeiro.');
+  const handleSendEmail = async () => {
+    const selected = emailRecipients.filter(r => r.selected);
+    if (selected.length === 0) {
+      toast({ title: 'Selecione pelo menos um destinatário', variant: 'destructive' });
+      return;
     }
 
-    const pdfAttachment = systemPdfs[systemPdfs.length - 1];
-    const pdfResponse = await fetch(pdfAttachment.url);
-    if (!pdfResponse.ok) throw new Error('Erro ao buscar o arquivo PDF');
-    const pdfBlob = await pdfResponse.blob();
+    setIsSendingEmail(true);
+    try {
+      const orderResponse = await fetch(`/api/medical-orders/${orderId}`, { credentials: 'include' });
+      if (!orderResponse.ok) throw new Error('Erro ao buscar pedido');
+      const orderData = await orderResponse.json();
 
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(pdfBlob);
-    });
+      const systemPdfs = (orderData.attachments || []).filter((att: any) => {
+        if (att.type !== 'pdf') return false;
+        const filename = att.filename || '';
+        return filename.includes(`pedido_${orderId}_`) || filename.includes(`order_${orderId}_`);
+      });
 
-    return { base64, filename: pdfAttachment.filename || `pedido_${orderId}.pdf` };
+      if (systemPdfs.length === 0) {
+        toast({
+          title: 'PDF não encontrado',
+          description: 'Nenhum PDF do pedido foi gerado. Por favor, gere o PDF primeiro.',
+          variant: 'destructive',
+        });
+        setIsSendingEmail(false);
+        return;
+      }
+
+      const pdfAttachment = systemPdfs[systemPdfs.length - 1];
+      const pdfResponse = await fetch(pdfAttachment.url);
+      if (!pdfResponse.ok) throw new Error('Erro ao buscar PDF');
+      const pdfBlob = await pdfResponse.blob();
+
+      const pdfBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(pdfBlob);
+      });
+
+      const result = await apiRequest(`/api/medical-orders/${orderId}/send-email`, 'POST', {
+        recipients: selected.map(r => ({ name: r.name, email: r.email })),
+        pdfBase64,
+        pdfFilename: pdfAttachment.filename || `pedido_${orderId}.pdf`,
+        patientName: selectedPatient?.fullName || '',
+      });
+
+      if (result.devMode) {
+        toast({
+          title: 'Simulação de envio (modo dev)',
+          description: `Email seria enviado para: ${result.sent.join(', ')}`,
+        });
+      } else if (result.failed.length > 0 && result.sent.length === 0) {
+        toast({ title: 'Falha no envio', description: 'Nenhum email foi enviado.', variant: 'destructive' });
+      } else {
+        const failMsg = result.failed.length > 0 ? ` Falha: ${result.failed.join(', ')}` : '';
+        toast({
+          title: 'Email enviado!',
+          description: `Enviado para ${result.sent.length} destinatário(s).${failMsg}`,
+        });
+      }
+      setShowEmailDialog(false);
+    } catch (err) {
+      console.error('[send-email]', err);
+      toast({ title: 'Erro ao enviar email', variant: 'destructive' });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const handleAddCustomRecipient = () => {
+    const emailTrimmed = newRecipientEmail.trim().toLowerCase();
+    const nameTrimmed = newRecipientName.trim();
+    if (!emailTrimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      toast({ title: 'Email inválido', variant: 'destructive' });
+      return;
+    }
+    if (emailRecipients.some(r => r.email.toLowerCase() === emailTrimmed)) {
+      toast({ title: 'Email já adicionado', variant: 'destructive' });
+      return;
+    }
+    setEmailRecipients(prev => [...prev, {
+      id: `custom-${Date.now()}`,
+      name: nameTrimmed || emailTrimmed,
+      email: emailTrimmed,
+      type: 'custom',
+      selected: true,
+    }]);
+    setNewRecipientName('');
+    setNewRecipientEmail('');
   };
 
   // Função para gerar PDF vetorial com quebra automática de páginas
@@ -4047,42 +4120,6 @@ export default function CreateOrder() {
     );
   }
 
-  // --- Dados para o email de solicitação de autorização ---
-  const _emailBirthDate = (() => {
-    if (!selectedPatient?.birthDate) return '';
-    const d = new Date(selectedPatient.birthDate + 'T00:00:00');
-    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-  })();
-  const _emailAge = selectedPatient?.birthDate
-    ? Math.floor((Date.now() - new Date(selectedPatient.birthDate + 'T00:00:00').getTime()) / (1000*60*60*24*365.25))
-    : null;
-  const _emailProcedureLabel = procedureType === PROCEDURE_TYPE_VALUES.URGENCIA ? 'Urgência' : 'Eletiva';
-  const _emailInsurance = (selectedPatient as any)?.insurance || (selectedPatient as any)?.plan || '';
-  const _emailCardNumber = (selectedPatient as any)?.insuranceNumber || '';
-  const _emailPdfAttachment = currentOrderData?.attachments?.find(a => a.type === 'pdf');
-  const _emailPdfLink = _emailPdfAttachment
-    ? `${window.location.origin}${_emailPdfAttachment.url}`
-    : `${window.location.origin}/order/${orderId}`;
-  const _emailSubject = `Solicitação de Autorização (${_emailProcedureLabel}) - ${selectedPatient?.fullName || ''}`;
-  const _emailBody = [
-    'Prezado(a),',
-    '',
-    `Venho por este meio solicitar Autorização para procedimento (${_emailProcedureLabel}) do paciente:`,
-    '',
-    `Nome: ${selectedPatient?.fullName || ''}`,
-    _emailBirthDate ? `Data de Nascimento: ${_emailBirthDate}` : null,
-    _emailAge !== null ? `Idade: ${_emailAge} anos` : null,
-    _emailInsurance ? `Plano de Saúde: ${_emailInsurance}` : null,
-    _emailCardNumber ? `Número da carteirinha: ${_emailCardNumber}` : null,
-    '',
-    `Cópia do Pedido de solicitação: ${_emailPdfLink}`,
-    '',
-    'Aguardo confirmação dentro da brevidade necessária.',
-    '',
-    'Com os melhores cumprimentos,',
-  ].filter((l): l is string => l !== null).join('\n');
-  // ---------------------------------------------------------
-
   return (
     <div className="min-h-screen flex flex-col bg-muted">
       <main className="flex-grow overflow-auto">
@@ -4340,16 +4377,14 @@ export default function CreateOrder() {
                     <img src={DownloadIcon} alt="Download" className="mr-2 h-5 w-5" />
                     Download PDF
                   </button>
-                  {_emailPdfAttachment && (
-                    <button
-                      className="btn-medsync-dark h-10 flex items-center justify-center w-full sm:w-auto"
-                      data-testid="button-send-email"
-                      onClick={handleOpenEmailDialog}
-                    >
-                      <img src={EmailIcon} alt="Email" className="mr-2 h-5 w-5" />
-                      Enviar por Email
-                    </button>
-                  )}
+                  <button
+                    className="btn-medsync-dark h-10 flex items-center justify-center w-full sm:w-auto"
+                    data-testid="button-send-email"
+                    onClick={handleOpenEmailDialog}
+                  >
+                    <img src={EmailIcon} alt="Email" className="mr-2 h-5 w-5" />
+                    Enviar por Email
+                  </button>
                   <Button
                     variant="outline"
                     className="border-border text-muted-foreground hover:bg-muted/30 h-10 cursor-not-allowed w-full sm:w-auto"
@@ -4535,18 +4570,110 @@ export default function CreateOrder() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de Envio por Email — abre cliente de email do usuário */}
-      <EmailSenderModal
-        open={showEmailDialog}
-        onOpenChange={setShowEmailDialog}
-        title="Enviar Pedido por Email"
-        description={`Selecione os destinatários para o pedido <strong>#${orderId}</strong>. O PDF será baixado e seu email será aberto automaticamente.`}
-        initialRecipients={initialEmailRecipients}
-        getPdf={getOrderPdf}
-        subject={_emailSubject}
-        bodyText={_emailBody}
-      />
+      {/* Dialog de Envio por Email */}
+      <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-medsync-blue" />
+              Enviar Pedido por Email
+            </DialogTitle>
+            <DialogDescription>
+              Selecione os destinatários e confirme o envio do pedido <strong>#{orderId}</strong> em PDF.
+            </DialogDescription>
+          </DialogHeader>
 
+          <div className="space-y-4 py-2">
+            {emailRecipients.length === 0 && (
+              <div className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
+                Nenhum email cadastrado para o hospital ou fornecedores deste pedido. Adicione um destinatário abaixo.
+              </div>
+            )}
+
+            {emailRecipients.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Destinatários</p>
+                {emailRecipients.map(recipient => (
+                  <div
+                    key={recipient.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${recipient.selected ? 'border-medsync-blue/50 bg-medsync-blue/5' : 'border-border bg-muted/20'}`}
+                    onClick={() => setEmailRecipients(prev => prev.map(r => r.id === recipient.id ? { ...r, selected: !r.selected } : r))}
+                  >
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${recipient.selected ? 'bg-medsync-blue border-medsync-blue' : 'border-muted-foreground/40'}`}>
+                      {recipient.selected && <Check className="h-3 w-3 text-white" />}
+                    </div>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {recipient.type === 'hospital' && <Building2 className="h-4 w-4 text-blue-500 flex-shrink-0" />}
+                      {recipient.type === 'fornecedor' && <Package className="h-4 w-4 text-green-500 flex-shrink-0" />}
+                      {recipient.type === 'custom' && <UserIcon className="h-4 w-4 text-purple-500 flex-shrink-0" />}
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{recipient.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{recipient.email}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted-foreground capitalize flex-shrink-0">{recipient.type === 'fornecedor' ? 'Fornecedor' : recipient.type === 'hospital' ? 'Hospital' : 'Outro'}</span>
+                    {recipient.type === 'custom' && (
+                      <button
+                        className="text-muted-foreground hover:text-destructive transition-colors"
+                        onClick={e => { e.stopPropagation(); setEmailRecipients(prev => prev.filter(r => r.id !== recipient.id)); }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="border-t pt-4 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Adicionar outro destinatário</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  placeholder="Nome"
+                  value={newRecipientName}
+                  onChange={e => setNewRecipientName(e.target.value)}
+                  className="flex-1 h-9 px-3 text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <input
+                  type="email"
+                  placeholder="email@exemplo.com"
+                  value={newRecipientEmail}
+                  onChange={e => setNewRecipientEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddCustomRecipient()}
+                  className="flex-1 h-9 px-3 text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <Button type="button" size="sm" variant="outline" onClick={handleAddCustomRecipient} className="flex-shrink-0">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowEmailDialog(false)} disabled={isSendingEmail}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSendEmail}
+              disabled={isSendingEmail || emailRecipients.filter(r => r.selected).length === 0}
+              className="bg-medsync-blue hover:bg-medsync-blue-dark text-white gap-2"
+            >
+              {isSendingEmail ? (
+                <>
+                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Enviar para {emailRecipients.filter(r => r.selected).length} destinatário{emailRecipients.filter(r => r.selected).length !== 1 ? 's' : ''}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
