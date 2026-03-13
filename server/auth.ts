@@ -17,31 +17,6 @@ import { findPromotionCodeByCode } from "./services/discounts/discountService";
 
 const PostgresSessionStore = connectPg(session);
 
-async function generateUniqueUsername(firstName: string, lastName: string, storageRef: typeof storage): Promise<string> {
-  const normalize = (str: string) =>
-    str.toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/ç/g, 'c')
-      .replace(/[^a-z0-9]/g, '');
-
-  const first = normalize(firstName);
-  const last = normalize(lastName);
-  const base = last ? `${first}.${last}` : first || `user`;
-
-  let candidate = base;
-  let suffix = 1;
-  while (true) {
-    const existing = await storageRef.getUserByUsername(candidate);
-    if (!existing) return candidate;
-    candidate = `${base}${suffix}`;
-    suffix++;
-    if (suffix > 999) {
-      return `${base}${Date.now()}`;
-    }
-  }
-}
-
 declare global {
   namespace Express {
     interface User extends SelectUser {}
@@ -196,6 +171,13 @@ export function setupAuth(app: Express) {
     try {
       console.log("Registro - dados recebidos:", req.body);
 
+      // Verificar se já existe usuário com esse username ou email
+      const existingUser = await storage.getUserByUsername(req.body.username);
+      if (existingUser) {
+        console.log("Erro de registro: Nome de usuário já existe");
+        return res.status(400).json({ message: "Nome de usuário já existe" });
+      }
+
       const existingEmail = await storage.getUserByEmail(req.body.email);
       if (existingEmail) {
         console.log("Erro de registro: Email já está em uso");
@@ -218,6 +200,7 @@ export function setupAuth(app: Express) {
           req.body.roleId = defaultRole.id;
           console.log("Usando papel padrão:", defaultRole.id);
         } else {
+          // Caso não exista papel padrão, usar o primeiro disponível
           const roles = await storage.getRoles();
           if (roles.length > 0) {
             req.body.roleId = roles[0].id;
@@ -232,9 +215,16 @@ export function setupAuth(app: Express) {
       }
 
       // Verificar se os campos obrigatórios estão presentes
-      if (!req.body.name && !req.body.firstName) {
+      if (!req.body.name) {
         console.log("Erro de registro: nome não fornecido");
         return res.status(400).json({ message: "Nome é obrigatório" });
+      }
+
+      if (!req.body.username) {
+        console.log("Erro de registro: username não fornecido");
+        return res
+          .status(400)
+          .json({ message: "Nome de usuário é obrigatório" });
       }
 
       if (!req.body.email) {
@@ -245,26 +235,6 @@ export function setupAuth(app: Express) {
       if (!req.body.password) {
         console.log("Erro de registro: senha não fornecida");
         return res.status(400).json({ message: "Senha é obrigatória" });
-      }
-
-      // Auto-generate username if not provided
-      if (!req.body.username) {
-        req.body.username = await generateUniqueUsername(
-          req.body.firstName || req.body.name?.split(' ')[0] || '',
-          req.body.lastName || req.body.name?.split(' ').slice(1).join(' ') || '',
-          storage
-        );
-      } else {
-        const existingUser = await storage.getUserByUsername(req.body.username);
-        if (existingUser) {
-          console.log("Erro de registro: Nome de usuário já existe");
-          return res.status(400).json({ message: "Nome de usuário já existe" });
-        }
-      }
-
-      // Build name from firstName + lastName if name not provided
-      if (!req.body.name && req.body.firstName) {
-        req.body.name = `${req.body.firstName} ${req.body.lastName || ''}`.trim();
       }
 
       console.log("Tentando criar usuário com dados:", {
@@ -382,6 +352,14 @@ export function setupAuth(app: Express) {
           .json({ message: "Plano de assinatura inválido" });
       }
 
+      // Verificar se já existe usuário com esse username ou email
+      const existingUser = await storage.getUserByUsername(
+        registrationData.username,
+      );
+      if (existingUser) {
+        return res.status(400).json({ message: "Nome de usuário já existe" });
+      }
+
       const existingEmail = await storage.getUserByEmail(
         registrationData.email,
       );
@@ -394,22 +372,6 @@ export function setupAuth(app: Express) {
         const defaultRole = await storage.getDefaultRole();
         if (defaultRole) {
           registrationData.roleId = defaultRole.id;
-        }
-      }
-
-      // Auto-generate username if not provided
-      if (!registrationData.username) {
-        registrationData.username = await generateUniqueUsername(
-          registrationData.firstName || '',
-          registrationData.lastName || '',
-          storage
-        );
-      } else {
-        const existingUser = await storage.getUserByUsername(
-          registrationData.username,
-        );
-        if (existingUser) {
-          return res.status(400).json({ message: "Nome de usuário já existe" });
         }
       }
 
@@ -428,7 +390,7 @@ export function setupAuth(app: Express) {
       // Garantir que o campo name seja criado corretamente
       const fullName =
         registrationData.name ||
-        `${registrationData.firstName} ${registrationData.lastName}`.trim();
+        `${registrationData.firstName} ${registrationData.lastName}`;
 
       const now = new Date();
       const hashedPassword = await hashPassword(registrationData.password);

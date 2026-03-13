@@ -39,13 +39,6 @@ import {
   MessageCircle,
   GripVertical,
   RotateCcw,
-  X,
-  Plus,
-  Trash2,
-  Send,
-  Building2,
-  Package,
-  User as UserIcon,
 } from "lucide-react";
 import {
   type Hospital,
@@ -136,7 +129,6 @@ import { LoadingLogo } from "@/components/loading-logo";
 import { MarkdownViewer } from "@/components/markdown-editor";
 import { OrderPreview } from "@/components/order-preview";
 import { OrderPreviewV2 } from "@/components/order-preview_v2";
-import { EmailSenderModal, type EmailRecipient } from "@/components/email-sender-modal";
 
 const USE_PAGINATED_PREVIEW = true;
 
@@ -306,11 +298,7 @@ export default function CreateOrder() {
     SecondaryProcedure[]
   >([]);
   const [orderId, setOrderId] = useState<number | null>(null);
-
-  // Estado para dialog de envio por email
-  const [showEmailDialog, setShowEmailDialog] = useState(false);
-  const [initialEmailRecipients, setInitialEmailRecipients] = useState<EmailRecipient[]>([]);
-
+  
   // Estado para quebras de página forçadas do preview (IDs dos blocos que devem iniciar nova página)
   const [forcedPageBreaks, setForcedPageBreaks] = useState<Set<string>>(new Set());
   // Estados para os itens OPME e fornecedores
@@ -2590,69 +2578,6 @@ export default function CreateOrder() {
     }
   };
 
-  // Monta a lista de destinatários iniciais a partir do hospital e fornecedores do pedido
-  const handleOpenEmailDialog = () => {
-    const recipients: EmailRecipient[] = [];
-    const seenEmails = new Set<string>();
-
-    if (selectedHospital && (selectedHospital as any).email) {
-      const email = (selectedHospital as any).email as string;
-      seenEmails.add(email.toLowerCase());
-      recipients.push({
-        id: `hospital-${selectedHospital.id}`,
-        name: selectedHospital.name,
-        email,
-        type: 'hospital',
-      });
-    }
-
-    for (const supplier of supplierDetails) {
-      if (supplier.email && !seenEmails.has(supplier.email.toLowerCase())) {
-        seenEmails.add(supplier.email.toLowerCase());
-        recipients.push({
-          id: `supplier-${supplier.id}`,
-          name: supplier.tradeName || supplier.companyName,
-          email: supplier.email,
-          type: 'fornecedor',
-        });
-      }
-    }
-
-    setInitialEmailRecipients(recipients);
-    setShowEmailDialog(true);
-  };
-
-  // Busca o PDF do pedido nos attachments e retorna em base64 (usado pelo EmailSenderModal)
-  const getOrderPdf = async (): Promise<{ base64: string; filename: string }> => {
-    const orderResponse = await fetch(`/api/medical-orders/${orderId}`, { credentials: 'include' });
-    if (!orderResponse.ok) throw new Error('Erro ao buscar pedido');
-    const orderData = await orderResponse.json();
-
-    const systemPdfs = (orderData.attachments || []).filter((att: any) => {
-      if (att.type !== 'pdf') return false;
-      const filename = att.filename || '';
-      return filename.includes(`pedido_${orderId}_`) || filename.includes(`order_${orderId}_`);
-    });
-
-    if (systemPdfs.length === 0) {
-      throw new Error('Nenhum PDF do pedido foi gerado. Por favor, gere o PDF primeiro.');
-    }
-
-    const pdfAttachment = systemPdfs[systemPdfs.length - 1];
-    const pdfResponse = await fetch(pdfAttachment.url);
-    if (!pdfResponse.ok) throw new Error('Erro ao buscar o arquivo PDF');
-    const pdfBlob = await pdfResponse.blob();
-
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(pdfBlob);
-    });
-
-    return { base64, filename: pdfAttachment.filename || `pedido_${orderId}.pdf` };
-  };
-
   // Função para gerar PDF vetorial com quebra automática de páginas
   const generateHighQualityPDF = async () => {
     // Configurar Buffer globalmente para @react-pdf/renderer
@@ -4047,42 +3972,6 @@ export default function CreateOrder() {
     );
   }
 
-  // --- Dados para o email de solicitação de autorização ---
-  const _emailBirthDate = (() => {
-    if (!selectedPatient?.birthDate) return '';
-    const d = new Date(selectedPatient.birthDate + 'T00:00:00');
-    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-  })();
-  const _emailAge = selectedPatient?.birthDate
-    ? Math.floor((Date.now() - new Date(selectedPatient.birthDate + 'T00:00:00').getTime()) / (1000*60*60*24*365.25))
-    : null;
-  const _emailProcedureLabel = procedureType === PROCEDURE_TYPE_VALUES.URGENCIA ? 'Urgência' : 'Eletiva';
-  const _emailInsurance = (selectedPatient as any)?.insurance || (selectedPatient as any)?.plan || '';
-  const _emailCardNumber = (selectedPatient as any)?.insuranceNumber || '';
-  const _emailPdfAttachment = currentOrderData?.attachments?.find(a => a.type === 'pdf');
-  const _emailPdfLink = _emailPdfAttachment
-    ? `${window.location.origin}${_emailPdfAttachment.url}`
-    : `${window.location.origin}/order/${orderId}`;
-  const _emailSubject = `Solicitação de Autorização (${_emailProcedureLabel}) - ${selectedPatient?.fullName || ''}`;
-  const _emailBody = [
-    'Prezado(a),',
-    '',
-    `Venho por este meio solicitar Autorização para procedimento (${_emailProcedureLabel}) do paciente:`,
-    '',
-    `Nome: ${selectedPatient?.fullName || ''}`,
-    _emailBirthDate ? `Data de Nascimento: ${_emailBirthDate}` : null,
-    _emailAge !== null ? `Idade: ${_emailAge} anos` : null,
-    _emailInsurance ? `Plano de Saúde: ${_emailInsurance}` : null,
-    _emailCardNumber ? `Número da carteirinha: ${_emailCardNumber}` : null,
-    '',
-    `Cópia do Pedido de solicitação: ${_emailPdfLink}`,
-    '',
-    'Aguardo confirmação dentro da brevidade necessária.',
-    '',
-    'Com os melhores cumprimentos,',
-  ].filter((l): l is string => l !== null).join('\n');
-  // ---------------------------------------------------------
-
   return (
     <div className="min-h-screen flex flex-col bg-muted">
       <main className="flex-grow overflow-auto">
@@ -4340,16 +4229,20 @@ export default function CreateOrder() {
                     <img src={DownloadIcon} alt="Download" className="mr-2 h-5 w-5" />
                     Download PDF
                   </button>
-                  {_emailPdfAttachment && (
-                    <button
-                      className="btn-medsync-dark h-10 flex items-center justify-center w-full sm:w-auto"
-                      data-testid="button-send-email"
-                      onClick={handleOpenEmailDialog}
-                    >
-                      <img src={EmailIcon} alt="Email" className="mr-2 h-5 w-5" />
-                      Enviar por Email
-                    </button>
-                  )}
+                  <button
+                    className="btn-medsync-dark h-10 flex items-center justify-center w-full sm:w-auto"
+                    data-testid="button-send-email"
+                    onClick={() => {
+                      toast({
+                        title: "Funcionalidade em desenvolvimento",
+                        description: "Envio por email será implementado em breve",
+                        duration: 3000,
+                      });
+                    }}
+                  >
+                    <img src={EmailIcon} alt="Email" className="mr-2 h-5 w-5" />
+                    Enviar por Email
+                  </button>
                   <Button
                     variant="outline"
                     className="border-border text-muted-foreground hover:bg-muted/30 h-10 cursor-not-allowed w-full sm:w-auto"
@@ -4534,19 +4427,6 @@ export default function CreateOrder() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Dialog de Envio por Email — abre cliente de email do usuário */}
-      <EmailSenderModal
-        open={showEmailDialog}
-        onOpenChange={setShowEmailDialog}
-        title="Enviar Pedido por Email"
-        description={`Selecione os destinatários para o pedido <strong>#${orderId}</strong>. O PDF será baixado e seu email será aberto automaticamente.`}
-        initialRecipients={initialEmailRecipients}
-        getPdf={getOrderPdf}
-        subject={_emailSubject}
-        bodyText={_emailBody}
-      />
-
     </div>
   );
 }

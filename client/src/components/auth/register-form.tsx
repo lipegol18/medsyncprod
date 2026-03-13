@@ -5,14 +5,16 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { registerSchema, type RegisterForm } from '@/schemas/auth-schemas';
-import { useEffect, useRef } from 'react';
+import { applyCPFMask, applyPhoneMask, onlyNumbers } from '@/lib/utils';
+import { fetchAddressByCEP, applyCEPMask } from '@/lib/viacep';
+import { useState, useRef, useEffect } from 'react';
 
 interface RegisterFormProps {
   onSubmit: (data: RegisterForm) => void;
   onSwitchToLogin: () => void;
   isLoading: boolean;
   validationErrors: Record<string, string>;
-  onFieldValidation: (field: 'crm' | 'email', value: string, additionalData?: any) => void;
+  onFieldValidation: (field: 'cpf' | 'crm' | 'phone' | 'email' | 'username', value: string, additionalData?: any) => void;
   defaultValues?: Partial<RegisterForm>;
 }
 
@@ -24,7 +26,11 @@ export function RegisterForm({
   onFieldValidation,
   defaultValues
 }: RegisterFormProps) {
+  const [isLoadingCEP, setIsLoadingCEP] = useState(false);
+  const [isLoadingPreviousData, setIsLoadingPreviousData] = useState(false);
+  const [showPrefillBanner, setShowPrefillBanner] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const prefillAttemptedRef = useRef<Set<string>>(new Set());
 
   const registerForm = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
@@ -32,12 +38,21 @@ export function RegisterForm({
       firstName: defaultValues?.firstName || '', 
       lastName: defaultValues?.lastName || '', 
       email: defaultValues?.email || '', 
-      password: '', 
-      confirmPassword: '', 
+      phone: defaultValues?.phone || '', 
+      username: defaultValues?.username || '',
+      password: '', confirmPassword: '', 
+      address: defaultValues?.address || '', 
+      number: defaultValues?.number || '', 
+      cep: defaultValues?.cep || '',
+      complement: defaultValues?.complement || '', 
+      neighborhood: defaultValues?.neighborhood || '', 
+      city: defaultValues?.city || '', 
+      state: defaultValues?.state || '',
       roleId: defaultValues?.roleId || 2, 
       medicalSpecialtyId: defaultValues?.medicalSpecialtyId || undefined, 
       crm: defaultValues?.crm || '', 
       crmUf: defaultValues?.crmUf || '',
+      cpf: defaultValues?.cpf || ''
     }
   });
 
@@ -47,20 +62,129 @@ export function RegisterForm({
         firstName: defaultValues.firstName || '', 
         lastName: defaultValues.lastName || '', 
         email: defaultValues.email || '', 
+        phone: defaultValues.phone || '', 
+        username: defaultValues.username || '',
         password: '', 
         confirmPassword: '', 
+        address: defaultValues.address || '', 
+        number: defaultValues.number || '', 
+        cep: defaultValues.cep || '',
+        complement: defaultValues.complement || '', 
+        neighborhood: defaultValues.neighborhood || '', 
+        city: defaultValues.city || '', 
+        state: defaultValues.state || '',
         roleId: defaultValues.roleId || 2, 
         medicalSpecialtyId: defaultValues.medicalSpecialtyId || undefined, 
         crm: defaultValues.crm || '', 
         crmUf: defaultValues.crmUf || '',
+        cpf: defaultValues.cpf || ''
       });
     }
   }, [defaultValues]);
 
+  const handleCpfAutofill = async (cpfValue: string) => {
+    const cleanCpf = cpfValue.replace(/\D/g, '');
+    if (cleanCpf.length !== 11) return;
+    if (prefillAttemptedRef.current.has(cleanCpf)) return;
+
+    const firstNameValue = registerForm.getValues('firstName');
+    if (!firstNameValue || firstNameValue.trim().length < 2) return;
+
+    const lastNameValue = registerForm.getValues('lastName');
+
+    prefillAttemptedRef.current.add(cleanCpf);
+
+    try {
+      setIsLoadingPreviousData(true);
+      const response = await fetch('/api/incomplete-registration/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpf: cpfValue, firstName: firstNameValue, lastName: lastNameValue }),
+      });
+      if (!response.ok) return;
+
+      const result = await response.json();
+      if (!result.success || !result.data) return;
+
+      const d = result.data;
+      const fieldsToFill: Array<{ key: keyof RegisterForm; value: any }> = [
+        { key: 'email', value: d.email },
+        { key: 'phone', value: d.phone },
+        { key: 'username', value: d.username },
+        { key: 'crm', value: d.crm },
+        { key: 'crmUf', value: d.crmUf },
+        { key: 'medicalSpecialtyId', value: d.medicalSpecialtyId },
+        { key: 'cep', value: d.cep },
+        { key: 'address', value: d.address },
+        { key: 'number', value: d.number },
+        { key: 'complement', value: d.complement },
+        { key: 'neighborhood', value: d.neighborhood },
+        { key: 'city', value: d.city },
+        { key: 'state', value: d.state },
+        { key: 'roleId', value: d.roleId },
+      ];
+
+      let filledCount = 0;
+      fieldsToFill.forEach(({ key, value }) => {
+        if (value && !registerForm.getValues(key)) {
+          registerForm.setValue(key, value, { shouldValidate: true });
+          filledCount++;
+        }
+      });
+
+      if (filledCount > 0) {
+        setShowPrefillBanner(true);
+        setTimeout(() => setShowPrefillBanner(false), 5000);
+      }
+    } catch (error) {
+      // silently ignore
+    } finally {
+      setIsLoadingPreviousData(false);
+    }
+  };
+
+  const handleCEPChange = async (cep: string) => {
+    const cleanCEP = cep.replace(/\D/g, '');
+    
+    if (cleanCEP.length === 8) {
+      setIsLoadingCEP(true);
+      
+      try {
+        const addressData = await fetchAddressByCEP(cleanCEP);
+        
+        if (addressData) {
+          // Preencher campos automaticamente
+          registerForm.setValue('address', addressData.logradouro);
+          registerForm.setValue('neighborhood', addressData.bairro);
+          registerForm.setValue('city', addressData.localidade);
+          registerForm.setValue('state', addressData.uf);
+          registerForm.setValue('complement', addressData.complemento || '');
+          
+          // Revalidar campos preenchidos para limpar erros
+          registerForm.trigger('address');
+          registerForm.trigger('neighborhood');
+          registerForm.trigger('city');
+          registerForm.trigger('state');
+          registerForm.trigger('complement');
+          
+          // Focar no campo número após preenchimento
+          const numberField = document.getElementById('reg-number');
+          if (numberField) numberField.focus();
+        }
+      } catch (error) {
+        console.error('Erro ao buscar CEP:', error);
+      } finally {
+        setIsLoadingCEP(false);
+      }
+    }
+  };
+
+  // Fetch medical specialties for registration
   const specialtiesQuery = useQuery({
     queryKey: ['/api/medical-specialties/public']
   });
 
+  // Fetch Brazilian states for CRM UF selection
   const statesQuery = useQuery({
     queryKey: ['/api/brazilian-states']
   });
@@ -69,8 +193,10 @@ export function RegisterForm({
     onSubmit(data);
   };
 
+  // Neutralizar elementos do Replit que interferem na navegação TAB
   useEffect(() => {
     const neutralizeReplitElements = () => {
+      // Elementos específicos do Replit que podem interferir
       const replitSelectors = [
         '[class*="beacon"]',
         '[class*="replit"]', 
@@ -78,6 +204,7 @@ export function RegisterForm({
         'iframe[src*="replit"]',
         'script[src*="replit"]',
         '[id*="replit"]',
+        // Elementos do Vite/Hot reload que podem ter tabIndex
         '[class*="vite"]',
         '[data-vite]'
       ];
@@ -85,11 +212,14 @@ export function RegisterForm({
       replitSelectors.forEach(selector => {
         const elements = document.querySelectorAll(selector);
         elements.forEach(el => {
+          // Remover da ordem de TAB
           (el as HTMLElement).tabIndex = -1;
+          // Remover eventos de foco se houver
           (el as HTMLElement).style.pointerEvents = 'none';
         });
       });
 
+      // Garantir que apenas elementos do formulário sejam focáveis
       if (formRef.current) {
         const formElements = formRef.current.querySelectorAll('input, select, button, textarea');
         formElements.forEach((el, index) => {
@@ -98,7 +228,10 @@ export function RegisterForm({
       }
     };
 
+    // Executar neutralização após carregamento
     const timer = setTimeout(neutralizeReplitElements, 500);
+    
+    // Executar novamente caso elementos sejam carregados dinamicamente
     const interval = setInterval(neutralizeReplitElements, 2000);
 
     return () => {
@@ -114,6 +247,24 @@ export function RegisterForm({
         <h2 className="modal-title">Bem-vindo!</h2>
         <p className="modal-subtitle text-sm">Crie sua conta para começar a usar</p>
       </div>
+      
+      {showPrefillBanner && (
+        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 animate-in fade-in duration-300">
+          <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-sm text-blue-700">
+            Identificamos seus dados de um cadastro anterior. Os campos foram preenchidos automaticamente. Confira e ajuste o que precisar.
+          </p>
+        </div>
+      )}
+
+      {isLoadingPreviousData && (
+        <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+          <p className="text-sm text-gray-600">Verificando dados anteriores...</p>
+        </div>
+      )}
 
       <form 
         id="register-form"
@@ -144,6 +295,262 @@ export function RegisterForm({
             />
             {registerForm.formState.errors.lastName && (
               <p className="text-error">{registerForm.formState.errors.lastName.message}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 -mt-1">
+          <div className="space-y-0.5">
+            <label htmlFor="reg-cpf" className="label-medsync">CPF</label>
+            <input
+              {...registerForm.register('cpf')}
+              id="reg-cpf"
+              placeholder="000.000.000-00"
+              maxLength={14}
+              onChange={(e) => {
+                const maskedValue = applyCPFMask(e.target.value);
+                registerForm.setValue('cpf', maskedValue);
+                // Forçar revalidação imediata do campo CPF
+                registerForm.trigger('cpf');
+              }}
+              onBlur={(e) => {
+                setTimeout(() => {
+                  registerForm.trigger('cpf');
+                  onFieldValidation('cpf', e.target.value);
+                  handleCpfAutofill(e.target.value);
+                }, 100);
+              }}
+              className="input-medsync"
+            />
+            {registerForm.formState.errors.cpf && (
+              <p className="text-error">{registerForm.formState.errors.cpf.message}</p>
+            )}
+            {validationErrors.cpf && (
+              <p className="text-error">{validationErrors.cpf}</p>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            <label htmlFor="reg-crm-uf" className="label-medsync">UF do CRM</label>
+            <Select
+              value={registerForm.watch('crmUf') || ""}
+              onValueChange={(value) => {
+                registerForm.setValue('crmUf', value);
+                registerForm.trigger('crmUf'); // Força revalidação para limpar erro
+              }}
+            >
+              <SelectTrigger className="select-medsync">
+                <SelectValue placeholder="UF" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.isArray(statesQuery.data) && statesQuery.data?.map((state: any) => (
+                  <SelectItem key={state.stateCode} value={state.stateCode}>
+                    {state.stateCode} - {state.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {registerForm.formState.errors.crmUf && (
+              <p className="text-error">{registerForm.formState.errors.crmUf.message}</p>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            <label htmlFor="reg-crm-top" className="label-medsync">Nº do CRM</label>
+            <input
+              {...registerForm.register('crm')}
+              id="reg-crm-top"
+              type="text"
+              placeholder="123456"
+              onBlur={(e) => {
+                setTimeout(() => {
+                  const crmUf = registerForm.getValues('crmUf');
+                  onFieldValidation('crm', e.target.value, { crmUf });
+                }, 100);
+              }}
+              className="input-medsync"
+            />
+            {registerForm.formState.errors.crm && (
+              <p className="text-error">{registerForm.formState.errors.crm.message}</p>
+            )}
+            {validationErrors.crm && (
+              <p className="text-error">{validationErrors.crm}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-0.5 -mt-1">
+          <label htmlFor="reg-cep" className="label-medsync">
+            CEP {isLoadingCEP && <span className="text-xs text-blue-600">(buscando...)</span>}
+          </label>
+          <input
+            {...registerForm.register('cep')}
+            id="reg-cep"
+            placeholder="00000-000"
+            maxLength={9}
+            onChange={(e) => {
+              const maskedValue = applyCEPMask(e.target.value);
+              registerForm.setValue('cep', maskedValue);
+              registerForm.trigger('cep'); // Força revalidação para limpar erro
+            }}
+            onBlur={(e) => {
+              // Usar setTimeout para não interferir na navegação TAB
+              setTimeout(() => {
+                handleCEPChange(e.target.value);
+              }, 100);
+            }}
+            className="input-medsync"
+            disabled={isLoadingCEP}
+          />
+          {registerForm.formState.errors.cep && (
+            <p className="text-error">{registerForm.formState.errors.cep.message}</p>
+          )}
+        </div>
+
+        {/* Campos de Endereço - movidos para baixo do CEP */}
+        <div className="grid grid-cols-4 gap-3 -mt-1">
+          <div className="col-span-3 space-y-0.5">
+            <label htmlFor="reg-address" className="label-medsync">Endereço</label>
+            <input
+              {...registerForm.register('address')}
+              id="reg-address"
+              placeholder="Rua, Avenida..."
+              className="input-medsync"
+            />
+            {registerForm.formState.errors.address && (
+              <p className="text-error">{registerForm.formState.errors.address.message}</p>
+            )}
+          </div>
+          <div className="col-span-1 space-y-0.5">
+            <label htmlFor="reg-number" className="label-medsync">Nº</label>
+            <input
+              {...registerForm.register('number')}
+              id="reg-number"
+              placeholder="123"
+              className="input-medsync"
+            />
+            {registerForm.formState.errors.number && (
+              <p className="text-error">{registerForm.formState.errors.number.message}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-0.5 -mt-1">
+          <label htmlFor="reg-complement" className="label-medsync">Complemento</label>
+          <input
+            {...registerForm.register('complement')}
+            id="reg-complement"
+            placeholder="Apto 101, Bloco A, Sala 2..."
+            className="input-medsync"
+          />
+          {registerForm.formState.errors.complement && (
+            <p className="text-error">{registerForm.formState.errors.complement.message}</p>
+          )}
+        </div>
+
+        {/* Bairro, Cidade e Estado na mesma linha */}
+        <div className="grid grid-cols-3 gap-3 -mt-1">
+          <div className="space-y-0.5">
+            <label htmlFor="reg-neighborhood" className="label-medsync">Bairro</label>
+            <input
+              {...registerForm.register('neighborhood')}
+              id="reg-neighborhood"
+              placeholder="Centro"
+              className="input-medsync"
+            />
+            {registerForm.formState.errors.neighborhood && (
+              <p className="text-error">{registerForm.formState.errors.neighborhood.message}</p>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            <label htmlFor="reg-city" className="label-medsync">Cidade</label>
+            <input
+              {...registerForm.register('city')}
+              id="reg-city"
+              placeholder="São Paulo"
+              className="input-medsync"
+            />
+            {registerForm.formState.errors.city && (
+              <p className="text-error">{registerForm.formState.errors.city.message}</p>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            <label htmlFor="reg-state" className="label-medsync">Estado</label>
+            <input
+              {...registerForm.register('state')}
+              id="reg-state"
+              placeholder="SP"
+              maxLength={2}
+              className="input-medsync uppercase"
+              onChange={(e) => {
+                const value = e.target.value.toUpperCase();
+                registerForm.setValue('state', value);
+                registerForm.trigger('state'); // Força revalidação para limpar erro
+              }}
+            />
+            {registerForm.formState.errors.state && (
+              <p className="text-error">{registerForm.formState.errors.state.message}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Usuário e Telefone na mesma linha após o CEP */}
+        <div className="grid grid-cols-2 gap-3 -mt-1">
+          <div className="space-y-0.5">
+            <label htmlFor="reg-username" className="label-medsync">Nome do Perfil</label>
+            <input
+              {...registerForm.register('username')}
+              id="reg-username"
+              placeholder="usuario"
+              maxLength={30}
+              onChange={(e) => {
+                // Remove acentos, espaços e converte para minúsculas
+                const sanitized = e.target.value
+                  .toLowerCase()
+                  .normalize('NFD')
+                  .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+                  .replace(/ç/g, 'c') // Converte ç para c
+                  .replace(/\s/g, '') // Remove espaços
+                  .replace(/[^a-z0-9_.]/g, ''); // Remove caracteres não permitidos
+                registerForm.setValue('username', sanitized);
+                registerForm.trigger('username');
+              }}
+              onBlur={(e) => {
+                setTimeout(() => {
+                  onFieldValidation('username', e.target.value);
+                }, 100);
+              }}
+              className="input-medsync"
+            />
+            {registerForm.formState.errors.username && (
+              <p className="text-error">{registerForm.formState.errors.username.message}</p>
+            )}
+            {validationErrors.username && (
+              <p className="text-error">{validationErrors.username}</p>
+            )}
+          </div>
+          <div className="space-y-0.5">
+            <label htmlFor="reg-phone" className="label-medsync">Telefone</label>
+            <input
+              {...registerForm.register('phone')}
+              id="reg-phone"
+              type="tel"
+              placeholder="(11) 99999-9999"
+              onChange={(e) => {
+                const maskedValue = applyPhoneMask(e.target.value);
+                registerForm.setValue('phone', maskedValue);
+                registerForm.trigger('phone'); // Força revalidação para limpar erro
+              }}
+              onBlur={(e) => {
+                setTimeout(() => {
+                  onFieldValidation('phone', e.target.value);
+                }, 100);
+              }}
+              className="input-medsync"
+            />
+            {registerForm.formState.errors.phone && (
+              <p className="text-error">{registerForm.formState.errors.phone.message}</p>
+            )}
+            {validationErrors.phone && (
+              <p className="text-error">{validationErrors.phone}</p>
             )}
           </div>
         </div>
@@ -199,80 +606,33 @@ export function RegisterForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 -mt-1">
-          <div className="space-y-0.5">
-            <label htmlFor="reg-crm-uf" className="label-medsync">UF do CRM</label>
-            <Select
-              value={registerForm.watch('crmUf') || ""}
-              onValueChange={(value) => {
-                registerForm.setValue('crmUf', value);
-                registerForm.trigger('crmUf');
-              }}
-            >
-              <SelectTrigger className="select-medsync">
-                <SelectValue placeholder="UF" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.isArray(statesQuery.data) && statesQuery.data?.map((state: any) => (
-                  <SelectItem key={state.stateCode} value={state.stateCode}>
-                    {state.stateCode} - {state.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {registerForm.formState.errors.crmUf && (
-              <p className="text-error">{registerForm.formState.errors.crmUf.message}</p>
-            )}
-          </div>
-          <div className="space-y-0.5">
-            <label htmlFor="reg-crm-top" className="label-medsync">Nº do CRM</label>
-            <input
-              {...registerForm.register('crm')}
-              id="reg-crm-top"
-              type="text"
-              placeholder="123456"
-              onBlur={(e) => {
-                setTimeout(() => {
-                  const crmUf = registerForm.getValues('crmUf');
-                  onFieldValidation('crm', e.target.value, { crmUf });
-                }, 100);
-              }}
-              className="input-medsync"
-            />
-            {registerForm.formState.errors.crm && (
-              <p className="text-error">{registerForm.formState.errors.crm.message}</p>
-            )}
-            {validationErrors.crm && (
-              <p className="text-error">{validationErrors.crm}</p>
-            )}
-          </div>
-          <div className="space-y-0.5">
-            <label htmlFor="reg-medicalSpecialtyId" className="label-medsync">Especialidade</label>
-            <Select
-              value={registerForm.watch('medicalSpecialtyId')?.toString() || ""} 
-              onValueChange={(value) => {
-                registerForm.setValue('medicalSpecialtyId', parseInt(value));
-                registerForm.trigger('medicalSpecialtyId');
-              }}
-            >
-              <SelectTrigger className="select-medsync">
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.isArray(specialtiesQuery.data) && specialtiesQuery.data?.map((specialty: any) => (
-                  <SelectItem key={specialty.id} value={specialty.id.toString()}>
-                    {specialty.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {registerForm.formState.errors.medicalSpecialtyId && (
-              <p className="text-error">{registerForm.formState.errors.medicalSpecialtyId.message}</p>
-            )}
-          </div>
+        <div className="space-y-0.5 -mt-1">
+          <label htmlFor="reg-medicalSpecialtyId" className="label-medsync">Especialidade Médica</label>
+          <Select
+            value={registerForm.watch('medicalSpecialtyId')?.toString() || ""} 
+            onValueChange={(value) => {
+              registerForm.setValue('medicalSpecialtyId', parseInt(value));
+              registerForm.trigger('medicalSpecialtyId'); // Força revalidação para limpar erro
+            }}
+          >
+            <SelectTrigger className="select-medsync">
+              <SelectValue placeholder="Selecione sua especialidade" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.isArray(specialtiesQuery.data) && specialtiesQuery.data?.map((specialty: any) => (
+                <SelectItem key={specialty.id} value={specialty.id.toString()}>
+                  {specialty.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {registerForm.formState.errors.medicalSpecialtyId && (
+            <p className="text-error">{registerForm.formState.errors.medicalSpecialtyId.message}</p>
+          )}
         </div>
       </form>
 
+      {/* Botão fora do formulário para melhor espaçamento */}
       <div className="mb-1">
         <Button
           type="submit"

@@ -1712,8 +1712,6 @@ export const hospitals = pgTable("hospitals", {
   address: text("address"), // Endereço (opcional temporariamente)
   number: integer("number"), // Número (opcional temporariamente)
   logoUrl: text("logo_url"), // URL do logo do hospital
-  phone: text("phone"), // Telefone do hospital
-  email: text("email"), // Email do hospital
 });
 
 export const insertHospitalSchema = createInsertSchema(hospitals).pick({
@@ -1727,8 +1725,6 @@ export const insertHospitalSchema = createInsertSchema(hospitals).pick({
   address: true,
   number: true,
   logoUrl: true,
-  phone: true,
-  email: true,
 });
 
 export type Hospital = typeof hospitals.$inferSelect;

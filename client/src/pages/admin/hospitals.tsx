@@ -89,8 +89,6 @@ export default function AdminHospitals() {
   const [formLogoUrl, setFormLogoUrl] = useState("");
   const [formLogoFile, setFormLogoFile] = useState<File | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [formPhone, setFormPhone] = useState("");
-  const [formEmail, setFormEmail] = useState("");
 
   // Protecção de rota — apenas administradores (roleId = 1)
   if (user && user.roleId !== 1) {
@@ -191,8 +189,6 @@ export default function AdminHospitals() {
     setFormNumber("");
     setFormLogoUrl("");
     setFormLogoFile(null);
-    setFormPhone("");
-    setFormEmail("");
     setOpenCreateDialog(true);
   };
   
@@ -207,8 +203,6 @@ export default function AdminHospitals() {
     setFormNumber(hospital.number?.toString() || "");
     setFormLogoUrl(hospital.logoUrl || "");
     setFormLogoFile(null);
-    setFormPhone((hospital as any).phone || "");
-    setFormEmail((hospital as any).email || "");
     const stateCode = hospital.ibgeStateCode || 33;
     setFormIbgeStateCode(stateCode);
     if (stateCode) await fetchMunicipalities(stateCode, true);
@@ -232,9 +226,7 @@ export default function AdminHospitals() {
         cep: formCEP || null,
         address: formAddress || null,
         number: formNumber ? parseInt(formNumber) : null,
-        logoUrl: null,
-        phone: formPhone || null,
-        email: formEmail || null,
+        logoUrl: null
       });
       if (formLogoFile) {
         setUploadingLogo(true);
@@ -282,9 +274,7 @@ export default function AdminHospitals() {
           cep: formCEP || null,
           address: formAddress || null,
           number: formNumber ? parseInt(formNumber) : null,
-          logoUrl: logoUrlToUse || null,
-          phone: formPhone || null,
-          email: formEmail || null,
+          logoUrl: logoUrlToUse || null
         })
       });
       if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
@@ -545,14 +535,6 @@ export default function AdminHospitals() {
                 <Label htmlFor="address">Endereço</Label>
                 <Input id="address" value={formAddress} onChange={(e) => setFormAddress(e.target.value)} placeholder="Rua, Avenida..." />
               </div>
-              <div>
-                <Label htmlFor="phone">Telefone</Label>
-                <Input id="phone" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="(21) 99999-9999" />
-              </div>
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} placeholder="contato@hospital.com.br" />
-              </div>
               <div className="col-span-2">
                 <Label>Logo do Hospital</Label>
                 <HospitalLogoCropUpload onFileChange={handleLogoFileChange} currentLogoUrl={formLogoUrl} />
@@ -628,14 +610,6 @@ export default function AdminHospitals() {
               <div className="col-span-2">
                 <Label htmlFor="edit-address">Endereço</Label>
                 <Input id="edit-address" value={formAddress} onChange={(e) => setFormAddress(e.target.value)} />
-              </div>
-              <div>
-                <Label htmlFor="edit-phone">Telefone</Label>
-                <Input id="edit-phone" value={formPhone} onChange={(e) => setFormPhone(e.target.value)} placeholder="(21) 99999-9999" />
-              </div>
-              <div>
-                <Label htmlFor="edit-email">Email</Label>
-                <Input id="edit-email" type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} placeholder="contato@hospital.com.br" />
               </div>
               <div className="col-span-2">
                 <Label>Logo do Hospital</Label>

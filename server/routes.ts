@@ -3575,16 +3575,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Preparar os dados para atualização
         const updateData: any = {};
         
+        // Campos que podem ser atualizados
         if (req.body.name !== undefined) updateData.name = req.body.name;
         if (req.body.email !== undefined) updateData.email = req.body.email;
         if (req.body.roleId !== undefined) updateData.roleId = parseInt(req.body.roleId);
         if (req.body.active !== undefined) {
+          // Converter string 'true'/'false' para boolean se necessário
           updateData.active = req.body.active === true || req.body.active === 'true';
         }
         if (req.body.crm !== undefined) updateData.crm = req.body.crm;
         if (req.body.signatureNote !== undefined) updateData.signatureNote = req.body.signatureNote;
-        if (req.body.cpf !== undefined) updateData.cpf = req.body.cpf;
-        if (req.body.phone !== undefined) updateData.phone = req.body.phone;
         
         // Se uma nova senha for fornecida, fazer hash dela
         if (req.body.password && req.body.password.trim() !== "") {

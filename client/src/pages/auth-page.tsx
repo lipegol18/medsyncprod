@@ -61,6 +61,7 @@ import iconHome3 from "@/assets/icons/icon_home_3.svg";
 import iconHome4 from "@/assets/icons/icon_home_4.svg";
 import iconDoctor from "@/assets/icons/icon-doctor.svg";
 import medsyncBanner from "@/assets/banners/Medsync_Consultorio_3288x1102.png";
+import { onlyNumbers } from "@/lib/utils";
 import { useValidation } from "@/hooks/use-validation";
 
 export default function AuthPage() {
@@ -343,7 +344,7 @@ export default function AuthPage() {
 
   // Função auxiliar para validar campos únicos
   const handleFieldValidation = async (
-    field: "crm" | "email",
+    field: "cpf" | "crm" | "phone" | "email" | "username",
     value: string,
   ) => {
     if (!value.trim()) {
@@ -351,12 +352,16 @@ export default function AuthPage() {
       return;
     }
 
-    const isUnique = await validateUnique(field, value);
+    const normalizedValue = field === "cpf" ? onlyNumbers(value) : value;
+    const isUnique = await validateUnique(field, normalizedValue);
 
     if (!isUnique) {
       const fieldNames = {
+        cpf: "CPF",
         crm: "CRM",
+        phone: "Telefone",
         email: "Email",
+        username: "Username",
       };
       setValidationErrors((prev) => ({
         ...prev,

@@ -1,12 +1,10 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { Layout } from "@/components/layout/layout";
 import { Shield, FileText, ScrollText, Cookie, HelpCircle, ExternalLink, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import MedSyncLogoGray from "@/assets/logos/Medsync_Logo_Gray.svg";
 
 export default function LgpdPage() {
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [, setLocation] = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -53,36 +51,7 @@ export default function LgpdPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header — igual ao da auth-page */}
-      <header className="bg-muted shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row justify-between items-center min-h-[9rem] py-4 sm:py-0.5 gap-4 sm:gap-0">
-            <div
-              className="flex items-center justify-center cursor-pointer pt-2 sm:pt-6"
-              onClick={() => setLocation("/")}
-            >
-              <img src={MedSyncLogoGray} alt="MedSync Logo" className="h-24 sm:h-32 scale-90" />
-            </div>
-            <div className="flex border px-1 py-1 rounded-2xl border-medsync-blue">
-              <button
-                onClick={() => setLocation("/")}
-                className="btn-medsync-auth"
-              >
-                <strong>Login</strong>
-              </button>
-              <Button
-                onClick={() => setLocation("/")}
-                variant="ghost"
-                className="bg-transparent px-8 py-2 rounded-xl font-medium text-base border-0 h-9 hover:bg-accent/10 text-medsync-blue"
-              >
-                <strong>Registrar</strong>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <Layout includeHeader={true} includeFooter={true}>
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8 p-8 rounded-xl bg-gradient-to-r from-[#124a6b] to-[#2ca8e0] text-white">
           <div className="flex items-center gap-4">
@@ -391,6 +360,6 @@ export default function LgpdPage() {
           <ChevronUp className="h-6 w-6" />
         </Button>
       )}
-    </div>
+    </Layout>
   );
 }
