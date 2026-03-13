@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePendingOrders } from "@/hooks/use-pending-orders";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import {
         FileText,
@@ -241,8 +242,23 @@ export default function Home() {
         const [pastDueDays, setPastDueDays] = useState(0);
         const [isPastDueBlocking, setIsPastDueBlocking] = useState(false);
 
-        // Verificar se o usuário é administrador
         const isAdmin = user?.roleId === 1;
+
+        const { data: userPrimaryAddress } = useQuery({
+                queryKey: ['/api/users', user?.id, 'addresses', 'primary'],
+                queryFn: async () => {
+                        if (!user?.id) return null;
+                        try {
+                                return await apiRequest(`/api/users/${user.id}/addresses/primary`, "GET");
+                        } catch {
+                                return null;
+                        }
+                },
+                enabled: !!user?.id,
+        });
+        const primaryAddr = userPrimaryAddress as { cep?: string; logradouro?: string; cidade?: string; uf?: string } | null;
+        const hasCompleteAddress = !!(primaryAddr?.cep && primaryAddr?.logradouro && primaryAddr?.cidade && primaryAddr?.uf);
+        const isProfileIncomplete = !user?.cpf || !user?.phone || !hasCompleteAddress;
 
         // Query para buscar informações de assinatura do usuário
         const { data: userSubscription } = useQuery<UserSubscription>({
@@ -441,12 +457,30 @@ export default function Home() {
                 <div className="min-h-screen flex flex-col bg-muted">
                         <LgpdModal />
 
-                        {/* Banner de pagamento em atraso (past_due) - Nível 1 */}
                         {showPastDueBanner && (
                                 <PastDueBanner 
                                         daysOverdue={pastDueDays}
                                         onDismiss={() => setShowPastDueBanner(false)}
                                 />
+                        )}
+
+                        {isProfileIncomplete && !showPaymentModal && (
+                                <div className="bg-amber-50 border-b border-amber-200">
+                                        <div className="container mx-auto px-4 py-3 max-w-8xl flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                        <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                                                        <p className="text-sm text-amber-800 font-medium">
+                                                                Seu perfil está incompleto. Complete seus dados para ter acesso total ao sistema.
+                                                        </p>
+                                                </div>
+                                                <button
+                                                        onClick={() => navigate('/profile#complete-profile')}
+                                                        className="text-sm font-semibold text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 px-4 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                                                >
+                                                        Completar perfil
+                                                </button>
+                                        </div>
+                                </div>
                         )}
 
                         <main className="flex-grow bg-muted/30 overflow-auto">

@@ -20,6 +20,10 @@ import 'react-image-crop/dist/ReactCrop.css';
 import { useLocation } from "wouter";
 import { useNavigationTracker } from "@/hooks/use-navigation-tracker";
 import { normalizeText } from "@/lib/normalize";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { applyCPFMask, applyPhoneMask } from "@/lib/utils";
+import { fetchAddressByCEP, applyCEPMask } from "@/lib/viacep";
+import { AlertCircle } from "lucide-react";
 const Profile = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -33,6 +37,19 @@ const Profile = () => {
   const [isLoadingHospitals, setIsLoadingHospitals] = useState(false);
   const [selectedHospitalIds, setSelectedHospitalIds] = useState<number[]>([]);
   const [hospitalSearchQuery, setHospitalSearchQuery] = useState("");
+  const [isLoadingCEP, setIsLoadingCEP] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    cpf: "",
+    phone: "",
+    cep: "",
+    address: "",
+    number: "",
+    complement: "",
+    neighborhood: "",
+    city: "",
+    state: "",
+  });
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -213,6 +230,27 @@ const Profile = () => {
     },
   });
 
+  const userAddressQuery = useQuery({
+    queryKey: ['/api/users', user?.id, 'addresses', 'primary'],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      try {
+        return await apiRequest(`/api/users/${user.id}/addresses/primary`, "GET");
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!user?.id,
+  });
+
+  interface AddressData {
+    id?: number; cep?: string; logradouro?: string; numero?: string;
+    complemento?: string; bairro?: string; cidade?: string; uf?: string;
+  }
+  const primaryAddr = userAddressQuery.data as AddressData | null;
+  const hasCompleteAddress = !!(primaryAddr?.cep && primaryAddr?.logradouro && primaryAddr?.cidade && primaryAddr?.uf);
+  const isProfileIncomplete = !user?.cpf || !user?.phone || !hasCompleteAddress;
+
   useEffect(() => {
     if (user) {
       setFormData(prevState => ({
@@ -221,8 +259,107 @@ const Profile = () => {
         email: user.email || "",
         signatureNote: user.signatureNote || "",
       }));
+      setProfileForm(prev => ({
+        ...prev,
+        cpf: user.cpf || "",
+        phone: user.phone || "",
+      }));
     }
   }, [user]);
+
+  useEffect(() => {
+    if (userAddressQuery.data) {
+      const addr = userAddressQuery.data as AddressData;
+      setProfileForm(prev => ({
+        ...prev,
+        cep: addr?.cep || "",
+        address: addr?.logradouro || "",
+        number: addr.numero || "",
+        complement: addr.complemento || "",
+        neighborhood: addr.bairro || "",
+        city: addr.cidade || "",
+        state: addr.uf || "",
+      }));
+    }
+  }, [userAddressQuery.data]);
+
+  const handleProfileCEPChange = async (cep: string) => {
+    const cleanCEP = cep.replace(/\D/g, '');
+    if (cleanCEP.length === 8) {
+      setIsLoadingCEP(true);
+      try {
+        const addressData = await fetchAddressByCEP(cleanCEP);
+        if (addressData) {
+          setProfileForm(prev => ({
+            ...prev,
+            address: addressData.logradouro || prev.address,
+            neighborhood: addressData.bairro || prev.neighborhood,
+            city: addressData.localidade || prev.city,
+            state: addressData.uf || prev.state,
+            complement: addressData.complemento || prev.complement,
+          }));
+        }
+      } catch (error) {
+        console.error('Erro ao buscar CEP:', error);
+      } finally {
+        setIsLoadingCEP(false);
+      }
+    }
+  };
+
+  const handleSaveProfileCompletion = async () => {
+    if (!user) return;
+    setIsSavingProfile(true);
+    try {
+      await apiRequest(`/api/users/${user.id}`, "PUT", {
+        cpf: profileForm.cpf,
+        phone: profileForm.phone,
+      });
+
+      if (profileForm.cep && profileForm.address && profileForm.city && profileForm.state) {
+        const addressPayload = {
+          userId: user.id,
+          isPrimary: true,
+          cep: profileForm.cep,
+          logradouro: profileForm.address,
+          numero: profileForm.number || "",
+          complemento: profileForm.complement || "",
+          bairro: profileForm.neighborhood || "",
+          cidade: profileForm.city,
+          uf: profileForm.state,
+          country: "BR",
+        };
+
+        const existingAddr = userAddressQuery.data as AddressData | null;
+        if (existingAddr?.id) {
+          await apiRequest(`/api/users/${user.id}/addresses/${existingAddr.id}`, "PUT", addressPayload);
+        } else {
+          await apiRequest(`/api/users/${user.id}/addresses`, "POST", addressPayload);
+        }
+      }
+
+      queryClient.setQueryData(["/api/user"], (oldData: any) => {
+        if (oldData) {
+          return { ...oldData, cpf: profileForm.cpf, phone: profileForm.phone };
+        }
+        return oldData;
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/users', user.id, 'addresses', 'primary'] });
+
+      toast({
+        title: "Perfil atualizado",
+        description: "Seus dados foram salvos com sucesso!",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível salvar os dados",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
   
   // Carregar hospitais quando o diálogo é aberto
   useEffect(() => {
@@ -1513,6 +1650,127 @@ const Profile = () => {
           </button>
         </div>
       </div>
+
+      {isProfileIncomplete && (
+        <Card className="mb-6 border-amber-200 bg-amber-50 shadow-md" id="complete-profile">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-bold text-amber-900 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
+              Complete seu perfil
+            </CardTitle>
+            <CardDescription className="text-amber-800">
+              Para ter acesso completo ao MedSync e poder fazer upgrade de plano, preencha CPF, telefone e endereço abaixo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="label-medsync text-amber-900">CPF</label>
+                <Input
+                  placeholder="000.000.000-00"
+                  maxLength={14}
+                  value={profileForm.cpf}
+                  onChange={(e) => {
+                    const masked = applyCPFMask(e.target.value);
+                    setProfileForm(prev => ({ ...prev, cpf: masked }));
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="label-medsync text-amber-900">Telefone</label>
+                <Input
+                  placeholder="(11) 99999-9999"
+                  value={profileForm.phone}
+                  onChange={(e) => {
+                    const masked = applyPhoneMask(e.target.value);
+                    setProfileForm(prev => ({ ...prev, phone: masked }));
+                  }}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="space-y-1">
+                <label className="label-medsync text-amber-900">
+                  CEP {isLoadingCEP && <span className="text-xs text-blue-600">(buscando...)</span>}
+                </label>
+                <Input
+                  placeholder="00000-000"
+                  maxLength={9}
+                  value={profileForm.cep}
+                  onChange={(e) => {
+                    const masked = applyCEPMask(e.target.value);
+                    setProfileForm(prev => ({ ...prev, cep: masked }));
+                  }}
+                  onBlur={(e) => handleProfileCEPChange(e.target.value)}
+                  disabled={isLoadingCEP}
+                />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="label-medsync text-amber-900">Endereço</label>
+                <Input
+                  placeholder="Rua, Avenida..."
+                  value={profileForm.address}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, address: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="label-medsync text-amber-900">Nº</label>
+                <Input
+                  placeholder="123"
+                  value={profileForm.number}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, number: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="space-y-1">
+                <label className="label-medsync text-amber-900">Complemento</label>
+                <Input
+                  placeholder="Apto, Sala..."
+                  value={profileForm.complement}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, complement: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="label-medsync text-amber-900">Bairro</label>
+                <Input
+                  placeholder="Centro"
+                  value={profileForm.neighborhood}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, neighborhood: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="label-medsync text-amber-900">Cidade</label>
+                <Input
+                  placeholder="São Paulo"
+                  value={profileForm.city}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, city: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="label-medsync text-amber-900">Estado</label>
+                <Input
+                  placeholder="SP"
+                  maxLength={2}
+                  className="uppercase"
+                  value={profileForm.state}
+                  onChange={(e) => setProfileForm(prev => ({ ...prev, state: e.target.value.toUpperCase() }))}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={handleSaveProfileCompletion}
+                disabled={isSavingProfile || !profileForm.cpf || !profileForm.phone || !profileForm.cep || !profileForm.address || !profileForm.city || !profileForm.state}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isSavingProfile && <Loader2 className="h-4 w-4 animate-spin" />}
+                Salvar dados
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="info" className="w-full">
         <TabsList className="mb-4">

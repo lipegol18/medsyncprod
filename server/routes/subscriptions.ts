@@ -220,6 +220,22 @@ router.post('/pending-payment/checkout', async (req, res) => {
       return res.status(401).json({ error: 'Usuário não autenticado' });
     }
 
+    const user = await storage.getUser(req.user.id);
+    if (!user?.cpf || !user?.phone) {
+      return res.status(400).json({ 
+        error: 'Perfil incompleto. Preencha CPF e telefone antes de continuar.',
+        code: 'PROFILE_INCOMPLETE'
+      });
+    }
+
+    const primaryAddress = await storage.getUserPrimaryAddress(req.user.id);
+    if (!primaryAddress || !primaryAddress.cep || !primaryAddress.logradouro || !primaryAddress.cidade || !primaryAddress.uf) {
+      return res.status(400).json({ 
+        error: 'Perfil incompleto. Preencha seu endereço antes de continuar.',
+        code: 'PROFILE_INCOMPLETE'
+      });
+    }
+
     const { planId, billingInterval = 'monthly' } = req.body;
 
     // Verificar se usuário tem assinatura pendente
@@ -306,6 +322,22 @@ router.post('/trial-upgrade/checkout', async (req, res) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    const user = await storage.getUser(req.user.id);
+    if (!user?.cpf || !user?.phone) {
+      return res.status(400).json({ 
+        error: 'Perfil incompleto. Preencha CPF e telefone antes de continuar.',
+        code: 'PROFILE_INCOMPLETE'
+      });
+    }
+
+    const primaryAddress = await storage.getUserPrimaryAddress(req.user.id);
+    if (!primaryAddress || !primaryAddress.cep || !primaryAddress.logradouro || !primaryAddress.cidade || !primaryAddress.uf) {
+      return res.status(400).json({ 
+        error: 'Perfil incompleto. Preencha seu endereço antes de continuar.',
+        code: 'PROFILE_INCOMPLETE'
+      });
     }
 
     const { planId, billingInterval = 'monthly' } = req.body;
